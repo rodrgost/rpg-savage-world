@@ -1,0 +1,16 @@
+# Normaliza arquivos de texto no repositório e evita avisos de LF/CRLF.
+* text=auto eol=lf
+
+# Scripts nativos do Windows mantêm CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binários não devem sofrer normalização.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
