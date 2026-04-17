@@ -1,0 +1,23 @@
+{
+  "name": "rpg-adaptavel",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "functions",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm -w functions run dev",
+    "dev:frontend": "npm -w frontend run dev",
+    "dev:backend": "npm -w backend run dev",
+    "dev:backend:clean": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$conns = netstat -ano | Select-String ':3100'; if ($conns) { $pidList = $conns | ForEach-Object { ($_.ToString().Trim() -split '\\s+')[-1] } | Sort-Object -Unique | Where-Object { $_ -ne '0' }; foreach ($procId in $pidList) { Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue } }; npm -w backend run dev\"",
+    "dev:functions": "npm -w functions run dev",
+    "dev:emulators": "npm -w functions run emulators",
+    "build": "npm -w functions run build",
+    "build:frontend": "npm -w frontend run build",
+    "build:backend": "npm -w backend run build",
+    "deploy:functions": "npx firebase deploy --only functions",
+    "start": "npm -w functions run start"
+  }
+}

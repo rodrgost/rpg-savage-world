@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(ownerId) {
+      return isSignedIn() && ownerId == request.auth.uid;
+    }
+
+    function isSessionOwner(sessionId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/sessions/$(sessionId)).data.ownerId == request.auth.uid;
+    }
+
+    // MVP: leitura apenas do dono; bloquear writes diretos.
+    // Escrevemos via Cloud Functions (Admin SDK ignora rules).
+
+    match /campaigns/{campaignId} {
+      allow read: if isOwner(resource.data.ownerId) || resource.data.visibility == 'public';
+      allow write: if false;
+    }
+
+    match /worlds/{worldId} {
+      allow read: if isOwner(resource.data.ownerId) || resource.data.visibility == 'public';
+      allow write: if false;
+    }
+
+    match /rule_sets/{ruleSetId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isOwner(resource.data.ownerId);
+      allow write: if false;
+
+      match /snapshots/{turn} {
+        allow read: if isSessionOwner(sessionId);
+        allow write: if false;
+      }
+
+      match /events/{eventId} {
+        allow read: if isSessionOwner(sessionId);
+        allow write: if false;
+      }
+
+      match /_meta/{docId} {
+        allow read: if isSessionOwner(sessionId);
+        allow write: if false;
+      }
+    }
+
+    match /characters/{characterId} {
+      allow read: if isOwner(resource.data.ownerId) || isOwner(resource.data.userId) || resource.data.visibility == 'public';
+      allow write: if false;
+    }
+  }
+}

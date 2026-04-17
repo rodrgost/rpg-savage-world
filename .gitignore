@@ -1,0 +1,30 @@
+node_modules/
+
+# Build
+dist/
+coverage/
+*.tsbuildinfo
+
+# Ambiente local
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Logs
+logs/
+*.log
+
+# Firebase local
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+functions-debug.log
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Credenciais locais
+service-account.json
