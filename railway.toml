@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci && npm -w frontend run build && npm -w backend run build"
+buildCommand = "npm -w frontend run build && npm -w backend run build"
 
 [deploy]
 startCommand = "node backend/dist/main.js"
