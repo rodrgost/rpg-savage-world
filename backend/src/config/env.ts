@@ -1,6 +1,7 @@
 import { config as loadDotenv } from 'dotenv'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { existsSync } from 'node:fs'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const backendRoot = resolve(currentDir, '..', '..')
@@ -28,10 +29,10 @@ export const env = {
 // - Alternativa: FIREBASE_SERVICE_ACCOUNT_JSON (string JSON)
 export function assertFirebaseEnv(): void {
   if (env.firebaseServiceAccountJson) return
-  if (env.firebaseServiceAccountPath) return
+  if (env.firebaseServiceAccountPath && existsSync(env.firebaseServiceAccountPath)) return
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) return
 
   throw new Error(
-    'Firebase credenciais ausentes. Defina GOOGLE_APPLICATION_CREDENTIALS, FIREBASE_SERVICE_ACCOUNT_PATH ou FIREBASE_SERVICE_ACCOUNT_JSON.'
+    'Firebase credenciais ausentes. Defina GOOGLE_APPLICATION_CREDENTIALS, FIREBASE_SERVICE_ACCOUNT_JSON ou FIREBASE_SERVICE_ACCOUNT_PATH com um arquivo valido.'
   )
 }
