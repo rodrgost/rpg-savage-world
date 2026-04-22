@@ -4,6 +4,13 @@ export type SessionSummaryRow = {
   sessionId: string
   lastTurnIncluded: number
   summaryText: string
+  keyEvents?: unknown
+}
+
+type StoredSessionSummaryDoc = {
+  sessionId?: string
+  lastTurnIncluded?: number
+  summaryText?: string
   historySummaryText?: string
   keyEvents?: unknown
 }
@@ -17,19 +24,18 @@ export class SessionSummaryRepo {
     sessionId: string
     lastTurnIncluded: number
     summaryText: string
-    historySummaryText?: string
     keyEvents?: unknown
   }): Promise<void> {
     const data: Record<string, unknown> = {
       sessionId: params.sessionId,
       lastTurnIncluded: params.lastTurnIncluded,
       summaryText: params.summaryText,
-      keyEvents: params.keyEvents ?? null,
+      historySummaryText: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp()
     }
 
-    if (params.historySummaryText !== undefined) {
-      data.historySummaryText = params.historySummaryText
+    if (params.keyEvents !== undefined) {
+      data.keyEvents = params.keyEvents
     }
 
     await this.summaryDoc(params.sessionId).set(
@@ -38,26 +44,14 @@ export class SessionSummaryRepo {
     )
   }
 
-  async upsertHistorySummary(params: { sessionId: string; historySummaryText: string }): Promise<void> {
-    await this.summaryDoc(params.sessionId).set(
-      {
-        sessionId: params.sessionId,
-        historySummaryText: params.historySummaryText,
-        updatedAt: FieldValue.serverTimestamp()
-      },
-      { merge: true }
-    )
-  }
-
   async getSummary(sessionId: string): Promise<SessionSummaryRow | null> {
     const doc = await this.summaryDoc(sessionId).get()
     if (!doc.exists) return null
-    const data = doc.data() as SessionSummaryRow
+    const data = doc.data() as StoredSessionSummaryDoc
     return {
       sessionId,
       lastTurnIncluded: data.lastTurnIncluded ?? 0,
-      summaryText: data.summaryText ?? '',
-      historySummaryText: data.historySummaryText ?? '',
+      summaryText: data.summaryText ?? data.historySummaryText ?? '',
       keyEvents: data.keyEvents ?? undefined
     }
   }

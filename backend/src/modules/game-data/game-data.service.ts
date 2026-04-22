@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ServiceUnavailableException } from '@nestjs/common'
 import { randomUUID } from 'node:crypto'
 
 import { CampaignsRepo } from '../../repositories/campaigns.repo.js'
@@ -10,35 +10,34 @@ import { normalizeToWebp, type StoredImage } from '../../utils/image-normalize.j
 import { isDieType, CHARACTER_CREATION, ATTRIBUTE_KEYS } from '../../domain/savage-worlds/constants.js'
 import type { DieType, Hindrance } from '../../domain/types/gameState.js'
 import { firebaseAuth, firestore } from '../../infrastructure/firebase.js'
-
-const FALLBACK_NAME_POOL = ['Darian', 'Liora', 'Thoran', 'Mirela', 'Aedan', 'Seris', 'Ravena', 'Nayra']
-const FALLBACK_CLASS_POOL = ['Guerreiro', 'Arcanista', 'Patrulheiro', 'Ladino', 'Bardo', 'Clérigo']
-const FALLBACK_PROFESSION_POOL = ['Batedor', 'Cartógrafo', 'Mercenário', 'Erudito', 'Mensageiro', 'Caçador']
+import { warn } from '../../utils/file-logger.js'
 
 function sanitizeInlineText(value: string | undefined): string {
   return (value ?? '').trim().replace(/\s+/g, ' ')
 }
 
-function buildWorldImagePrompt(params: { worldName: string; thematic: string }): string {
-  const worldName = sanitizeInlineText(params.worldName)
+function buildWorldImagePrompt(params: { thematic: string; visualDescription?: string }): string {
   const thematic = sanitizeInlineText(params.thematic)
+  const visualDescription = sanitizeInlineText(params.visualDescription)
 
   return [
     'Create a illustrated key art.',
-    `Setting anchor: world name "${worldName || 'Unnamed world'}".`,
-    `Campaign theme: "${thematic || 'generic fantasy'}".`,
-    'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, memorable landmarks, mood and visual storytelling driven by the setting itself.',
+    `Campaign title anchor: "${thematic || 'Untitled campaign'}".`,
+    ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
+    'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, mood and visual storytelling driven by the setting itself.',
     'Restrictions: no text, no title, no logos, no watermarks, no UI, no typography, no close-up faces, no characters as the main subject.'
   ].join('\n')
 }
 
-function buildUniverseImagePrompt(params: { name: string }): string {
+function buildUniverseImagePrompt(params: { name: string; visualDescription?: string }): string {
   const worldName = sanitizeInlineText(params.name)
+  const visualDescription = sanitizeInlineText(params.visualDescription)
 
   return [
     'Create a cinematic illustrated key art.',
     `Setting anchor: world name "${worldName || 'Unnamed world'}".`,
-    'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, memorable landmarks, mood and visual storytelling driven by the setting itself.',
+    ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
+    'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, mood and visual storytelling driven by the setting itself.',
     'Restrictions: no text, no title, no logos, no watermarks, no UI, no typography, no close-up faces, no characters as the main subject.'
   ].join('\n')
 }
@@ -51,6 +50,7 @@ function buildCharacterImagePrompt(params: {
   profession: string
   characterClass: string
   additionalDescription?: string
+  visualDescription?: string
 }): string {
   const worldName = sanitizeInlineText(params.worldName)
   const thematic = sanitizeInlineText(params.thematic)
@@ -59,6 +59,7 @@ function buildCharacterImagePrompt(params: {
   const profession = sanitizeInlineText(params.profession)
   const characterClass = sanitizeInlineText(params.characterClass)
   const additional = sanitizeInlineText(params.additionalDescription)
+  const visualDescription = sanitizeInlineText(params.visualDescription)
 
   return [
     'Create a RPG character portrait illustration.',
@@ -70,6 +71,7 @@ function buildCharacterImagePrompt(params: {
     `Class: ${characterClass || 'Adventurer'}.`,
     `Profession: ${profession || 'Traveler'}.`,
     ...(additional ? [`Visual details: ${additional}.`] : []),
+    ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
     'Composition: centered character, warm lighting, friendly expression, fully clothed, no weapons pointed at viewer.'
   ].join('\n')
 }
@@ -252,6 +254,27 @@ export class GameDataService {
   private readonly characters = new CharactersRepo()
   private readonly narrator = new GeminiAdapter()
   private readonly imageGenerator = new GeminiImageGenerator()
+
+  private async buildVisualDescription(params:
+    | { entityType: 'world'; title: string }
+    | { entityType: 'campaign'; title: string }
+    | {
+        entityType: 'character'
+        worldName: string
+        campaignTitle: string
+        gender?: string
+        race?: string
+        profession: string
+        characterClass: string
+        additionalDescription?: string
+      }): Promise<string | undefined> {
+    try {
+      const description = await this.narrator.generateImageDescription(params)
+      return description.trim() || undefined
+    } catch {
+      return undefined
+    }
+  }
 
   private async normalizeWorldImage(image: StoredImage): Promise<StoredImage> {
     return await normalizeToWebp(image, { width: 512, height: 288, quality: 70 })
@@ -454,8 +477,10 @@ export class GameDataService {
     const name = params.name?.trim() ?? ''
     if (!name) throw new BadRequestException('Nome do universo é obrigatório')
 
+    const visualDescription = await this.buildVisualDescription({ entityType: 'world', title: name })
+
     const generated = await this.imageGenerator.generateImage({
-      prompt: buildUniverseImagePrompt({ name }),
+      prompt: buildUniverseImagePrompt({ name, visualDescription }),
       width: 768,
       height: 432,
       mimeType: 'image/webp'
@@ -616,28 +641,15 @@ export class GameDataService {
 
   async generateCampaignImagePreview(params: {
     userId: string
-    campaignId?: string
-    worldName?: string
     thematic: string
   }): Promise<{ image: StoredImage }> {
     const thematic = params.thematic?.trim() ?? ''
     if (!thematic) throw new BadRequestException('Temática é obrigatória')
 
-    let worldName = params.worldName?.trim() ?? ''
-
-    if (!worldName && params.campaignId) {
-      const campaign = await this.campaigns.get(params.campaignId)
-      if (!campaign) throw new NotFoundException('Campanha não encontrada')
-      if (!this.canReadResource({ ownerId: campaign.ownerId, visibility: campaign.visibility, userId: params.userId })) {
-        throw new ForbiddenException('Sem permissão para esta campanha')
-      }
-
-      const world = await this.worlds.get(campaign.worldId)
-      if (world) worldName = world.name
-    }
+    const visualDescription = await this.buildVisualDescription({ entityType: 'campaign', title: thematic })
 
     const generated = await this.imageGenerator.generateImage({
-      prompt: buildWorldImagePrompt({ worldName, thematic }),
+      prompt: buildWorldImagePrompt({ thematic, visualDescription }),
       width: 768,
       height: 432,
       mimeType: 'image/webp'
@@ -752,16 +764,28 @@ export class GameDataService {
 
     const world = await this.worlds.get(campaign.worldId)
     const worldName = world?.name ?? 'Mundo desconhecido'
+    const thematic = campaign.thematic ?? campaign.name ?? ''
+    const visualDescription = await this.buildVisualDescription({
+      entityType: 'character',
+      worldName,
+      campaignTitle: thematic,
+      gender: params.gender,
+      race: params.race,
+      profession: params.profession,
+      characterClass: params.characterClass,
+      additionalDescription: params.additionalDescription
+    })
 
     const generated = await this.imageGenerator.generateImage({
       prompt: buildCharacterImagePrompt({
         worldName,
-        thematic: campaign.thematic ?? campaign.name ?? '',
+        thematic,
         gender: params.gender,
         race: params.race,
         profession: params.profession,
         characterClass: params.characterClass,
-        additionalDescription: params.additionalDescription
+        additionalDescription: params.additionalDescription,
+        visualDescription
       }),
       width: 512,
       height: 512,
@@ -825,21 +849,6 @@ export class GameDataService {
     const world = await this.worlds.get(campaign.worldId)
     const worldLore = world?.lore?.trim() ?? ''
 
-    const fallbackName = pickRandom(FALLBACK_NAME_POOL, 'Darian')
-    const fallbackClass = pickRandom(FALLBACK_CLASS_POOL, 'Guerreiro')
-    const professionOptions = FALLBACK_PROFESSION_POOL.filter(
-      (item) => item.localeCompare(fallbackClass, 'pt-BR', { sensitivity: 'base' }) !== 0
-    )
-    const fallbackProfession = pickRandom(professionOptions, 'Mercenário')
-    const fallback = {
-      name: fallbackName,
-      gender: '',
-      race: 'Humano',
-      characterClass: fallbackClass,
-      profession: fallbackProfession,
-      description: `${fallbackName} é ${fallbackProfession.toLowerCase()} com perfil ${fallbackClass.toLowerCase()}, moldado pela temática ${thematic.toLowerCase()}.`
-    }
-
     try {
       const suggestion = await this.narrator.suggestCharacterFromWorld({
         thematic,
@@ -848,12 +857,16 @@ export class GameDataService {
         existingFields: params.existingFields
       })
 
-      const name = suggestion.name.trim() || fallback.name
-      const gender = suggestion.gender?.trim() || fallback.gender
-      const race = suggestion.race?.trim() || fallback.race
-      const characterClass = suggestion.characterClass.trim() || fallback.characterClass
-      const profession = suggestion.profession.trim() || fallback.profession
-      const description = suggestion.description.trim() || fallback.description
+      const name = suggestion.name.trim()
+      const gender = suggestion.gender?.trim() || ''
+      const race = suggestion.race?.trim() || ''
+      const characterClass = suggestion.characterClass.trim()
+      const profession = suggestion.profession.trim()
+      const description = suggestion.description.trim()
+
+      if (!name || !characterClass || !profession || !description) {
+        throw new Error('O provedor de IA retornou uma sugestão incompleta.')
+      }
 
       return {
         name,
@@ -863,8 +876,10 @@ export class GameDataService {
         profession,
         description
       }
-    } catch {
-      return fallback
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'erro desconhecido'
+      warn('suggestCharacterFromWorld', `Falha ao gerar sugestão por IA para campaignId=${params.campaignId}: ${message}`)
+      throw new ServiceUnavailableException(`Falha ao gerar personagem com IA: ${message}`)
     }
   }
 

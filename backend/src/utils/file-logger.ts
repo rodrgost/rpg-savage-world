@@ -45,7 +45,7 @@ function writeLine(line: string): void {
 
 export function logLlmRequest(tag: string, opts: {
   systemPrompt?: string
-  userPrompt: string
+  userPrompt: string | Array<{ role: string; text: string }>
   model?: string
   maxOutputTokens?: number
   temperature?: number
@@ -59,9 +59,18 @@ export function logLlmRequest(tag: string, opts: {
       writeLine(`  ${line}`)
     }
   }
-  writeLine('── USER PROMPT ──')
-  for (const line of opts.userPrompt.split('\n')) {
-    writeLine(`  ${line}`)
+  writeLine(Array.isArray(opts.userPrompt) ? `── USER PROMPT (${opts.userPrompt.length} turns) ──` : '── USER PROMPT ──')
+  if (Array.isArray(opts.userPrompt)) {
+    opts.userPrompt.forEach((entry, index) => {
+      writeLine(`  [${index + 1}] ${entry.role}`)
+      for (const line of entry.text.split('\n')) {
+        writeLine(`    ${line}`)
+      }
+    })
+  } else {
+    for (const line of opts.userPrompt.split('\n')) {
+      writeLine(`  ${line}`)
+    }
   }
   writeLine(sep)
 }

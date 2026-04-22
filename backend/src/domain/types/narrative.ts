@@ -86,14 +86,22 @@ export type ValidateActionRequest = {
     fatigue: number
     isShaken: boolean
     bennies: number
-    npcsPresent: Array<{ id: string; name: string }>
+    npcsPresent: Array<{
+      id: string
+      name: string
+      isWildCard: boolean
+      disposition?: 'hostile' | 'neutral' | 'friendly'
+      wounds: number
+      maxWounds: number
+      toughness: number
+      parry: number
+    }>
     inventory: InventoryItem[]
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
     playerSkills?: Record<string, string>
     rulesDigest?: string
   }
-  /** Últimas mensagens para contexto narrativo */
-  recentMessages: Array<{ role: string; narrative?: string; playerInput?: string }>
+  recentMessages: Array<{ role: string; narrative?: string; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
 }
 
 // ─── Opções de ação ───
@@ -188,7 +196,16 @@ export type NarrateTurnRequest = {
     fatigue: number
     isShaken: boolean
     bennies: number
-    npcsPresent: Array<{ id: string; name: string }>
+    npcsPresent: Array<{
+      id: string
+      name: string
+      isWildCard: boolean
+      disposition?: 'hostile' | 'neutral' | 'friendly'
+      wounds: number
+      maxWounds: number
+      toughness: number
+      parry: number
+    }>
     inventory: InventoryItem[]
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
     /** Perícias do personagem com seus dados atuais (ex: { "Percepção": "d6", "Luta": "d8" }) */
@@ -196,6 +213,5 @@ export type NarrateTurnRequest = {
     /** Digest compacto das regras do jogo + traços do personagem */
     rulesDigest?: string
   }
-  /** Últimas mensagens para manter coerência narrativa */
-  recentMessages: Array<{ role: string; narrative?: string; playerInput?: string }>
+  recentMessages: Array<{ role: string; narrative?: string; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
 }

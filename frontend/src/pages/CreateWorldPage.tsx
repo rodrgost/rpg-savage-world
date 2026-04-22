@@ -98,7 +98,21 @@ export function CreateWorldPage({ uid }: Props) {
         setLoreLoading(false)
       }
     } else {
-      setError('Salve o universo primeiro para gerar lore com IA.')
+      // No modo de criação, salva o universo primeiro e redireciona para edição
+      if (!name.trim()) {
+        setError('Informe o nome do universo antes de gerar lore.')
+        return
+      }
+      setError('')
+      setLoading(true)
+      try {
+        const newWorldId = await createWorld({ name, lore, visibility, image: imagePreview ?? undefined })
+        navigate(`/worlds/${newWorldId}/edit`)
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : 'Falha ao salvar universo')
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
@@ -208,7 +222,7 @@ export function CreateWorldPage({ uid }: Props) {
               className="lore-textarea"
               value={lore}
               onChange={(event) => setLore(event.target.value)}
-              placeholder={isEditMode ? 'Clique no botão para gerar lore com IA' : 'Salve o universo primeiro para gerar lore com IA'}
+              placeholder="Clique no botão abaixo para gerar lore com IA"
               rows={20}
             />
           ) : (
@@ -216,14 +230,14 @@ export function CreateWorldPage({ uid }: Props) {
               {lore.trim() ? (
                 <Markdown remarkPlugins={[remarkGfm]}>{lore}</Markdown>
               ) : (
-                <p className="muted">Nenhuma lore ainda. {isEditMode ? 'Gere com IA ou edite manualmente.' : 'Salve o universo e gere com IA.'}</p>
+                <p className="muted">Nenhuma lore ainda. Gere com IA ou edite manualmente.</p>
               )}
             </div>
           )}
 
-          {isEditMode && isOwner && (
+          {isOwner && (
             <button disabled={loreLoading || imageLoading || loading} onClick={handleGenerateLore} type="button">
-              {loreLoading ? 'Gerando lore com IA...' : '✨ Gerar / expandir lore com IA'}
+              {loreLoading ? 'Gerando lore com IA...' : loading && !isEditMode ? 'Salvando e gerando lore...' : '✨ Gerar / expandir lore com IA'}
             </button>
           )}
         </div>

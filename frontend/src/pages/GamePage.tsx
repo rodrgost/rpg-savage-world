@@ -17,11 +17,201 @@ import {
   getCampaign
 } from '../lib/api'
 import type { EnginePhaseData } from '../lib/api'
-import type { ActionOption, ChatMessage, GameState, InventoryItem, Hindrance, NarratorTurnResponse, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
+import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, NarratorTurnResponse, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
 import { ATTRIBUTES, SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
 import { YouTubeAmbient } from '../components/YouTubeAmbient'
 
 // ─── Helpers ───
+
+function normalizeEscapedText(value: string): string {
+  let normalized = value.replace(/\r\n?/g, '\n')
+
+  for (let iteration = 0; iteration < 2; iteration += 1) {
+    const next = normalized
+      .replace(/\\\\r\\\\n/g, '\n')
+      .replace(/\\\\n/g, '\n')
+      .replace(/\\\\r/g, '\n')
+      .replace(/\\\\t/g, '\t')
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\"/g, '"')
+
+    if (next === normalized) break
+    normalized = next
+  }
+
+  return normalized.normalize('NFC').trim()
+}
+
+function normalizeInlineText(value: string): string {
+  return normalizeEscapedText(value)
+    .replace(/\s*\n+\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function splitNarrativeParagraphs(narrative?: string): string[] {
+  if (!narrative) return []
+
+  return normalizeEscapedText(narrative)
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n')
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+}
+
+function trimIncompleteSummaryText(text?: string): string {
+  if (!text) return ''
+
+  const normalized = normalizeEscapedText(text)
+  if (/[.!?…]["')\]]?\s*$/u.test(normalized)) return normalized
+
+  const matches = [...normalized.matchAll(/[.!?…]["')\]]?(?=\s|$)/gu)]
+  if (!matches.length) return normalized
+
+  const last = matches[matches.length - 1]
+  const index = last.index ?? 0
+  return normalized.slice(0, index + last[0].length).trim()
+}
+
+function normalizeLookupKey(value: string): string {
+  return normalizeInlineText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+const SKILL_ALIAS_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
+  ['luta', 'lutar'],
+  ['tiro', 'atirar'],
+  ['conducao', 'dirigir', 'pilotar'],
+  ['montaria', 'cavalgar'],
+  ['medicina', 'curar'],
+  ['percepcao', 'notar'],
+  ['reparos', 'reparar'],
+  ['pesquisa', 'investigar'],
+  ['ciencia', 'ciencias'],
+  ['jogatina', 'apostar'],
+  ['intimidacao', 'intimidar'],
+  ['atuacao', 'desempenho'],
+  ['persuasao', 'persuadir'],
+  ['foco', 'psionismo'],
+  ['magias', 'conjurar'],
+  ['navegacao', 'navegar'],
+  ['ladinagem', 'roubar']
+] as const
+
+function normalizeActionPayload(actionPayload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(actionPayload).map(([key, value]) => [key, typeof value === 'string' ? normalizeInlineText(value) : value])
+  )
+}
+
+function resolveDiceCheckTrait(
+  diceCheck: DiceCheck | null | undefined,
+  actionPayload: Record<string, unknown>
+): { skill: string | null; attribute: string | null; label: string } {
+  const payloadSkill = typeof actionPayload.skill === 'string' ? normalizeInlineText(actionPayload.skill) : null
+  const payloadAttribute = typeof actionPayload.attribute === 'string' ? normalizeInlineText(actionPayload.attribute) : null
+  const skill = diceCheck?.skill ? normalizeInlineText(diceCheck.skill) : payloadSkill
+  const attribute = diceCheck?.attribute ? normalizeInlineText(diceCheck.attribute) : payloadAttribute
+
+  return {
+    skill,
+    attribute,
+    label: skill ?? attribute ?? '?'
+  }
+}
+
+function areEquivalentSkills(left: string, right: string): boolean {
+  const normalizedLeft = normalizeLookupKey(left)
+  const normalizedRight = normalizeLookupKey(right)
+
+  if (normalizedLeft === normalizedRight) return true
+
+  return SKILL_ALIAS_GROUPS.some((group) => group.includes(normalizedLeft) && group.includes(normalizedRight))
+}
+
+function resolvePlayerTraitDie(
+  playerState: GameState['player'] | null,
+  trait: { skill: string | null; attribute: string | null }
+): number | null {
+  if (!playerState) return null
+
+  if (trait.skill) {
+    const traitSkill = trait.skill
+    const direct = playerState.skills[traitSkill]
+    if (direct != null) return direct
+
+    const matchedSkill = Object.entries(playerState.skills).find(([storedSkill]) => areEquivalentSkills(storedSkill, traitSkill))
+    if (matchedSkill) return matchedSkill[1]
+  }
+
+  if (trait.attribute) {
+    const direct = playerState.attributes[trait.attribute]
+    if (direct != null) return direct
+
+    const normalizedAttribute = normalizeLookupKey(trait.attribute)
+    const matchedAttribute = ATTRIBUTES.find((attribute) => {
+      return normalizeLookupKey(attribute.key) === normalizedAttribute || normalizeLookupKey(attribute.label) === normalizedAttribute
+    })
+
+    if (matchedAttribute && playerState.attributes[matchedAttribute.key] != null) {
+      return playerState.attributes[matchedAttribute.key]
+    }
+  }
+
+  return null
+}
+
+function normalizeValidationResponse(validation: ValidateActionResponse): ValidateActionResponse {
+  const actionPayload = normalizeActionPayload(validation.actionPayload ?? {})
+  const resolvedTrait = resolveDiceCheckTrait(validation.diceCheck, actionPayload)
+
+  return {
+    ...validation,
+    interpretation: normalizeInlineText(validation.interpretation),
+    feasibilityReason: validation.feasibilityReason ? normalizeInlineText(validation.feasibilityReason) : validation.feasibilityReason,
+    actionPayload,
+    diceCheck: validation.diceCheck
+      ? {
+          ...validation.diceCheck,
+          skill: resolvedTrait.skill,
+          attribute: resolvedTrait.attribute,
+          reason: normalizeInlineText(validation.diceCheck.reason ?? '')
+        }
+      : validation.diceCheck
+  }
+}
+
+function normalizeOption(option: ActionOption): ActionOption {
+  const actionPayload = normalizeActionPayload(option.actionPayload ?? {})
+  const resolvedTrait = resolveDiceCheckTrait(option.diceCheck, actionPayload)
+
+  return {
+    ...option,
+    text: normalizeInlineText(option.text),
+    actionPayload,
+    feasibilityReason: option.feasibilityReason ? normalizeInlineText(option.feasibilityReason) : option.feasibilityReason,
+    diceCheck: option.diceCheck
+      ? {
+          ...option.diceCheck,
+          skill: resolvedTrait.skill,
+          attribute: resolvedTrait.attribute,
+          reason: normalizeInlineText(option.diceCheck.reason ?? '')
+        }
+      : option.diceCheck
+  }
+}
+
+function normalizeOptions(options?: ActionOption[]): ActionOption[] {
+  if (!options?.length) return []
+  return options
+    .map((option) => normalizeOption(option))
+    .filter((option) => Boolean(option.text))
+}
 
 /** Ordena mensagens: por seq (se disponível), senão por turn+role */
 function sortMessages(msgs: ChatMessage[]): ChatMessage[] {
@@ -66,14 +256,18 @@ function buildMessageSignature(message: ChatMessage): string {
   }
 
   if (message.role === 'player') {
-    return `player:${message.turn}:${message.playerInput?.trim() ?? ''}`
+    return `player:${message.turn}:${normalizeInlineText(message.playerInput ?? '')}`
   }
 
   if (message.role === 'narrator') {
-    return `narrator:${message.turn}:${message.narrative?.trim() ?? ''}`
+    return `narrator:${message.turn}:${normalizeEscapedText(message.narrative ?? '')}`
   }
 
-  return `system-summary:${message.turn}:${message.narrative?.trim() ?? ''}`
+  return `system-summary:${message.turn}:${normalizeEscapedText(message.narrative ?? '')}`
+}
+
+function getEngineMessageSignature(message: ChatMessage): string | null {
+  return message.engineEvents?.length ? buildMessageSignature(message) : null
 }
 
 function messageScore(message: ChatMessage): number {
@@ -214,7 +408,7 @@ function NarrativeBubble({ message }: { message: ChatMessage }) {
           <strong>Resumo da história até aqui</strong>
         </div>
         <div className="summary-text">
-          {message.narrative?.split('\n').map((paragraph, i) => (
+          {splitNarrativeParagraphs(trimIncompleteSummaryText(message.narrative)).map((paragraph, i) => (
             <p key={i}>{paragraph}</p>
           ))}
         </div>
@@ -226,7 +420,7 @@ function NarrativeBubble({ message }: { message: ChatMessage }) {
     <div className="msg narrator">
       <strong>Narrador</strong>
       <div className="narrative-text">
-        {message.narrative?.split('\n').map((paragraph, i) => (
+        {splitNarrativeParagraphs(message.narrative).map((paragraph, i) => (
           <p key={i}>{paragraph}</p>
         ))}
       </div>
@@ -296,6 +490,7 @@ function ActionOptions({
         {options.map((option) => {
           const dc = option.diceCheck
           const hasDice = dc?.required === true
+          const trait = resolveDiceCheckTrait(dc, option.actionPayload)
           return (
             <button
               key={option.id}
@@ -310,7 +505,7 @@ function ActionOptions({
               </span>
               {hasDice && dc && (
                 <span className="dice-check-info">
-                  Teste: {dc.skill ?? dc.attribute ?? '?'}
+                  Teste: {trait.label}
                   {dc.modifier ? ` (${dc.modifier > 0 ? '+' : ''}${dc.modifier})` : ''}
                   {' · TN '}{dc.tn ?? 4}
                 </span>
@@ -378,16 +573,9 @@ function DiceCheckConfirmModal({
   const dc = option.diceCheck
   if (!dc) return null
 
-  const traitName = dc.skill ?? dc.attribute ?? '?'
-  // Resolve the player's current die for this trait
-  let playerDie: number | null = null
-  if (playerState) {
-    if (dc.skill && playerState.skills[dc.skill] != null) {
-      playerDie = playerState.skills[dc.skill]
-    } else if (dc.attribute && playerState.attributes[dc.attribute] != null) {
-      playerDie = playerState.attributes[dc.attribute]
-    }
-  }
+  const trait = resolveDiceCheckTrait(dc, option.actionPayload)
+  const traitName = trait.label
+  const playerDie = resolvePlayerTraitDie(playerState, trait)
 
   const tn = dc.tn ?? 4
   const mod = dc.modifier ?? 0
@@ -440,7 +628,126 @@ function DiceCheckConfirmModal({
 
 // ─── Dice Result Card (inline no chat) ───
 
+type AttackHitPayload = {
+  targetName: string
+  skill: string
+  attackRoll: number
+  targetParry: number
+  attackRaises: number
+  damageTotal: number
+  targetToughness: number
+  woundsInflicted: number
+  targetShaken: boolean
+  targetIncapacitated: boolean
+  traitRoll: DiceRollDetail
+  wildRoll: DiceRollDetail | null
+  damageRolls: DiceRollDetail[]
+}
+
+type AttackMissPayload = {
+  targetName: string
+  skill: string
+  attackRoll: number
+  targetParry: number
+  traitRoll: DiceRollDetail
+  wildRoll: DiceRollDetail | null
+}
+
+function AttackResultCard({ event }: { event: SessionEvent }) {
+  const isHit = event.type === 'attack_hit'
+  const p = event.payload as unknown as AttackHitPayload & AttackMissPayload
+  const traitRoll = p.traitRoll
+  const wildRoll = p.wildRoll
+
+  return (
+    <div className={`dice-result-card ${isHit ? 'dice-success' : 'dice-failure'}`}>
+      <div className="dice-result-header">
+        <span className="dice-result-icon">{isHit ? '⚔️' : '❌'}</span>
+        <span className="dice-result-title">{p.skill} → {p.targetName}</span>
+        {isHit ? (
+          <span className="dice-result-badge success">
+            {p.attackRaises > 0
+              ? `Acertou +${p.attackRaises} ampliaç${p.attackRaises > 1 ? 'ões' : 'ão'}`
+              : 'Acertou'}
+          </span>
+        ) : (
+          <span className="dice-result-badge failure">Errou</span>
+        )}
+      </div>
+
+      {/* Rolagem de ataque */}
+      <div className="dice-result-rolls">
+        {traitRoll && (
+          <div className="dice-roll-group">
+            <span className="dice-roll-label">Ataque d{traitRoll.sides}</span>
+            <div className="dice-roll-values">
+              {traitRoll.rolls?.map((r: number, i: number) => (
+                <span key={i} className={`dice-value ${traitRoll.aced ? 'aced' : ''}`}>
+                  {r}{traitRoll.aced && i < traitRoll.rolls.length - 1 ? '🔥' : ''}
+                </span>
+              )) ?? <span className="dice-value">{traitRoll.total}</span>}
+              <span className="dice-roll-total">= {traitRoll.total}</span>
+            </div>
+          </div>
+        )}
+        {wildRoll && (
+          <div className="dice-roll-group">
+            <span className="dice-roll-label">Wild d6</span>
+            <div className="dice-roll-values">
+              {wildRoll.rolls?.map((r: number, i: number) => (
+                <span key={i} className={`dice-value ${wildRoll.aced ? 'aced' : ''}`}>
+                  {r}{wildRoll.aced && i < wildRoll.rolls.length - 1 ? '🔥' : ''}
+                </span>
+              )) ?? <span className="dice-value">{wildRoll.total}</span>}
+              <span className="dice-roll-total">= {wildRoll.total}</span>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="dice-result-summary">
+        <span className="dice-final">Ataque: <strong>{p.attackRoll}</strong></span>
+        <span className="dice-tn">Aparar: {p.targetParry}</span>
+      </div>
+
+      {/* Dano (apenas em acerto) */}
+      {isHit && (
+        <>
+          <div className="dice-result-rolls attack-damage-rolls">
+            {p.damageRolls?.map((dr, i) => (
+              <div key={i} className="dice-roll-group">
+                <span className="dice-roll-label">Dano d{dr.sides}</span>
+                <div className="dice-roll-values">
+                  {dr.rolls.map((r: number, j: number) => (
+                    <span key={j} className={`dice-value ${dr.aced ? 'aced' : ''}`}>
+                      {r}{dr.aced && j < dr.rolls.length - 1 ? '🔥' : ''}
+                    </span>
+                  ))}
+                  <span className="dice-roll-total">= {dr.total}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="dice-result-summary">
+            <span className="dice-final">Dano: <strong>{p.damageTotal}</strong></span>
+            <span className="dice-tn">Resistência: {p.targetToughness}</span>
+            {p.targetIncapacitated ? (
+              <span className="attack-result-status incapacitated">💀 Incapacitado</span>
+            ) : p.woundsInflicted > 0 ? (
+              <span className="attack-result-status wounded">🩸 {p.woundsInflicted} ferimento{p.woundsInflicted > 1 ? 's' : ''}</span>
+            ) : p.targetShaken ? (
+              <span className="attack-result-status shaken">🟡 Abalado</span>
+            ) : null}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function DiceResultCard({ event }: { event: SessionEvent }) {
+  if (event.type === 'attack_hit' || event.type === 'attack_miss') {
+    return <AttackResultCard event={event} />
+  }
   if (event.type !== 'trait_test') return null
 
   const p = event.payload as unknown as TraitTestPayload
@@ -817,18 +1124,19 @@ export function GamePage() {
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
-  const historySummaryText = summary?.historySummaryText?.trim() ?? ''
+  const pendingEngineMessagesRef = useRef<Map<string, ChatMessage>>(new Map())
+  const sessionSummaryText = trimIncompleteSummaryText(summary?.summaryText)
   const hasPersistedSummaryMessage = messages.some(
     (message) => message.role === 'system' && Boolean(message.narrative?.trim()) && !(message.engineEvents?.length)
   )
-  const displayMessages = historySummaryText && !hasPersistedSummaryMessage
+  const displayMessages = sessionSummaryText && !hasPersistedSummaryMessage
     ? [{
-        messageId: `history-summary-${sessionId || state?.meta.sessionId || 'session'}`,
+        messageId: `session-summary-${sessionId || state?.meta.sessionId || 'session'}`,
         sessionId: sessionId || state?.meta.sessionId || '',
         turn: -1,
         seq: -1,
         role: 'system' as const,
-        narrative: historySummaryText
+        narrative: sessionSummaryText
       }, ...messages]
     : messages
 
@@ -839,9 +1147,49 @@ export function GamePage() {
 
   function commitMessages(nextMessages: ChatMessage[]) {
     const sorted = sortMessages(nextMessages)
+
+    if (pendingEngineMessagesRef.current.size > 0) {
+      const nextPending = new Map(pendingEngineMessagesRef.current)
+
+      for (const message of sorted) {
+        if (isLocalOnlyMessage(message)) continue
+
+        const signature = getEngineMessageSignature(message)
+        if (!signature) continue
+
+        nextPending.delete(signature)
+      }
+
+      pendingEngineMessagesRef.current = nextPending
+    }
+
     messagesRef.current = sorted
     setMessages(sorted)
     return sorted
+  }
+
+  function reconcilePendingEngineMessages(...groups: ChatMessage[][]) {
+    const nextPending = new Map(pendingEngineMessagesRef.current)
+
+    for (const group of groups) {
+      for (const message of group) {
+        if (!message) continue
+
+        const signature = getEngineMessageSignature(message)
+        if (!signature) continue
+
+        if (isLocalOnlyMessage(message)) {
+          const existing = nextPending.get(signature)
+          nextPending.set(signature, existing ? choosePreferredMessage(existing, message) : message)
+          continue
+        }
+
+        nextPending.delete(signature)
+      }
+    }
+
+    pendingEngineMessagesRef.current = nextPending
+    return [...nextPending.values()]
   }
 
   function mergeAndCommitMessages(...groups: ChatMessage[][]) {
@@ -856,13 +1204,14 @@ export function GamePage() {
       .then((payload) => {
         setState(payload.state)
         setSummary(payload.summary ?? null)
+        pendingEngineMessagesRef.current.clear()
         const hydratedMessages = commitMessages(payload.messages ?? [])
         // Extract options from last narrator message
         const lastNarrator = [...hydratedMessages].reverse().find(
           (m) => m.role === 'narrator' && m.options?.length
         )
         if (lastNarrator?.options) {
-          setCurrentOptions(lastNarrator.options)
+          setCurrentOptions(normalizeOptions(lastNarrator.options))
         }
         // Fetch campaign to get youtubeUrl and header info
         const campaignId = payload.state?.meta?.campaignId
@@ -900,6 +1249,7 @@ export function GamePage() {
     setSummary(result.summary ?? null)
 
     let msgs = result.messages ?? []
+    const normalizedNarratorOptions = normalizeOptions(result.narratorResponse?.options)
 
     // Construir mensagem do narrador (fallback se Firestore ainda não propagou)
     let narratorMsg: ChatMessage | null = null
@@ -915,7 +1265,7 @@ export function GamePage() {
           turn: result.state.meta.turn,
           role: 'narrator',
           narrative: nr.narrative,
-          options: nr.options,
+          options: normalizedNarratorOptions,
           npcs: nr.npcs,
           itemChanges: nr.itemChanges,
           statusChanges: nr.statusChanges
@@ -927,17 +1277,30 @@ export function GamePage() {
     if (narratorMsg) {
       msgs = [...msgs, narratorMsg]
     }
+    const pendingEngineMessages = options?.replaceMessages
+      ? []
+      : reconcilePendingEngineMessages(msgs)
+    if (options?.replaceMessages) {
+      pendingEngineMessagesRef.current.clear()
+    }
+    console.debug('[GamePage.handlePayload]', {
+      turn: result.state.meta.turn,
+      replaceMessages: Boolean(options?.replaceMessages),
+      incomingMessages: msgs.length,
+      pendingEngineMessages: pendingEngineMessages.length,
+      hasNarratorResponse: Boolean(result.narratorResponse?.narrative)
+    })
     const committedMessages = options?.replaceMessages
       ? commitMessages(msgs)
-      : mergeAndCommitMessages(messagesRef.current, msgs)
+      : mergeAndCommitMessages(messagesRef.current, msgs, pendingEngineMessages)
 
-    if (result.narratorResponse?.options?.length) {
-      setCurrentOptions(result.narratorResponse.options)
+    if (result.narratorResponse) {
+      setCurrentOptions(normalizedNarratorOptions)
     } else {
       const lastNarrator = [...committedMessages].reverse().find(
         (m) => m.role === 'narrator' && m.options?.length
       )
-      setCurrentOptions(lastNarrator?.options ?? [])
+      setCurrentOptions(normalizeOptions(lastNarrator?.options))
     }
     setLoading(false)
   }
@@ -954,12 +1317,24 @@ export function GamePage() {
 
     const transientEngineMessage = buildTransientEngineMessage(data, sessionId)
     const incomingMessages = data.messages ?? []
+    const pendingEngineMessages = reconcilePendingEngineMessages(
+      incomingMessages,
+      transientEngineMessage ? [transientEngineMessage] : []
+    )
 
-    if (incomingMessages.length || transientEngineMessage) {
+    console.debug('[GamePage.handleEnginePhase]', {
+      turn: data.state?.meta.turn,
+      incomingMessages: incomingMessages.length,
+      diceEvents: data.diceEvents?.length ?? 0,
+      hasTransientEngineMessage: Boolean(transientEngineMessage),
+      pendingEngineMessages: pendingEngineMessages.length
+    })
+
+    if (incomingMessages.length || pendingEngineMessages.length) {
       mergeAndCommitMessages(
         messagesRef.current,
         incomingMessages,
-        transientEngineMessage ? [transientEngineMessage] : []
+        pendingEngineMessages
       )
     }
   }
@@ -1028,7 +1403,7 @@ export function GamePage() {
         return
       }
       if (validation.diceCheck?.required) {
-        setPendingValidation({ input: text, validation })
+        setPendingValidation({ input: text, validation: normalizeValidationResponse(validation) })
         setValidating(false)
         return
       }
@@ -1153,6 +1528,7 @@ export function GamePage() {
     setError('')
     try {
       const result = await resetSession(sessionId)
+      pendingEngineMessagesRef.current.clear()
       handlePayload(result, { replaceMessages: true })
       setSidebarOpen(false)
     } catch (err) {
@@ -1356,17 +1732,18 @@ export function GamePage() {
                 <div className="dice-detail-row">
                   <span className="dice-detail-label">Teste</span>
                   <span className="dice-detail-value">
-                    {pendingValidation.validation.diceCheck.skill ?? pendingValidation.validation.diceCheck.attribute ?? '?'}
+                    {resolveDiceCheckTrait(
+                      pendingValidation.validation.diceCheck,
+                      pendingValidation.validation.actionPayload
+                    ).label}
                   </span>
                 </div>
                 {(() => {
-                  const dc = pendingValidation.validation.diceCheck!
-                  const p = state?.player
-                  let playerDie: number | null = null
-                  if (p) {
-                    if (dc.skill && p.skills[dc.skill] != null) playerDie = p.skills[dc.skill]
-                    else if (dc.attribute && p.attributes[dc.attribute] != null) playerDie = p.attributes[dc.attribute]
-                  }
+                  const trait = resolveDiceCheckTrait(
+                    pendingValidation.validation.diceCheck,
+                    pendingValidation.validation.actionPayload
+                  )
+                  const playerDie = resolvePlayerTraitDie(state?.player ?? null, trait)
                   return playerDie != null ? (
                     <div className="dice-detail-row">
                       <span className="dice-detail-label">Seu dado</span>

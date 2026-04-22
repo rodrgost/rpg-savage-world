@@ -226,5 +226,4 @@ export type SessionEvent = {
 export type SummaryDoc = {
   summaryText: string
   lastTurnIncluded: number
-  historySummaryText?: string
 }

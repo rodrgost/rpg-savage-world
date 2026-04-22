@@ -10,8 +10,10 @@ async function bootstrap(): Promise<void> {
   app.useBodyParser('json', { limit: '5mb' })
   app.useBodyParser('urlencoded', { limit: '5mb', extended: true })
 
+  const localhostPattern = /^http:\/\/localhost:\d+$/
+  const extraOrigins: Array<string | RegExp> = env.allowedOrigins
   app.enableCors({
-    origin: [/^http:\/\/localhost:\d+$/],
+    origin: [localhostPattern, ...extraOrigins],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
   })

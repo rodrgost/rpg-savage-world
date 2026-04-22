@@ -17,7 +17,10 @@ export const env = {
   firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? '',
   firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
 
-  summaryIntervalTurns: Number(process.env.SUMMARY_INTERVAL_TURNS ?? '10')
+  summaryIntervalTurns: Number(process.env.SUMMARY_INTERVAL_TURNS ?? '10'),
+
+  // Origens adicionais permitidas no CORS (ex.: domínio customizado no Railway)
+  allowedOrigins: (process.env.ALLOWED_ORIGIN ?? '').split(',').map(o => o.trim()).filter(Boolean)
 }
 
 // Garante que pelo menos um caminho de credenciais exista.

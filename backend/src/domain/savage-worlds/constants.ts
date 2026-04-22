@@ -61,6 +61,88 @@ export const SKILLS: readonly SkillDefinition[] = [
 
 export const CORE_SKILL_KEYS = SKILLS.map((s) => s.key)
 
+const SKILL_ALIAS_TO_KEY: Readonly<Record<string, string>> = {
+  Apostar: 'gambling',
+  Atirar: 'shooting',
+  Cavalgar: 'riding',
+  Ciências: 'science',
+  Conjurar: 'spellcasting',
+  Curar: 'healing',
+  Desempenho: 'performance',
+  Dirigir: 'driving',
+  Intimidar: 'intimidation',
+  Investigar: 'research',
+  Lutar: 'fighting',
+  Navegar: 'boating',
+  Notar: 'notice',
+  Persuadir: 'persuasion',
+  Pilotar: 'driving',
+  Psionismo: 'focus',
+  Reparar: 'repair',
+  Roubar: 'thievery'
+}
+
+function normalizeSkillLookupValue(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+const SKILL_DEFINITION_BY_LOOKUP = new Map<string, SkillDefinition>()
+
+for (const skill of SKILLS) {
+  SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(skill.key), skill)
+  SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(skill.label), skill)
+}
+
+for (const [alias, skillKey] of Object.entries(SKILL_ALIAS_TO_KEY)) {
+  const def = SKILLS.find((skill) => skill.key === skillKey)
+  if (def) {
+    SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(alias), def)
+  }
+}
+
+export function findSkillDefinition(skillName: string | null | undefined): SkillDefinition | undefined {
+  if (typeof skillName !== 'string') return undefined
+
+  const normalized = normalizeSkillLookupValue(skillName)
+  if (!normalized) return undefined
+
+  return SKILL_DEFINITION_BY_LOOKUP.get(normalized)
+}
+
+export function getCanonicalSkillLabel(skillName: string | null | undefined): string | undefined {
+  const trimmed = typeof skillName === 'string' ? skillName.trim() : ''
+  if (!trimmed) return undefined
+
+  return findSkillDefinition(trimmed)?.label ?? trimmed
+}
+
+export function resolveSkillDie(skills: Record<string, DieType>, skillName: string | null | undefined): DieType | undefined {
+  if (typeof skillName !== 'string') return undefined
+
+  const trimmed = skillName.trim()
+  if (!trimmed) return undefined
+
+  const direct = skills[trimmed]
+  if (isDieType(direct)) return direct
+
+  const targetDef = findSkillDefinition(trimmed)
+  const normalizedTarget = normalizeSkillLookupValue(trimmed)
+
+  for (const [storedName, die] of Object.entries(skills)) {
+    if (!isDieType(die)) continue
+    if (normalizeSkillLookupValue(storedName) === normalizedTarget) return die
+
+    const storedDef = findSkillDefinition(storedName)
+    if (targetDef && storedDef?.key === targetDef.key) return die
+  }
+
+  return undefined
+}
+
 // ─── Edges ───
 
 export type EdgeRequirement = {

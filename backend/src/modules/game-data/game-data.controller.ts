@@ -53,14 +53,9 @@ const IncrementCampaignPreviewBody = z.object({
 
 const CampaignImagePreviewBody = z
   .object({
-    campaignId: z.string().min(1).optional(),
-    worldName: z.string().min(1).optional(),
     thematic: z.string().min(1)
   })
   .strict()
-  .refine((data) => Boolean(data.campaignId || data.worldName), {
-    message: 'Informe campaignId ou worldName'
-  })
 
 // ─── World (universo / cenário) ────────────────────────────────
 

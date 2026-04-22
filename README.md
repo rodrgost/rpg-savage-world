@@ -22,7 +22,7 @@ Para rodar a aplicação web completa localmente:
 
 1. Instale as dependências com `npm install`.
 2. Crie o arquivo `.env` na raiz a partir de `.env.example`.
-3. Preencha as variáveis de Firebase Web SDK, OAuth2, Firebase Admin e Gemini.
+3. Preencha as variáveis de Firebase Web SDK, OAuth2, Firebase Admin e do LLM (modelo de linguagem) escolhido.
 4. Suba o backend HTTP com `npm run dev:backend`.
 5. Em outro terminal, suba o frontend com `npm run dev:frontend`.
 
@@ -45,9 +45,13 @@ O arquivo `.env.example` na raiz concentra as variáveis usadas pelo frontend e 
 - `VITE_BACKEND_URL`: URL base do backend HTTP
 - `OAUTH2_CLIENT_ID`: configuração de autenticação OAuth2
 - `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_PATH` ou `FIREBASE_SERVICE_ACCOUNT_JSON`: credenciais administrativas
-- `GEMINI_*`: configuração do narrador e geração de conteúdo
+- `LLM_PROVIDER`: seleciona o provedor do narrador (`gemini` ou `deepseek`)
+- `DEEPSEEK_*`: configuração do narrador quando o provedor for DeepSeek
+- `GEMINI_*`: configuração do narrador quando o provedor for Gemini e da geração de imagem
 
 Se usar `FIREBASE_SERVICE_ACCOUNT_PATH`, mantenha o JSON fora do repositório ou em um caminho já ignorado pelo Git.
+
+No fluxo atual, apenas o narrador textual suporta DeepSeek. A geração de imagem continua usando Gemini.
 
 ## Persistência no Firestore
 

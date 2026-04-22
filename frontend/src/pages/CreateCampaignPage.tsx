@@ -98,11 +98,7 @@ export function CreateCampaignPage({ uid }: Props) {
     setImageLoading(true)
 
     try {
-      const image = await generateCampaignImagePreview(
-        isEditMode && campaignId
-          ? { campaignId, thematic }
-          : { worldName, thematic }
-      )
+      const image = await generateCampaignImagePreview({ thematic })
       setImagePreview(image)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Falha ao gerar imagem da campanha')

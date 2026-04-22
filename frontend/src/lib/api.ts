@@ -21,7 +21,9 @@ function normalizeEnvValue(value: unknown): string {
   return trimmed.replace(/^"(.*)"$/, '$1')
 }
 
-const backendBaseUrl = normalizeEnvValue(import.meta.env.VITE_BACKEND_URL) || 'http://localhost:3100'
+// Em produção (Railway), VITE_BACKEND_URL não é definida → string vazia → URLs relativas (same-origin).
+// Em dev local, VITE_BACKEND_URL=http://localhost:3100 vem do .env da raiz.
+const backendBaseUrl = normalizeEnvValue(import.meta.env.VITE_BACKEND_URL)
 
 async function buildAuthHeaders(initHeaders?: HeadersInit): Promise<Headers> {
   const idToken = await getAuthenticatedIdToken()
@@ -99,6 +101,16 @@ async function apiStreamRequest<T>(
       if (!line.trim()) continue
       try {
         const data = JSON.parse(line) as Record<string, unknown>
+        if (data.phase === 'engine' || data.phase === 'narration' || data.phase === 'error') {
+          console.debug('[apiStreamRequest]', {
+            path,
+            phase: data.phase,
+            turn: (data.state as { meta?: { turn?: number } } | undefined)?.meta?.turn,
+            messages: Array.isArray(data.messages) ? data.messages.length : 0,
+            diceEvents: Array.isArray(data.diceEvents) ? data.diceEvents.length : 0,
+            hasNarratorResponse: Boolean(data.narratorResponse)
+          })
+        }
         if (data.phase === 'error') {
           throw new Error(String(data.message ?? 'Erro no servidor'))
         }
@@ -115,6 +127,16 @@ async function apiStreamRequest<T>(
   if (buffer.trim()) {
     try {
       const data = JSON.parse(buffer) as Record<string, unknown>
+      if (data.phase === 'engine' || data.phase === 'narration' || data.phase === 'error') {
+        console.debug('[apiStreamRequest]', {
+          path,
+          phase: data.phase,
+          turn: (data.state as { meta?: { turn?: number } } | undefined)?.meta?.turn,
+          messages: Array.isArray(data.messages) ? data.messages.length : 0,
+          diceEvents: Array.isArray(data.diceEvents) ? data.diceEvents.length : 0,
+          hasNarratorResponse: Boolean(data.narratorResponse)
+        })
+      }
       if (data.phase === 'error') {
         throw new Error(String(data.message ?? 'Erro no servidor'))
       }
@@ -357,8 +379,6 @@ export async function incrementCampaignStory(campaignId: string): Promise<string
 
 export async function generateCampaignImagePreview(params: {
   thematic: string
-  worldName?: string
-  campaignId?: string
 }): Promise<StoredImage> {
   const response = await apiRequest<{ image: StoredImage }>('/campaigns/image-preview', {
     method: 'POST',
@@ -620,6 +640,12 @@ export async function validateCustomAction(
   return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/validate-action', {
     method: 'POST',
     body: JSON.stringify({ input })
+  })
+}
+
+export async function rebuildHistorySummary(sessionId: string): Promise<SessionPayload> {
+  return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/rebuild-history-summary', {
+    method: 'POST'
   })
 }
 

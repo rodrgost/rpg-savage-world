@@ -21,7 +21,7 @@ const ActionSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('attack'),
-    skill: z.string().min(1).default('Lutar'),
+    skill: z.string().min(1).default('Luta'),
     targetId: z.string().min(1),
     modifier: z.number().int().default(0),
     damageFormula: z.string().optional(),
@@ -68,6 +68,11 @@ export class SessionController {
   @Get('/:sessionId/messages')
   async messages(@CurrentUser('uid') userId: string, @Param('sessionId') sessionId: string) {
     return await this.sessions.getMessages({ ownerId: userId, sessionId })
+  }
+
+  @Post('/:sessionId/rebuild-history-summary')
+  async rebuildHistorySummary(@CurrentUser('uid') userId: string, @Param('sessionId') sessionId: string) {
+    return await this.sessions.rebuildHistorySummary({ ownerId: userId, sessionId })
   }
 
   @Post('/:sessionId/validate-action')

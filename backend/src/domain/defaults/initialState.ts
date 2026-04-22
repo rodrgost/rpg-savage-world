@@ -4,7 +4,8 @@ import {
   calcParry,
   calcToughness,
   CHARACTER_CREATION,
-  defaultAttributes
+  defaultAttributes,
+  resolveSkillDie
 } from '../savage-worlds/constants.js'
 
 export type CharacterInput = {
@@ -24,7 +25,7 @@ export function createInitialState(params: { sessionId: string; campaignId: stri
   const hindrances = char?.hindrances ?? []
   const armor = char?.armor ?? 0
 
-  const fightingDie = skills['fighting'] ?? 0
+  const fightingDie = resolveSkillDie(skills, 'Luta') ?? 0
   const pace = calcPace(edges, hindrances)
   const parry = calcParry(fightingDie as DieType | 0, edges)
   const toughness = calcToughness(attributes.vigor, armor, edges, hindrances)

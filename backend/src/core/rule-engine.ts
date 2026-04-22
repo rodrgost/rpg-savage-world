@@ -1,10 +1,11 @@
 import type { DieType, EngineResult, GameState, NPCCombatant, PlayerAction } from '../domain/types/gameState.js'
+import { getCanonicalSkillLabel, resolveSkillDie } from '../domain/savage-worlds/constants.js'
 import { rollTrait, rollDamage, countRaises } from './dice-engine.js'
 
 // ─── Savage Worlds Rule Engine ───
 
 function getSkillDie(state: GameState, skillName: string): DieType {
-  return state.player.skills[skillName] ?? 4
+  return resolveSkillDie(state.player.skills, skillName) ?? 4
 }
 
 function getAttributeDie(state: GameState, attrName: string): DieType {
@@ -47,9 +48,10 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
   switch (action.type) {
     // ─── Trait Test ───
     case 'trait_test': {
-      const traitName = action.skill ?? action.attribute ?? 'Notar'
-      const traitDie = action.skill
-        ? getSkillDie(nextState, action.skill)
+      const skillName = getCanonicalSkillLabel(action.skill)
+      const traitName = skillName ?? action.attribute ?? 'Percepção'
+      const traitDie = skillName
+        ? getSkillDie(nextState, skillName)
         : action.attribute
           ? getAttributeDie(nextState, action.attribute)
           : 4 as DieType
@@ -85,7 +87,7 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
         break
       }
 
-      const attackSkill = action.skill ?? 'Lutar'
+      const attackSkill = getCanonicalSkillLabel(action.skill) ?? 'Luta'
       const attackDie = getSkillDie(nextState, attackSkill)
       const penalty = woundPenalty(nextState.player.wounds)
       const attackModifier = (action.modifier ?? 0) + penalty

@@ -294,7 +294,7 @@ export function CreateCharacterPage({ uid }: Props) {
       if (!profession.trim()) setProfession(suggestion.profession)
       if (!description.trim()) setDescription(suggestion.description)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao sugerir personagem')
+      setError(e instanceof Error ? e.message : 'Falha ao gerar sugestão por IA para este personagem')
     } finally {
       setSuggestLoading(false)
     }
@@ -305,17 +305,18 @@ export function CreateCharacterPage({ uid }: Props) {
     setImageLoading(true)
     setError('')
     try {
-      // Compile all user-edited fields into a rich description for image generation
+      // Consolida o que o jogador já definiu para o backend melhorar a descrição visual do retrato.
       const parts: string[] = []
-      if (name) parts.push(`Name: ${name}`)
-      if (description) parts.push(description)
+      if (name.trim()) parts.push(`Nome do personagem: ${name.trim()}`)
+      if (description.trim()) parts.push(`Descrição base: ${description.trim()}`)
+      if (selectedCampaign?.thematic?.trim()) parts.push(`Tom da campanha: ${selectedCampaign.thematic.trim()}`)
       if (selectedEdges.length > 0) {
         const labels = selectedEdges.map(k => EDGES.find(e => e.key === k)?.label ?? k)
-        parts.push(`Traits: ${labels.join(', ')}`)
+        parts.push(`Traços marcantes: ${labels.join(', ')}`)
       }
       if (selectedHindrances.length > 0) {
         const labels = selectedHindrances.map(h => HINDRANCES.find(d => d.key === h.name)?.label ?? h.name)
-        parts.push(`Flaws: ${labels.join(', ')}`)
+        parts.push(`Complicações visíveis: ${labels.join(', ')}`)
       }
 
       const img = await generateCharacterImagePreview({

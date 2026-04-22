@@ -8,7 +8,8 @@ import {
   HINDRANCES,
   WEAPONS,
   ARMORS,
-  ATTRIBUTES
+  ATTRIBUTES,
+  getCanonicalSkillLabel
 } from '../domain/savage-worlds/constants.js'
 
 function formatDie(die: DieType): string {
@@ -16,13 +17,38 @@ function formatDie(die: DieType): string {
 }
 
 function buildPlayerSkillsMap(skills: Record<string, DieType>): Record<string, string> {
-  const result: Record<string, string> = {}
+  const byLabel: Record<string, DieType> = {}
   for (const [key, die] of Object.entries(skills)) {
-    const def = SKILLS.find((s) => s.key === key)
-    const label = def?.label ?? key
-    result[label] = formatDie(die)
+    const label = getCanonicalSkillLabel(key) ?? key
+    const current = byLabel[label]
+    if (!current || die > current) {
+      byLabel[label] = die
+    }
   }
-  return result
+
+  return Object.fromEntries(
+    Object.entries(byLabel).map(([label, die]) => [label, formatDie(die)])
+  )
+}
+
+function normalizeLlmText(text: string): string {
+  let normalized = text.replace(/\r\n?/g, '\n')
+
+  for (let iteration = 0; iteration < 2; iteration += 1) {
+    const next = normalized
+      .replace(/\\\\r\\\\n/g, '\n')
+      .replace(/\\\\n/g, '\n')
+      .replace(/\\\\r/g, '\n')
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\n')
+      .replace(/\\"/g, '"')
+
+    if (next === normalized) break
+    normalized = next
+  }
+
+  return normalized.normalize('NFC').trim()
 }
 
 // ─── Rules Digest ───
@@ -36,9 +62,12 @@ function buildRulesDigest(state: GameState): string {
     'Testes: rola-se o dado da perícia/atributo + Wild Die (d6). Usa-se o MAIOR. Se tirar o máximo, o dado "explode" (re-rola e soma).',
     'Sucesso: total >= 4 (TN padrão). Cada +4 acima do TN = 1 Raise (sucesso excepcional).',
     'Combate: Ataque rola Luta/Tiro vs Aparar do alvo (corpo a corpo) ou TN 4 (distância). Raise no ataque = +1d6 de dano.',
-    'Dano vs Resistência: dano >= Resistência → Abalado (Shaken). Cada raise = +1 Ferimento. Já Abalado + Abalado novamente = +1 Ferimento.',
-    'Ferimentos: -1 por ferimento em TODOS os testes (máx -3). 4+ ferimentos = Incapacitado.',
-    'Bennies: gastar para re-rolar teste, absorver ferimento (Soak com Vigor), ou recuperar de Abalado.',
+    'Dano vs Resistência: dano >= Resistência → Abalado (Shaken). Cada +4 acima da Resistência = +1 Ferimento adicional. Já Abalado + novo golpe = +1 Ferimento imediato.',
+    'Ferimentos (Wild Cards): -1 por ferimento em TODOS os testes (máx -3). 4+ ferimentos = Incapacitado.',
+    'Extras (NPCs comuns, guardas, zumbis, bandidos): 1 único ferimento = removido de combate imediatamente. Sem Wild Die, sem Bennies.',
+    'Wild Cards (heróis, vilões, chefes): suportam até 3 ferimentos como o jogador. Possuem Wild Die e Bennies.',
+    'Soak (absorver ferimento): custa 1 Benny + rola Vigor. Sucesso = 1 ferimento absorvido. Cada raise = +1 ferimento absorvido.',
+    'Bennies: gastar para re-rolar teste, fazer Soak (absorver ferimento), ou recuperar de Abalado.',
     'Fadiga: acumula por esforço, ambiente, poderes. Causa -1 por nível. Em excesso → Incapacitado.'
   ].join('\n'))
 
@@ -126,7 +155,16 @@ export type LlmContext = {
     fatigue: number
     isShaken: boolean
     bennies: number
-    npcsPresent: Array<{ id: string; name: string }>
+    npcsPresent: Array<{
+      id: string
+      name: string
+      isWildCard: boolean
+      disposition?: 'hostile' | 'neutral' | 'friendly'
+      wounds: number
+      maxWounds: number
+      toughness: number
+      parry: number
+    }>
     situation: 'exploracao' | 'combat' | 'dialogo'
     inventory: InventoryItem[]
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
@@ -135,21 +173,11 @@ export type LlmContext = {
   }
   /** Digest compacto das regras SW + traços do personagem + equipamento */
   rulesDigest: string
-  recentMessages: Array<{ role: string; narrative?: string; playerInput?: string }>
+  recentMessages: Array<{ role: string; narrative?: string; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
 }
 
 function buildCombinedSummaryText(summary: SessionSummaryRow | null): string {
-  const sessionSummaryText = summary?.summaryText?.trim() ?? ''
-  const historySummaryText = summary?.historySummaryText?.trim() ?? ''
-
-  if (sessionSummaryText && historySummaryText) {
-    return [
-      `Resumo da sessao:\n${sessionSummaryText}`,
-      `Historico resumido do chat:\n${historySummaryText}`
-    ].join('\n\n')
-  }
-
-  return sessionSummaryText || historySummaryText
+  return summary?.summaryText ? normalizeLlmText(summary.summaryText) : ''
 }
 
 export function buildLlmContext(params: {
@@ -171,7 +199,16 @@ export function buildLlmContext(params: {
       bennies: state.player.bennies,
       npcsPresent: state.npcs
         .filter((n) => !n.location || n.location === state.worldState.activeLocation)
-        .map((n) => ({ id: n.id, name: n.name })),
+        .map((n) => ({
+          id: n.id,
+          name: n.name,
+          isWildCard: n.isWildCard,
+          disposition: n.disposition,
+          wounds: n.wounds,
+          maxWounds: n.maxWounds,
+          toughness: n.toughness,
+          parry: n.parry
+        })),
       situation,
       inventory: state.player.inventory ?? [],
       activeStatusEffects: state.player.statusEffects.map((e) => ({
@@ -184,8 +221,12 @@ export function buildLlmContext(params: {
     rulesDigest: buildRulesDigest(state),
     recentMessages: (recentMessages ?? []).map((m) => ({
       role: m.role,
-      narrative: m.narrative,
-      playerInput: m.playerInput
+      narrative: typeof m.narrative === 'string' ? normalizeLlmText(m.narrative) : m.narrative,
+      playerInput: typeof m.playerInput === 'string' ? normalizeLlmText(m.playerInput) : m.playerInput,
+      engineEvents: m.engineEvents?.map((event) => ({
+        type: event.type,
+        payload: event.payload
+      }))
     }))
   }
 }

@@ -1139,6 +1139,36 @@ button:disabled {
   font-style: italic;
 }
 
+.attack-damage-rolls {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.attack-result-status {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.attack-result-status.shaken {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.attack-result-status.wounded {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.attack-result-status.incapacitated {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
 /* ─── Inventory Panel ─── */
 .inventory-panel, .status-effects-panel {
   margin-top: var(--space-2);
