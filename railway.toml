@@ -1,9 +1,7 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "npm -w frontend run build && npm -w backend run build"
+builder = "DOCKERFILE"
 
 [deploy]
-startCommand = "node backend/dist/main.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
