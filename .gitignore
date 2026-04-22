@@ -28,3 +28,6 @@ Thumbs.db
 
 # Credenciais locais
 service-account.json
+
+# Claude worktrees (repositórios git embutidos internos da ferramenta)
+.claude/
