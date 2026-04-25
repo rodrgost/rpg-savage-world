@@ -61,6 +61,7 @@ export function createInitialState(params: { sessionId: string; campaignId: stri
       activeLocation: 'inicio',
       worldFlags: {}
     },
-    npcs: []
+    npcs: [],
+    defeatedNpcIds: []
   }
 }

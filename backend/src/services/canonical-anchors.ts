@@ -23,48 +23,81 @@ const PROPER_NAME_STOPWORDS = new Set([
   'acao',
   'ação',
   'acender',
+  'acionar',
+  'agora',
   'ajudar',
+  'alcançar',
+  'alcancar',
   'ameacas',
   'ameaças',
   'ameacar',
   'ameaçar',
   'andar',
+  'antes',
+  'aproximar',
   'arremessar',
   'atacar',
   'ativar',
   'abalado',
+  'atravessar',
+  'ainda',
   'bennies',
+  'buscar',
   'campanha',
+  'capturar',
   'carregar',
   'chamar',
   'checar',
+  'cobrir',
   'comer',
+  'comunicar',
+  'confiscar',
   'conferir',
+  'confrontar',
   'consertar',
   'consultar',
   'conversar',
   'convencer',
   'correr',
+  'cuidar',
+  'debater',
+  'depois',
   'descricao',
   'descrição',
+  'desviar',
   'disparar',
   'efeitos',
   'empunhar',
   'encarar',
+  'encontrar',
   'enfrentar',
+  'enquanto',
+  'entrar',
   'entregar',
   'equipar',
+  'escapar',
+  'esconder',
+  'escutar',
+  'esperar',
   'espionar',
   'examinar',
+  'explorar',
   'falar',
   'fechar',
   'ferimentos',
+  'fotografar',
   'forcas',
   'forças',
   'guardar',
+  'hackear',
+  'identificar',
+  'ignorar',
+  'iluminar',
+  'inspecionar',
   'interrogar',
   'inventario',
   'inventário',
+  'investigar',
   'ir',
   'jogador',
   'jogo',
@@ -73,9 +106,11 @@ const PROPER_NAME_STOPWORDS = new Set([
   'ler',
   'limpar',
   'local',
+  'monitorar',
   'mostrar',
   'mover',
   'narrador',
+  'negociar',
   'nenhum',
   'nenhuma',
   'observar',
@@ -84,17 +119,26 @@ const PROPER_NAME_STOPWORDS = new Set([
   'perícias',
   'perseguir',
   'partir',
+  'pressionar',
   'problema',
+  'procurar',
   'proximo',
   'próximo',
   'proteger',
+  'rastrear',
   'recarregar',
   'recursos',
   'reparar',
+  'resistir',
   'resumo',
   'resultado',
+  'revistar',
   'rumar',
+  'sabotar',
   'sacar',
+  'salvar',
+  'saquear',
+  'seduzir',
   'sem',
   'seguir',
   'segurar',
@@ -103,16 +147,39 @@ const PROPER_NAME_STOPWORDS = new Set([
   'teste',
   'tentar',
   'tipo',
+  'travar',
   'turno',
   'universo',
   'usar',
+  'vasculhar',
   'viajar',
   'vestir',
   'verificar',
   'vigiar',
+  'virar',
   'voltar',
   'voce',
-  'você'
+  'você',
+  // Verbos frequentes no início de opções que não são nomes próprios
+  'agachar',
+  'apertar',
+  'atirar',
+  'bloquear',
+  'cercar',
+  'contornar',
+  'defender',
+  'engatilhar',
+  'esquivar',
+  'gritar',
+  'invocar',
+  'mirar',
+  'posicionar',
+  'preparar',
+  'recuar',
+  'recuperar',
+  'retirar',
+  'soltar',
+  'tentar'
 ])
 
 const GENERIC_ITEM_REFERENCES = new Set([
@@ -205,10 +272,55 @@ function uniqueNames(names: string[]): string[] {
   return result
 }
 
+/**
+ * Calcula a distância de Levenshtein (edits) entre duas strings.
+ * Usado para tolerância a erros de digitação no matching de nomes.
+ */
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length
+  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i)
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0]
+    dp[0] = i
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j]
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1])
+      prev = temp
+    }
+  }
+  return dp[n]
+}
+
+/**
+ * Retorna true se `candidate` estiver "ancorado" em `searchableText`.
+ *
+ * Estratégia (em ordem de prioridade):
+ * 1. Correspondência exata do nome completo normalizado (comportamento original).
+ * 2. Correspondência fuzzy a nível de token: alguma palavra significativa do texto
+ *    da ação encontra par próximo em alguma palavra do nome candidato.
+ *    Isso cobre referências parciais ("viajante" → "Viajante Inquieto") e
+ *    pequenos erros de digitação ("viagante" → "viajante").
+ *    Limiar conservador para evitar falsos positivos.
+ */
 function hasAnchoredName(searchableText: string, candidate: string): boolean {
   const normalizedCandidate = normalizeCanonicalText(candidate)
   if (!normalizedCandidate) return false
-  return searchableText.includes(` ${normalizedCandidate} `)
+
+  // 1. Correspondência exata (comportamento original)
+  if (searchableText.includes(` ${normalizedCandidate} `)) return true
+
+  // 2. Fuzzy a nível de token — palavras com >= 4 caracteres apenas
+  const searchWords = searchableText.trim().split(/\s+/).filter((w) => w.length >= 4)
+  const candidateWords = normalizedCandidate.split(/\s+/).filter((w) => w.length >= 4)
+  if (searchWords.length === 0 || candidateWords.length === 0) return false
+
+  return searchWords.some((sw) =>
+    candidateWords.some((cw) => {
+      // Para palavras curtas (4-5 chars) tolera 1 edição; para mais longas, 2 edições.
+      const maxDist = sw.length <= 5 ? 1 : 2
+      return levenshtein(sw, cw) <= maxDist
+    })
+  )
 }
 
 function extractStructuredReference(text: string, pattern: RegExp): string | null {
@@ -232,7 +344,13 @@ function extractProperNames(text: string): string[] {
       .filter(Boolean)
       .filter((candidate) => {
         const normalized = normalizeCanonicalText(candidate)
-        return normalized.length >= 3 && !PROPER_NAME_STOPWORDS.has(normalized)
+        if (normalized.length < 3) return false
+        if (PROPER_NAME_STOPWORDS.has(normalized)) return false
+        // Filtra também se a PRIMEIRA palavra for uma stopword conhecida.
+        // Cobre padrões como "Posicionar-se" → primeira palavra "posicionar".
+        const firstWord = normalized.split(' ')[0] ?? ''
+        if (firstWord && PROPER_NAME_STOPWORDS.has(firstWord)) return false
+        return true
       })
   )
 }
@@ -311,7 +429,14 @@ export function buildCanonicalAnchors(params: {
   ])
   const confirmedLocations = uniqueNames([
     state.worldState.activeLocation,
-    ...historicalText.flatMap((entry) => extractLocationCandidates(entry))
+    ...historicalText.flatMap((entry) => extractLocationCandidates(entry)),
+    // Destinos de opções de viagem propostas pelo LLM no histórico recente
+    ...recentMessages.flatMap((m) =>
+      (m.options ?? [])
+        .filter((o) => o.actionType === 'travel' && typeof o.actionPayload?.to === 'string')
+        .map((o) => (o.actionPayload.to as string).trim())
+        .filter(Boolean)
+    )
   ])
 
   return {
@@ -379,7 +504,10 @@ export function findCanonicalTextViolations(
   for (const properName of extractProperNames(trimmed)) {
     const normalizedProperName = normalizeCanonicalText(properName)
     if (!normalizedProperName) continue
-    if (allowedProperNames.some((allowed) => normalizeCanonicalText(allowed) === normalizedProperName)) continue
+    // Usa hasAnchoredName com argumentos invertidos: verifica se o nome próprio
+    // extraído aparece (exato ou fuzzy) como token dentro de algum nome permitido.
+    // Isso permite que "Viajante" seja aceito quando "Viajante Inquieto" está na cena.
+    if (allowedProperNames.some((allowed) => hasAnchoredName(toSearchableText(allowed), properName))) continue
 
     violations.set(`proper-name:${normalizedProperName}`, {
       category: 'proper-name',
@@ -405,19 +533,29 @@ export function findCanonicalTextViolations(
 
   const hasAnchoredNpcMention = anchors.presentNpcNames.some((name) => hasAnchoredName(searchableText, name))
   const npcReference = extractStructuredReference(trimmed, NPC_REFERENCE_PATTERN)
-  if (
-    npcReference
-    && !hasAnchoredNpcMention
-    && !isGenericReference(npcReference, GENERIC_NPC_REFERENCES, genericNpcTokens)
-    && !isGenericReference(npcReference, GENERIC_LOCATION_REFERENCES, genericLocationTokens)
-    && !isGenericReference(npcReference, GENERIC_ITEM_REFERENCES, genericItemTokens)
-  ) {
-    const normalizedReference = normalizeCanonicalText(npcReference)
-    violations.set(`npc:${normalizedReference}`, {
-      category: 'npc',
-      token: npcReference,
-      reason: 'Referência a NPC não confirmada na cena atual.'
-    })
+  if (npcReference && !hasAnchoredNpcMention) {
+    // Verifica se o PRIMEIRO TOKEN da referência capturada já é uma palavra genérica.
+    // O NPC_REFERENCE_PATTERN pode capturar expressões longas como
+    // "ambiente rapidamente em busca de uma vantagem tática" quando o verbo
+    // ("observar") é seguido de um substantivo comum ("ambiente").
+    const npcRefFirstToken = normalizeCanonicalText(npcReference).split(' ').filter(Boolean)[0] ?? ''
+    const npcRefFirstIsGeneric =
+      genericLocationTokens.has(npcRefFirstToken)
+      || genericNpcTokens.has(npcRefFirstToken)
+      || genericItemTokens.has(npcRefFirstToken)
+    if (
+      !npcRefFirstIsGeneric
+      && !isGenericReference(npcReference, GENERIC_NPC_REFERENCES, genericNpcTokens)
+      && !isGenericReference(npcReference, GENERIC_LOCATION_REFERENCES, genericLocationTokens)
+      && !isGenericReference(npcReference, GENERIC_ITEM_REFERENCES, genericItemTokens)
+    ) {
+      const normalizedReference = normalizeCanonicalText(npcReference)
+      violations.set(`npc:${normalizedReference}`, {
+        category: 'npc',
+        token: npcReference,
+        reason: 'Referência a NPC não confirmada na cena atual.'
+      })
+    }
   }
 
   const hasAnchoredLocationMention = anchors.confirmedLocations.some((name) => hasAnchoredName(searchableText, name))

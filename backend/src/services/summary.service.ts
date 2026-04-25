@@ -109,13 +109,16 @@ export class SummaryService {
     }
 
     const keyEvents = await this.events.listSince({ sessionId, afterTurn: lastTurnIncluded })
+    const recentRaw = await this.chatMessages.getRecent(sessionId, 10)
+    const recentMessages = this.buildMessagesForSummary(recentRaw)
 
     const summaryText = trimIncompleteSummaryText(await this.narrator.summarize({
       previousSummary: existing?.summaryText ?? '',
       upToTurn: params.state.meta.turn,
       keyEvents,
       currentState: params.state,
-      maxTokensHint: 500
+      maxTokensHint: 500,
+      recentMessages
     }))
 
     await this.summaries.upsertSummary({

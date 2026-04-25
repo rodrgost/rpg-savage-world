@@ -113,7 +113,7 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
       }
 
       // Hit → roll damage
-      const damageFormula = action.damageFormula ?? 'str+d6'
+      const damageFormula = action.damageFormula ?? 'str+d4'
       const strengthDie = nextState.player.attributes.strength
       const attackRaises = countRaises(attackResult.finalTotal, attackTN)
 
@@ -162,6 +162,12 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
           damageRolls: damageResult.dice
         }
       })
+
+      // NPC incapacitado: remove da lista de combatentes ativos e registra como derrotado
+      if (isIncapacitated) {
+        nextState.npcs = nextState.npcs.filter((n) => n.id !== target.id)
+        nextState.defeatedNpcIds = [...(nextState.defeatedNpcIds ?? []), target.id]
+      }
       break
     }
 

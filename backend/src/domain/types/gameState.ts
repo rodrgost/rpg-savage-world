@@ -84,6 +84,9 @@ export interface GameState {
 
   npcs: NPCCombatant[]
 
+  /** IDs de NPCs já incapacitados/derrotados nesta sessão — impede reintrodução pelo narrador */
+  defeatedNpcIds: string[]
+
   combat?: CombatState
 }
 

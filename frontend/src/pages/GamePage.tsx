@@ -1296,6 +1296,9 @@ export function GamePage() {
 
     if (result.narratorResponse) {
       setCurrentOptions(normalizedNarratorOptions)
+      if (result.narratorResponse.isFallback) {
+        setError('A IA não respondeu com contexto nesta rodada — tente outra ação.')
+      }
     } else {
       const lastNarrator = [...committedMessages].reverse().find(
         (m) => m.role === 'narrator' && m.options?.length
@@ -1407,9 +1410,9 @@ export function GamePage() {
         setValidating(false)
         return
       }
-      // Ação viável sem teste de dados — executar diretamente
+      // Ação viável sem teste de dados — executar diretamente, mas passar validation para roteamento por actionType
       setValidating(false)
-      await executeValidatedAction(text)
+      await executeValidatedAction(text, validation)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao validar ação')
       setValidating(false)
@@ -1426,6 +1429,8 @@ export function GamePage() {
       let result
       // Se a validação indicou trait_test ou diceCheck com skill/attribute, enviar como trait_test
       const dc = validation?.diceCheck
+      const isAttack = validation?.actionType === 'attack'
+      const combatSkill = isAttack ? (dc?.skill ?? 'Luta') : null
       if (dc?.required && (dc.skill || dc.attribute)) {
         result = await executeTraitTest(
           {
@@ -1433,6 +1438,17 @@ export function GamePage() {
             skill: dc.skill ?? undefined,
             attribute: dc.attribute ?? undefined,
             modifier: dc.modifier ?? 0,
+            description: text
+          },
+          handleEnginePhase
+        )
+      } else if (isAttack && combatSkill) {
+        // Ataque livre sem dice check required explícito — rolar a perícia de combate
+        result = await executeTraitTest(
+          {
+            sessionId,
+            skill: combatSkill,
+            modifier: dc?.modifier ?? 0,
             description: text
           },
           handleEnginePhase

@@ -6,8 +6,6 @@ import {
   SKILLS,
   EDGES,
   HINDRANCES,
-  WEAPONS,
-  ARMORS,
   ATTRIBUTES,
   getCanonicalSkillLabel
 } from '../domain/savage-worlds/constants.js'
@@ -120,30 +118,6 @@ function buildRulesDigest(state: GameState): string {
     `Aparar: ${state.player.parry} | Resistência: ${state.player.toughness} | Armadura: ${state.player.armor} | Passo: ${state.player.pace}`
   ].join('\n'))
 
-  // 6. Tabela de armas (resumida)
-  const weaponLines = WEAPONS.map(w => {
-    const parts = [`${w.label}: Dano ${w.damage}`]
-    if (w.range) parts.push(`Alcance ${w.range}`)
-    if (w.ap) parts.push(`AP ${w.ap}`)
-    if (w.notes) parts.push(w.notes)
-    return parts.join(', ')
-  })
-  sections.push([
-    '=== ARMAS DISPONÍVEIS ===',
-    ...weaponLines
-  ].join('\n'))
-
-  // 7. Tabela de armaduras (resumida)
-  const armorLines = ARMORS.map(a => {
-    const parts = [`${a.label}: +${a.armorValue} Armadura`]
-    if (a.notes) parts.push(a.notes)
-    return parts.join(', ')
-  })
-  sections.push([
-    '=== ARMADURAS DISPONÍVEIS ===',
-    ...armorLines
-  ].join('\n'))
-
   return sections.join('\n\n')
 }
 
@@ -165,6 +139,8 @@ export type LlmContext = {
       toughness: number
       parry: number
     }>
+    /** IDs de NPCs já derrotados nesta sessão — para orientar o LLM a não referenciá-los como ameaças ativas */
+    defeatedNpcIds: string[]
     situation: 'exploracao' | 'combat' | 'dialogo'
     inventory: InventoryItem[]
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
@@ -209,6 +185,7 @@ export function buildLlmContext(params: {
           toughness: n.toughness,
           parry: n.parry
         })),
+      defeatedNpcIds: state.defeatedNpcIds ?? [],
       situation,
       inventory: state.player.inventory ?? [],
       activeStatusEffects: state.player.statusEffects.map((e) => ({

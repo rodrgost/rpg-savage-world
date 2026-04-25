@@ -203,14 +203,14 @@ export class SessionService {
       anchors
     )
 
-    if (!violations.length) return narrative
+    if (violations.length) {
+      warn(
+        'validateNarratorResponse',
+        `Narrativa com possíveis entidades fora de âncora (mantida): ${violations.map((v) => `${v.category}:${v.token}`).join(', ')}`
+      )
+    }
 
-    warn(
-      'validateNarratorResponse',
-      `Substituindo narrativa com entidades fora de âncora: ${violations.map((violation) => `${violation.category}:${violation.token}`).join(', ')}`
-    )
-
-    return 'Você avalia a situação com cuidado e o ambiente reage sem introduzir elementos além do que já está confirmado na cena. O que faz agora?'
+    return narrative
   }
 
   private enforceCanonicalValidateActionResponse(
@@ -327,6 +327,7 @@ export class SessionService {
     if (allowCreate) {
       for (const npc of npcs) {
         if (knownNpcIds.has(npc.id)) continue
+        if ((state.defeatedNpcIds ?? []).includes(npc.id)) continue
         mergedNpcs.push(this.createNarrativeNpcStub(npc, sceneLocation))
         changed = true
       }
@@ -521,10 +522,21 @@ export class SessionService {
 
     switch (option.actionType) {
       case 'attack': {
-        const targetId = typeof actionPayload.targetId === 'string' ? actionPayload.targetId.trim() : ''
-        if (!targetId || !sceneNpcIds.has(targetId)) {
-          warn('validateNarratorOption', `Descartando ataque com alvo fora da cena: "${targetId || 'vazio'}"`)
-          return null
+        const resolvedTargetId = typeof actionPayload.targetId === 'string' ? actionPayload.targetId.trim() : ''
+        if (!resolvedTargetId || !sceneNpcIds.has(resolvedTargetId)) {
+          // Tenta redirecionar para qualquer NPC hostil que esteja na cena,
+          // incluindo os recém-introduzidos pela narrativa deste turno.
+          const hostileSceneNpcId = [...sceneNpcIds].find((id) => {
+            const npc = state.npcs.find((n) => n.id === id)
+            return npc?.disposition === 'hostile'
+          })
+          if (hostileSceneNpcId) {
+            warn('validateNarratorOption', `Corrigindo ataque: targetId "${resolvedTargetId || 'vazio'}" → "${hostileSceneNpcId}"`)
+            actionPayload.targetId = hostileSceneNpcId
+          } else {
+            warn('validateNarratorOption', `Descartando ataque com alvo fora da cena: "${resolvedTargetId || 'vazio'}"`)
+            return null
+          }
         }
 
         const attackSkill = normalizeSkillName(
@@ -727,6 +739,9 @@ export class SessionService {
     summaryText?: string
   }): NarratorTurnResponse {
     const { response, state, mode, action, engineEvents, recentMessages, summaryText } = params
+    if (response.isFallback) {
+      warn('validateNarratorResponse', `[isFallback] LLM falhou no modo "${mode}" — conteúdo genérico retornado ao jogador`)
+    }
     const locationChange = this.validateNarratorLocationChange({
       locationChange: response.locationChange,
       state,
@@ -747,7 +762,7 @@ export class SessionService {
       state: stateAtResponseLocation,
       npcs: response.npcs,
       sceneLocation: stateAtResponseLocation.worldState.activeLocation,
-      allowCreate: mode === 'start'
+      allowCreate: true
     })
     const canonicalAnchors = buildCanonicalAnchors({
       state: canonicalNarrativeState,
@@ -1241,6 +1256,7 @@ export class SessionService {
         isShaken: context.stateBrief.isShaken,
         bennies: context.stateBrief.bennies,
         npcsPresent: context.stateBrief.npcsPresent,
+        defeatedNpcIds: context.stateBrief.defeatedNpcIds,
         inventory: context.stateBrief.inventory,
         activeStatusEffects: context.stateBrief.activeStatusEffects,
         playerSkills: context.stateBrief.playerSkills,
@@ -1361,6 +1377,7 @@ export class SessionService {
           isShaken: context.stateBrief.isShaken,
           bennies: context.stateBrief.bennies,
           npcsPresent: context.stateBrief.npcsPresent,
+          defeatedNpcIds: context.stateBrief.defeatedNpcIds,
           inventory: context.stateBrief.inventory,
           activeStatusEffects: context.stateBrief.activeStatusEffects,
           playerSkills: context.stateBrief.playerSkills,

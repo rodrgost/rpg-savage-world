@@ -13,6 +13,7 @@ export type SummarizeRequest = {
   keyEvents: Array<{ turn: number; type: string; payload: unknown }>
   currentState: GameState
   maxTokensHint?: number
+  recentMessages?: Array<{ role: 'narrator' | 'player'; text: string; turn: number }>
 }
 
 export type SummarizeHistoryRequest = {

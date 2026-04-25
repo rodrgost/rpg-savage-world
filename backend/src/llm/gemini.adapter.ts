@@ -23,6 +23,7 @@ import type {
 import { randomUUID } from 'node:crypto'
 import { findSkillDefinition, getCanonicalSkillLabel } from '../domain/savage-worlds/constants.js'
 import { logLlmRequest, logLlmResponse, logLlmError, log, warn, error as logErr } from '../utils/file-logger.js'
+import { classifyTrivialAction } from '../core/trivial-action.js'
 
 type GeminiGenerateContentResponse = {
   candidates?: Array<{
@@ -416,14 +417,21 @@ function sanitizeValidateActionResponse(
     actionPayload.input = interpretation
   }
 
-    if (actionType === 'travel' && !sanitizeInlineText(actionPayload.to, '')) return null
-    if (actionType === 'attack' && !sanitizeInlineText(actionPayload.targetId, '')) return null
-    if (actionType === 'trait_test') {
-      const payloadAttribute = sanitizeInlineText(actionPayload.attribute, '')
-      if (!payloadSkill && !payloadAttribute && !diceCheck?.skill && !diceCheck?.attribute) {
-        return null
-      }
+  // Para ataques: mapear "target" → "targetId" se o LLM usou o campo errado.
+  // Não rejeitar por targetId ausente — o alvo canônico é resolvido downstream.
+  if (actionType === 'attack') {
+    if (!actionPayload.targetId && typeof actionPayload.target === 'string') {
+      actionPayload.targetId = actionPayload.target
     }
+  }
+
+  if (actionType === 'travel' && !sanitizeInlineText(actionPayload.to, '')) return null
+  if (actionType === 'trait_test') {
+    const payloadAttribute = sanitizeInlineText(actionPayload.attribute, '')
+    if (!payloadSkill && !payloadAttribute && !diceCheck?.skill && !diceCheck?.attribute) {
+      return null
+    }
+  }
 
   return {
     feasible: raw.feasible,
@@ -1181,6 +1189,10 @@ export class GeminiAdapter implements Narrator {
       '- Não use markdown, bullets, prefácio, saudação ou comentários metalinguísticos.'
     ].join('\n')
 
+    const narrativeBlock = req.recentMessages?.length
+      ? `Narrativa recente (preserve detalhes específicos não capturados no estado ou nos eventos):\n${req.recentMessages.map((m) => `[${m.role === 'narrator' ? 'Narrador' : 'Jogador'} T${m.turn}] ${m.text}`).join('\n')}`
+      : null
+
     const prompt = [
       `Turno atual: ${req.upToTurn}.`,
       `Resumo anterior canônico: ${req.previousSummary || 'sem resumo anterior'}.`,
@@ -1193,8 +1205,9 @@ export class GeminiAdapter implements Narrator {
       `Efeitos ativos: ${statusText}`,
       `Flags de mundo ativas: ${activeFlagsText}`,
       `Eventos novos (JSON): ${JSON.stringify(req.keyEvents)}.`,
+      narrativeBlock,
       'Atualize o resumo canônico sem repetir fatos antigos que já estejam cobertos.'
-    ].join('\n')
+    ].filter(Boolean).join('\n')
 
     try {
       const generated = await this.generateText(prompt, {
@@ -1597,23 +1610,42 @@ export class GeminiAdapter implements Narrator {
       '',
       'REGRAS DO CAMPO diceCheck (OBRIGATÓRIO em TODA opção):',
       '- Avalie para CADA opção se a ação exige um teste de dados com base nas regras de Savage Worlds.',
+      '- PRINCÍPIO FUNDAMENTAL: Só exija teste quando AMBAS as condições forem verdadeiras:',
+      '  (1) o resultado da ação é genuinamente incerto neste contexto, E',
+      '  (2) a falha teria consequências narrativas interessantes.',
+      '  Se qualquer uma dessas condições for falsa, "required" deve ser false.',
+      '',
       '- Se a opção envolve risco, perigo, esforço físico ou mental significativo → "required": true.',
       '  Exemplos que EXIGEM teste:',
       '  • Perceber algo oculto ou sutil → skill: "Percepção"',
       '  • Mover-se sem ser detectado → skill: "Furtividade"',
-      '  • Escalar, saltar, correr sob pressão → skill: "Atletismo"',
+      '  • Escalar uma superfície difícil, saltar um abismo, correr sob pressão → skill: "Atletismo"',
       '  • Convencer, barganhar, mentir → skill: "Persuasão"',
       '  • Intimidar alguém → skill: "Intimidação"',
       '  • Curar ferimentos → skill: "Medicina"',
-      '  • Abrir fechaduras, desarmar armadilhas → skill: "Ladinagem"',
+      '  • Abrir fechadura trancada, desarmar armadilha → skill: "Ladinagem"',
       '  • Investigar pistas, pesquisar → skill: "Pesquisa"',
       '  • Conhecimento arcano → skill: "Ocultismo"',
       '  • Resistir a veneno, doença, fadiga → attribute: "vigor"',
       '  • Resistir a medo, tentação → attribute: "spirit"',
       '  • Combate corpo a corpo → skill: "Luta" (use actionType "attack")',
       '  • Combate à distância → skill: "Tiro" (use actionType "attack")',
-      '- Se a ação é segura, trivial ou puramente narrativa → "required": false, reason: "Ação simples sem risco".',
-      '  Exemplos que NÃO exigem teste: conversar casualmente, caminhar por um caminho seguro, descansar, examinar um item no inventário.',
+      '',
+      '- Se a ação é segura, trivial, cotidiana ou puramente narrativa → "required": false.',
+      '  Exemplos que NÃO exigem teste (qualquer personagem faz automaticamente):',
+      '  • Atender o telefone / celular / chamada',
+      '  • Abrir uma porta destrancada ou desimpedida',
+      '  • Sentar, deitar, levantar-se',
+      '  • Ligar/desligar um aparelho simples, pressionar um botão',
+      '  • Acenar, gesticular, cumprimentar alguém',
+      '  • Pular um obstáculo claramente baixo e seguro (meio-fio, vão de 30 cm)',
+      '  • Conversar casualmente sem intenção de persuadir',
+      '  • Caminhar por um caminho seguro sem ameaças',
+      '  • Descansar, respirar fundo, aguardar',
+      '  • Examinar um item que já está no inventário',
+      '  • Verificar a hora, olhar ao redor sem alvo específico',
+      '  ATENÇÃO: se houver elemento de resistência, risco ou incerteza real no contexto, mesmo ações comuns podem exigir teste.',
+      '  Ex.: abrir uma porta pode exigir Ladinagem se estiver trancada; pular pode exigir Atletismo se for um abismo.',
       '- "modifier": ajuste situacional (-2 para dificuldade alta, -4 para quase impossível, +2 para vantagem). Default: 0.',
       '- "tn": target number. Default 4. Aumente para situações especialmente difíceis (6, 8).',
       '- "reason": SEMPRE preencha com uma justificativa narrativa curta.',
@@ -1627,7 +1659,7 @@ export class GeminiAdapter implements Narrator {
       '- O campo "feasible" deve ser false se o jogador não tiver os itens/condições necessárias.',
       '- Para actionType "trait_test", inclua "skill" ou "attribute" no actionPayload.',
       '- Para actionType "attack", inclua "targetId" e "damageFormula" no actionPayload.',
-      '  Exemplos de damageFormula: "str+d6" (default/soco/faca), "str+d8" (espada/machado), "str+d10" (montante), "2d6" (pistola), "2d8" (rifle).',
+      '  Exemplos de damageFormula: "str" (soco/desarmado), "str+d4" (faca/canivete), "str+d6" (espada curta/clava/machado leve), "str+d8" (espada longa/machado pesado), "str+d10" (montante/arma duas mãos), "2d6" (pistola), "2d8" (rifle).',
       '- Ao narrar Extras abatidos (isWildCard=false): descreva-os saindo de combate/fugindo/caindo com 1 único ferimento.',
       '- Ao narrar Wild Cards feridos: acumule penalidades, eles continuam combatendo até 4+ ferimentos.',
       '- Para actionType "travel", inclua "to" no actionPayload.',
@@ -1701,12 +1733,13 @@ export class GeminiAdapter implements Narrator {
       lines.push(
         '',
         '=== REGRAS DE TURNO CANÔNICO ===',
-        '- No turno normal, use o array "npcs" apenas para NPCs já listados em NPCs PRESENTES.',
+        '- No turno normal, use o array "npcs" para NPCs já listados em NPCs PRESENTES.',
+        '- EXCEÇÃO: se sua narrativa DESTE turno introduz uma criatura/entidade hostil que ainda não estava listada, você DEVE registrá-la em "npcs" com newlyIntroduced: true, disposition: "hostile" e um UUID gerado por você como "id". Use o MESMO id no actionPayload.targetId de qualquer opção de ataque contra essa entidade.',
         '- No turno normal, NÃO crie itemChanges com changeType "gained".',
         '- No turno normal, use itemChanges apenas para "lost" ou "used" de itens já presentes no INVENTÁRIO.',
         '- No turno normal, NÃO aplique statusChanges novos sem evidência direta no RESULTADO MECÂNICO ou em EFEITOS ATIVOS já existentes.',
         '- No turno normal, só preencha locationChange se a ação do jogador for travel ou se o RESULTADO MECÂNICO trouxer location_change.',
-        '- Use apenas IDs de NPC já listados em NPCs PRESENTES para actionPayload.targetId.',
+        '- Use apenas IDs de NPC já listados em NPCs PRESENTES (ou do novo NPC hostil desta narrativa) para actionPayload.targetId.',
         '- Se faltar evidência canônica para mutação de estado, deixe os campos mutáveis vazios/null.'
       )
     }
@@ -2057,6 +2090,19 @@ export class GeminiAdapter implements Narrator {
   // ─── Validação de ação custom ───────────────────────────────────────────────
 
   async validateAction(req: ValidateActionRequest): Promise<ValidateActionResponse> {
+    // Atalho determinístico: ações inequivocamente triviais não precisam de LLM
+    const trivialResult = classifyTrivialAction(req.input)
+    if (trivialResult.trivial) {
+      warn('validateAction', `Ação trivial detectada (sem chamada LLM): "${req.input}"`)
+      return {
+        feasible: true,
+        actionType: 'custom',
+        actionPayload: { input: req.input },
+        diceCheck: { required: false, reason: trivialResult.reason },
+        interpretation: req.input
+      }
+    }
+
     const sysPrompt = [
       'Você é o Narrador Mestre de um RPG de mesa Savage Worlds.',
       'O jogador digitou uma ação livre. Sua tarefa é VALIDAR se a ação é possível no contexto atual.',
@@ -2080,8 +2126,41 @@ export class GeminiAdapter implements Narrator {
       '',
       'REGRAS DE VALIDAÇÃO:',
       '- Se a ação é impossível no contexto (ex: usar item que não tem, atacar NPC que não está presente) → feasible: false.',
-      '- Se a ação é trivial/narrativa (conversar, andar, olhar ao redor) → feasible: true, diceCheck.required: false.',
-      '- Se a ação envolve risco ou desafio → feasible: true, diceCheck.required: true, com a perícia/atributo corretos.',
+      '',
+      '- PRINCÍPIO FUNDAMENTAL do teste de dados:',
+      '  Só marque diceCheck.required: true quando AMBAS as condições forem verdadeiras:',
+      '  (1) o resultado é genuinamente incerto neste contexto, E',
+      '  (2) a falha teria consequências narrativas interessantes.',
+      '  Se qualquer uma dessas condições for falsa → diceCheck.required: false.',
+      '',
+      '- Ações que NUNCA exigem teste (automáticas para qualquer personagem):',
+      '  • Atender o telefone/celular/chamada',
+      '  • Abrir uma porta destrancada ou desimpedida',
+      '  • Sentar, deitar, levantar-se',
+      '  • Ligar/desligar aparelho simples, pressionar botão óbvio',
+      '  • Acenar, gesticular, cumprimentar com gesto',
+      '  • Pular obstáculo claramente baixo e seguro (meio-fio, degrau)',
+      '  • Conversar sem intenção de persuadir',
+      '  • Andar por caminho seguro sem ameaças',
+      '  • Descansar, respirar, aguardar',
+      '  • Examinar item já em mãos / verificar inventário',
+      '',
+      '- Ações que EXIGEM teste:',
+      '  • Perceber algo oculto → skill: "Percepção"',
+      '  • Mover-se furtivamente → skill: "Furtividade"',
+      '  • Escalar, saltar abismo, correr sob pressão → skill: "Atletismo"',
+      '  • Convencer, enganar, barganhar → skill: "Persuasão"',
+      '  • Intimidar → skill: "Intimidação"',
+      '  • Curar ferimentos → skill: "Medicina"',
+      '  • Arrombar fechadura, desarmar armadilha → skill: "Ladinagem"',
+      '  • Investigar pistas → skill: "Pesquisa"',
+      '  • Resistir a veneno/doença → attribute: "vigor"',
+      '  • Resistir a medo → attribute: "spirit"',
+      '  • Combate → actionType "attack"',
+      '',
+      '  ATENÇÃO contextual: "abrir a porta" pode exigir Ladinagem se o contexto indicar que está trancada;',
+      '  "pular" pode exigir Atletismo se for um abismo real.',
+      '',
       '- Para combate → actionType: "attack", inclua targetId no actionPayload.',
       '- Para testes de habilidade → actionType: "trait_test", inclua skill ou attribute no actionPayload.',
       '- Para deslocamento → actionType: "travel", inclua "to" no actionPayload.',
@@ -2102,6 +2181,9 @@ export class GeminiAdapter implements Narrator {
           return `${n.name} (${n.id}) [${tipo}, ${disp}, Res ${n.toughness}, Aparar ${n.parry}${status}]`
         }).join(', ')
       : 'nenhum'
+    const defeatedText = (ctx.defeatedNpcIds ?? []).length
+      ? (ctx.defeatedNpcIds ?? []).join(', ')
+      : null
     const statusText = ctx.activeStatusEffects.length
       ? ctx.activeStatusEffects.map((s) => `${s.name}${s.turnsRemaining ? ` (${s.turnsRemaining} turnos)` : ''}`).join(', ')
       : 'nenhum'
@@ -2122,6 +2204,7 @@ export class GeminiAdapter implements Narrator {
       `Local: ${ctx.location}`,
       `Ferimentos: ${ctx.wounds} | Fadiga: ${ctx.fatigue} | Abalado: ${ctx.isShaken ? 'sim' : 'não'} | Bennies: ${ctx.bennies}`,
       `NPCs presentes: ${npcsText}`,
+      defeatedText ? `NPCs derrotados (não são ameaças ativas): ${defeatedText}` : '',
       `Inventário: ${inventoryText}`,
       `Efeitos ativos: ${statusText}`,
       `Perícias do jogador: ${skillsText}`,
@@ -2249,9 +2332,10 @@ export class GeminiAdapter implements Narrator {
         mode: 'start'
       })
     } catch (error) {
-      logErr('narrateStart', 'Error:', error)
+      logLlmError('narrateStart', error)
       // Fallback mínimo para não bloquear a sessão
       return {
+        isFallback: true,
         narrative: `Você chega a um novo lugar. O ar carrega o peso de histórias não contadas. Ao seu redor, a paisagem de ${req.campaign.thematic} se estende até onde a vista alcança. Um caminho se abre à sua frente, e você sente que a aventura está prestes a começar.`,
         options: [
           { id: randomUUID(), text: 'Explorar o caminho principal', actionType: 'custom', actionPayload: { input: 'Explorar o caminho principal' }, feasible: true, diceCheck: { required: false, reason: 'Caminho seguro e acessível' } },
@@ -2321,6 +2405,10 @@ export class GeminiAdapter implements Narrator {
         }).join('\n')
       : 'Nenhum NPC presente'
 
+    const defeatedNpcList = (req.context.defeatedNpcIds ?? []).length
+      ? (req.context.defeatedNpcIds ?? []).join(', ')
+      : null
+
     const engineResultText = req.engineEvents.length
       ? formatEngineEventsForPrompt(req.engineEvents)
       : 'Sem resultado mecânico'
@@ -2341,6 +2429,7 @@ export class GeminiAdapter implements Narrator {
       '',
       '── NPCs PRESENTES ──',
       npcList,
+      ...(defeatedNpcList ? ['', '── NPCs DERROTADOS (já eliminados — NÃO referenciar como ameaças ativas) ──', defeatedNpcList] : []),
       '',
       '── AÇÃO DO JOGADOR ──',
       `Tipo: ${req.playerAction.type}`,
@@ -2370,8 +2459,9 @@ export class GeminiAdapter implements Narrator {
         }
       )
     } catch (error) {
-      logErr('narrateTurn', 'Error:', error)
+      logLlmError('narrateTurn', error)
       return {
+        isFallback: true,
         narrative: `Sua ação ecoa no ambiente. As consequências ainda não são claras, mas o mundo ao redor reage de formas sutis. O que fará agora?`,
         options: [
           { id: randomUUID(), text: 'Investigar o resultado da ação', actionType: 'custom', actionPayload: { input: 'Investigar o que aconteceu' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Investigar requer atenção aos detalhes' } },

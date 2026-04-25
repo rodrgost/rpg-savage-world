@@ -142,6 +142,8 @@ export type NarratorTurnResponse = {
   statusChanges: StatusChange[]
   locationChange?: string
   chapterTitle?: string
+  /** true quando o conteúdo é um fallback estático por falha do LLM */
+  isFallback?: boolean
 }
 
 export type ChatMessage = {

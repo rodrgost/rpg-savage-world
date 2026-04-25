@@ -96,6 +96,8 @@ export type ValidateActionRequest = {
       toughness: number
       parry: number
     }>
+    /** IDs de NPCs já derrotados nesta sessão */
+    defeatedNpcIds?: string[]
     inventory: InventoryItem[]
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
     playerSkills?: Record<string, string>
@@ -141,6 +143,8 @@ export type NarratorTurnResponse = {
   locationChange?: string | null
   /** Título do capítulo, se mudou */
   chapterTitle?: string | null
+  /** true quando o conteúdo é um fallback estático por falha do LLM */
+  isFallback?: boolean
 }
 
 // ─── Requests para o Narrator ───
@@ -206,6 +210,8 @@ export type NarrateTurnRequest = {
       toughness: number
       parry: number
     }>
+    /** IDs de NPCs já derrotados nesta sessão */
+    defeatedNpcIds?: string[]
     inventory: InventoryItem[]
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
     /** Perícias do personagem com seus dados atuais (ex: { "Percepção": "d6", "Luta": "d8" }) */
