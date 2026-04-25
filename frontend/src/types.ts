@@ -75,11 +75,22 @@ export type Character = {
 
 // ─── Inventory & Narrative Types ───
 
+export type ItemCategory =
+  | 'weapon'
+  | 'armor'
+  | 'consumable'
+  | 'ammunition'
+  | 'vehicle'
+  | 'property'
+  | 'quest'
+  | 'misc'
+
 export type InventoryItem = {
   id: string
   name: string
   description: string
   quantity: number
+  category?: ItemCategory
   tags?: string[]
 }
 
@@ -88,6 +99,7 @@ export type ItemChange = {
   name: string
   quantity: number
   changeType: 'gained' | 'lost' | 'used'
+  category?: ItemCategory
 }
 
 export type StatusChange = {

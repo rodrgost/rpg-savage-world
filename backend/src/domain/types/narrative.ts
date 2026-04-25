@@ -6,12 +6,24 @@ import type { PlayerAction } from './gameState.js'
 
 // ─── Inventário ───
 
+export type ItemCategory =
+  | 'weapon'
+  | 'armor'
+  | 'consumable'
+  | 'ammunition'
+  | 'vehicle'
+  | 'property'
+  | 'quest'
+  | 'misc'
+
 export type InventoryItem = {
   id: string
   name: string
   description: string
   quantity: number
-  /** Tags opcionais para categorização (weapon, consumable, quest, etc.) */
+  /** Categoria estruturada do item */
+  category?: ItemCategory
+  /** Tags opcionais para categorização adicional */
   tags?: string[]
 }
 
@@ -20,6 +32,8 @@ export type ItemChange = {
   name: string
   quantity: number
   changeType: 'gained' | 'lost' | 'used'
+  /** Categoria do item — obrigatória para veículos e propriedades */
+  category?: ItemCategory
 }
 
 // ─── Status Effects ───

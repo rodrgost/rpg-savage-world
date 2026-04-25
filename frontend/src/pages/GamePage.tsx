@@ -524,18 +524,38 @@ function ActionOptions({
 function InventoryPanel({ items }: { items: InventoryItem[] }) {
   if (!items.length) return null
 
+  const bigAssets = items.filter((item) => item.category === 'vehicle' || item.category === 'property')
+  const backpackItems = items.filter((item) => item.category !== 'vehicle' && item.category !== 'property')
+
   return (
-    <div className="inventory-panel">
-      <h4>Mochila</h4>
-      <ul className="inventory-list">
-        {items.map((item) => (
-          <li key={item.id} className="inventory-item" title={item.description}>
-            <span className="item-name">{item.name}</span>
-            {item.quantity > 1 && <span className="item-qty">x{item.quantity}</span>}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <>
+      {backpackItems.length > 0 && (
+        <div className="inventory-panel">
+          <h4>Mochila</h4>
+          <ul className="inventory-list">
+            {backpackItems.map((item) => (
+              <li key={item.id} className="inventory-item" title={item.description}>
+                <span className="item-name">{item.name}</span>
+                {item.quantity > 1 && <span className="item-qty">x{item.quantity}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {bigAssets.length > 0 && (
+        <div className="inventory-panel">
+          <h4>Bens &amp; Veículos</h4>
+          <ul className="inventory-list">
+            {bigAssets.map((item) => (
+              <li key={item.id} className="inventory-item" title={item.description}>
+                <span className="item-name">{item.name}</span>
+                {item.quantity > 1 && <span className="item-qty">x{item.quantity}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
   )
 }
 

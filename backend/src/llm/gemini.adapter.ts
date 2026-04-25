@@ -1599,7 +1599,7 @@ export class GeminiAdapter implements Narrator {
       '    { "id": "<uuid>", "name": "<nome>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false }',
       '  ],',
       '  "itemChanges": [',
-      '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used" }',
+      '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|vehicle|property|quest|misc" }',
       '  ],',
       '  "statusChanges": [',
       '    { "effectId": "<uuid>", "name": "<nome do efeito>", "changeType": "applied|removed", "turnsRemaining": 3, "description": "<desc>" }',
@@ -1667,6 +1667,9 @@ export class GeminiAdapter implements Narrator {
       '- Itens ganhos devem ter nomes criativos e coerentes com a ambientação.',
       '- NUNCA repita itemChanges de itens que já estão no inventário do jogador. Se o jogador já possui um item, NÃO o inclua novamente em itemChanges com changeType "gained". Consulte a seção INVENTÁRIO no contexto do turno.',
       '- Cada item deve aparecer NO MÁXIMO UMA VEZ no array itemChanges de uma mesma resposta.',
+      '- Armas à distância (arco, besta, pistola, rifle, escopeta, etc.) SEMPRE devem ter sua munição correspondente como item separado no inventário (flechas, virotes, balas, cartuchos, etc.). Ao usar uma arma à distância em combate, registre o consumo de munição com changeType "used" no item de munição correspondente.',
+      '- Todo item DEVE ter o campo "category". Use: weapon (armas), armor (armaduras), consumable (consumíveis como poções/ração), ammunition (munição), vehicle (veículos: carro, moto, avião, barco, nave, etc.), property (propriedades: casa, apartamento, fazenda, escritório, etc.), quest (item narrativo/missão), misc (outros itens).',
+      '- Veículos e propriedades (category "vehicle" ou "property") PODEM ser adicionados com changeType "gained" durante turnos normais quando a narrativa justificar (compra, herança, conquista, recompensa). Jamais use "gained" com outras categorias em turno normal.',
       '- Nunca quebre a imersão. Nunca mencione regras, dados ou mecânicas no texto narrativo.',
       '- Não repita a mesma narrativa. Evolua a história a cada turno.',
       '- IMPORTANTE: Mantenha o JSON compacto. A narrativa deve ter no máximo 2-3 parágrafos curtos.',
@@ -1735,8 +1738,8 @@ export class GeminiAdapter implements Narrator {
         '=== REGRAS DE TURNO CANÔNICO ===',
         '- No turno normal, use o array "npcs" para NPCs já listados em NPCs PRESENTES.',
         '- EXCEÇÃO: se sua narrativa DESTE turno introduz uma criatura/entidade hostil que ainda não estava listada, você DEVE registrá-la em "npcs" com newlyIntroduced: true, disposition: "hostile" e um UUID gerado por você como "id". Use o MESMO id no actionPayload.targetId de qualquer opção de ataque contra essa entidade.',
-        '- No turno normal, NÃO crie itemChanges com changeType "gained".',
-        '- No turno normal, use itemChanges apenas para "lost" ou "used" de itens já presentes no INVENTÁRIO.',
+        '- No turno normal, NÃO crie itemChanges com changeType "gained" EXCETO para categorias "vehicle" (veículos) e "property" (propriedades) quando a narrativa justificar (compra, herança, conquista, recompensa).',
+        '- No turno normal, use itemChanges apenas para "lost" ou "used" de itens já presentes no INVENTÁRIO (exceto veículos/propriedades conforme regra acima).',
         '- No turno normal, NÃO aplique statusChanges novos sem evidência direta no RESULTADO MECÂNICO ou em EFEITOS ATIVOS já existentes.',
         '- No turno normal, só preencha locationChange se a ação do jogador for travel ou se o RESULTADO MECÂNICO trouxer location_change.',
         '- Use apenas IDs de NPC já listados em NPCs PRESENTES (ou do novo NPC hostil desta narrativa) para actionPayload.targetId.',
@@ -2163,7 +2166,8 @@ export class GeminiAdapter implements Narrator {
       '',
       '- Para combate → actionType: "attack", inclua targetId no actionPayload.',
       '- Para testes de habilidade → actionType: "trait_test", inclua skill ou attribute no actionPayload.',
-      '- Para deslocamento → actionType: "travel", inclua "to" no actionPayload.',
+      '- Para deslocamento a um LOCAL DIFERENTE do atual → actionType: "travel", inclua "to" no actionPayload com o nome do local de destino.',
+      '  ATENÇÃO: mover-se em direção a um NPC que já está na cena (ex: "ir em direção ao homem", "se aproximar do estranho") NÃO é "travel" — use actionType: "custom".',
       '- Para ações narrativas simples → actionType: "custom".',
       '- Use os nomes das PERÍCIAS DO JOGADOR listadas no contexto.',
       '- O campo "interpretation" deve ser 1 frase curta explicando o que o jogador quer fazer.'
@@ -2316,13 +2320,15 @@ export class GeminiAdapter implements Narrator {
       'ITENS INICIAIS (OBRIGATÓRIO):',
       'Retorne em "itemChanges" de 3 a 6 itens iniciais com changeType "gained" que o personagem já possui ao começar a aventura.',
       'Escolha itens coerentes com a classe, profissão, raça e ambientação do mundo. Exemplos de categorias:',
-      '- Arma principal adequada à classe/profissão (espada, arco, cajado, adaga, etc.)',
+      '- Arma principal adequada à classe/profissão (espada, arco, cajado, adaga, pistola, rifle, etc.)',
+      '- Se a arma for à distância (arco, besta, pistola, rifle, escopeta, etc.), inclua OBRIGATORIAMENTE a munição correspondente como item separado (flechas, virotes, balas, cartuchos, etc.) com quantidade adequada ao contexto',
       '- Armadura ou vestimenta de proteção se aplicável',
       '- Provisões básicas de viagem (ração, cantil, bolsa)',
       '- 1 a 2 itens temáticos/narrativos que conectem o personagem ao mundo (amuleto de família, carta misteriosa, mapa antigo, diário, etc.)',
       '- Moedas ou recursos iniciais',
+      '- Para ambientações modernas/futuristas: se o personagem tiver profissão ou contexto que justifique, inclua um veículo (category "vehicle": carro, moto, nave, etc.) ou propriedade (category "property": apartamento, base, etc.) como item inicial.',
       'Mencione os itens naturalmente dentro da narrativa de abertura (ex: descreva o personagem conferindo seus pertences, ou um NPC entregando algo).',
-      'Use o mesmo formato itemChanges já definido no system prompt. Cada item deve ter um nome criativo e coerente com a ambientação.'
+      'Use o mesmo formato itemChanges já definido no system prompt. Cada item DEVE ter o campo "category" preenchido corretamente.'
     ].filter(Boolean).join('\n')
 
     try {

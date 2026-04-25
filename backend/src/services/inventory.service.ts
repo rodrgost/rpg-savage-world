@@ -119,6 +119,7 @@ export class InventoryService {
             name: change.name,
             description: '',
             quantity: change.quantity,
+            ...(change.category ? { category: change.category } : {}),
             tags: []
           })
         }

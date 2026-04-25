@@ -12,6 +12,7 @@ import {
   buildCanonicalPromptSection,
   findCanonicalTextViolations,
   isCanonicalLocation,
+  normalizeCanonicalText,
   type CanonicalAnchors,
   type CanonicalTextScope,
   type CanonicalTextViolation
@@ -231,6 +232,19 @@ export class SessionService {
     if (response.actionType === 'travel') {
       const destination = typeof response.actionPayload.to === 'string' ? response.actionPayload.to.trim() : ''
       if (destination && !isCanonicalLocation(destination, anchors)) {
+        // Se o destino coincide com ID ou nome de NPC presente, é movimento em direção ao NPC — trata como custom
+        const isNpcInScene = state.npcs.some(
+          (npc) =>
+            (!npc.location || npc.location === state.worldState.activeLocation) &&
+            (npc.id === destination || normalizeCanonicalText(npc.name) === normalizeCanonicalText(destination))
+        )
+        if (isNpcInScene) {
+          return {
+            ...response,
+            actionType: 'custom',
+            actionPayload: { input }
+          }
+        }
         violations.push({
           category: 'location',
           token: destination,
@@ -655,8 +669,11 @@ export class SessionService {
       }
 
       if (change.changeType === 'gained') {
-        warn('validateNarratorItemChanges', `Descartando ganho de item não canônico no turno: "${change.name}"`)
-        return false
+        const isBigAsset = change.category === 'vehicle' || change.category === 'property'
+        if (!isBigAsset) {
+          warn('validateNarratorItemChanges', `Descartando ganho de item não canônico no turno: "${change.name}"`)
+          return false
+        }
       }
 
       if (!this.inventory.hasItem(state, change.itemId) && !this.inventory.hasItem(state, change.name)) {
