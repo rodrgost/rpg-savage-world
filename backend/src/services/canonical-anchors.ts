@@ -8,6 +8,8 @@ export type CanonicalAnchors = {
   inventoryItemNames: string[]
   activeStatusNames: string[]
   historicalProperNames: string[]
+  /** Texto da narrativa do turno corrente — itens mencionados aqui são permitidos nas opções mesmo sem estar no inventário. */
+  currentNarrativeText?: string
 }
 
 export type CanonicalTextScope = 'option' | 'action' | 'narrative' | 'reason'
@@ -24,8 +26,12 @@ const PROPER_NAME_STOPWORDS = new Set([
   'ação',
   'acender',
   'acionar',
+  'aceitar',
+  'acalmar',
+  'agradecer',
   'agora',
   'ajudar',
+  'alertar',
   'alcançar',
   'alcancar',
   'ameacas',
@@ -409,8 +415,9 @@ export function buildCanonicalAnchors(params: {
   state: GameState
   recentMessages?: ChatMessageRow[]
   summaryText?: string
+  currentNarrative?: string
 }): CanonicalAnchors {
-  const { state, recentMessages = [], summaryText } = params
+  const { state, recentMessages = [], summaryText, currentNarrative } = params
 
   const presentNpcNames = uniqueNames(
     state.npcs
@@ -445,7 +452,8 @@ export function buildCanonicalAnchors(params: {
     presentNpcNames,
     inventoryItemNames,
     activeStatusNames,
-    historicalProperNames
+    historicalProperNames,
+    currentNarrativeText: currentNarrative?.trim() || undefined
   }
 }
 
@@ -457,11 +465,11 @@ export function buildCanonicalPromptSection(anchors: CanonicalAnchors): string {
   const historyNamesText = anchors.historicalProperNames.length ? anchors.historicalProperNames.slice(0, 12).join(', ') : 'nenhum'
 
   return [
-    '=== ÂNCORAS CANÔNICAS ESTRITAS ===',
-    '- No turno normal, trate as listas abaixo como fechadas.',
-    '- Se uma opção ou interpretação citar item, NPC, local ou nome próprio fora destas listas, a resposta será descartada.',
-    '- Para interação direta, ataque, diálogo, entrega de item ou deslocamento, use apenas entidades confirmadas abaixo.',
-    '- Nomes do histórico recente servem apenas para continuidade narrativa; não use isso para fingir presença imediata de NPC fora da cena.',
+    '=== ÂNCORAS CANÔNICAS ===',
+    '- Prefira as entidades abaixo ao criar opções e interpretar ações.',
+    '- Não invente NPCs, itens ou locais que não constem nas listas abaixo, a menos que a narrativa deste turno os introduza explicitamente.',
+    '- Priorize entidades confirmadas abaixo para interação direta, ataque, diálogo, entrega de item ou deslocamento.',
+    '- Nomes do histórico recente servem apenas para continuidade narrativa; não assuma presença imediata de NPC fora da cena atual.',
     `Local atual confirmado: ${anchors.currentLocation}`,
     `NPCs presentes agora: ${npcsText}`,
     `Itens disponíveis agora: ${inventoryText}`,
@@ -518,17 +526,35 @@ export function findCanonicalTextViolations(
 
   const hasAnchoredItemMention = anchors.inventoryItemNames.some((name) => hasAnchoredName(searchableText, name))
   const itemReference = extractStructuredReference(trimmed, ITEM_REFERENCE_PATTERN)
-  if (
-    itemReference
-    && !hasAnchoredItemMention
-    && !isGenericReference(itemReference, GENERIC_ITEM_REFERENCES, genericItemTokens)
-  ) {
-    const normalizedReference = normalizeCanonicalText(itemReference)
-    violations.set(`item:${normalizedReference}`, {
-      category: 'item',
-      token: itemReference,
-      reason: 'Referência a item não confirmada no inventário atual.'
-    })
+  if (itemReference && !hasAnchoredItemMention) {
+    // Verifica se o PRIMEIRO TOKEN da referência capturada é uma palavra genérica de
+    // localização, NPC ou item — padrão similar ao check do NPC_REFERENCE_PATTERN abaixo.
+    // Isso evita falsos positivos como "verificar o perímetro..." → item:"perímetro do motel..."
+    const itemRefFirstToken = normalizeCanonicalText(itemReference).split(' ').filter(Boolean)[0] ?? ''
+    const itemRefFirstIsGeneric =
+      genericLocationTokens.has(itemRefFirstToken)
+      || genericNpcTokens.has(itemRefFirstToken)
+      || genericItemTokens.has(itemRefFirstToken)
+
+    // Verifica se o item foi introduzido na narrativa corrente do turno (ainda não está
+    // no inventário, mas acabou de ser mencionado pelo narrador).
+    const narrativeNormalized = anchors.currentNarrativeText ? normalizeCanonicalText(anchors.currentNarrativeText) : ''
+    const itemRefWords = normalizeCanonicalText(itemReference).split(' ').filter((w) => w.length >= 4).slice(0, 2)
+    const itemInCurrentNarrative = narrativeNormalized.length > 0 && itemRefWords.length > 0
+      && itemRefWords.every((w) => narrativeNormalized.includes(w))
+
+    if (
+      !itemRefFirstIsGeneric
+      && !itemInCurrentNarrative
+      && !isGenericReference(itemReference, GENERIC_ITEM_REFERENCES, genericItemTokens)
+    ) {
+      const normalizedReference = normalizeCanonicalText(itemReference)
+      violations.set(`item:${normalizedReference}`, {
+        category: 'item',
+        token: itemReference,
+        reason: 'Referência a item não confirmada no inventário atual.'
+      })
+    }
   }
 
   const hasAnchoredNpcMention = anchors.presentNpcNames.some((name) => hasAnchoredName(searchableText, name))

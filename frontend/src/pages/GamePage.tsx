@@ -764,9 +764,151 @@ function AttackResultCard({ event }: { event: SessionEvent }) {
   )
 }
 
+type SoakRollPayload = {
+  vigorDie: number
+  traitRoll: DiceRollDetail
+  wildRoll: DiceRollDetail | null
+  finalTotal: number
+  isSuccess: boolean
+  woundsSoaked: number
+  remainingWounds: number
+  remainingBennies: number
+  shakenRemoved: boolean
+}
+
+function SoakRollCard({ event }: { event: SessionEvent }) {
+  const p = event.payload as unknown as SoakRollPayload
+  const traitRoll = p.traitRoll
+  const wildRoll = p.wildRoll
+
+  return (
+    <div className={`dice-result-card ${p.isSuccess ? 'dice-success' : 'dice-failure'}`}>
+      <div className="dice-result-header">
+        <span className="dice-result-icon">🛡️</span>
+        <span className="dice-result-title">Absorção de Dano</span>
+        <span className={`dice-result-badge ${p.isSuccess ? 'success' : 'failure'}`}>
+          {p.isSuccess
+            ? `Absorveu ${p.woundsSoaked} ferimento${p.woundsSoaked !== 1 ? 's' : ''}`
+            : 'Falhou'}
+        </span>
+      </div>
+
+      <div className="dice-result-rolls">
+        {traitRoll && (
+          <div className="dice-roll-group">
+            <span className="dice-roll-label">Vigor d{p.vigorDie}</span>
+            <div className="dice-roll-values">
+              {traitRoll.rolls?.map((r: number, i: number) => (
+                <span key={i} className={`dice-value ${traitRoll.aced ? 'aced' : ''}`}>
+                  {r}{traitRoll.aced && i < traitRoll.rolls.length - 1 ? '🔥' : ''}
+                </span>
+              )) ?? <span className="dice-value">{traitRoll.total}</span>}
+              <span className="dice-roll-total">= {traitRoll.total}</span>
+            </div>
+          </div>
+        )}
+        {wildRoll && (
+          <div className="dice-roll-group">
+            <span className="dice-roll-label">Wild d6</span>
+            <div className="dice-roll-values">
+              {wildRoll.rolls?.map((r: number, i: number) => (
+                <span key={i} className={`dice-value ${wildRoll.aced ? 'aced' : ''}`}>
+                  {r}{wildRoll.aced && i < wildRoll.rolls.length - 1 ? '🔥' : ''}
+                </span>
+              )) ?? <span className="dice-value">{wildRoll.total}</span>}
+              <span className="dice-roll-total">= {wildRoll.total}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="dice-result-summary">
+        <span className="dice-final">Total: <strong>{p.finalTotal}</strong></span>
+        <span className="dice-tn">TN: 4</span>
+        {p.isSuccess && p.shakenRemoved && (
+          <span className="attack-result-status shaken">✅ Abalado removido</span>
+        )}
+        <span className="dice-mod">Bennies: {p.remainingBennies}</span>
+        {!p.isSuccess && (
+          <span className="attack-result-status wounded">🩸 Ferimentos restantes: {p.remainingWounds}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+type RecoverShakenPayload = {
+  spiritDie: number
+  traitRoll: DiceRollDetail
+  wildRoll: DiceRollDetail | null
+  finalTotal: number
+  recovered: boolean
+  withRaise?: boolean
+}
+
+function RecoverShakenCard({ event }: { event: SessionEvent }) {
+  const p = event.payload as unknown as RecoverShakenPayload
+  const traitRoll = p.traitRoll
+  const wildRoll = p.wildRoll
+
+  return (
+    <div className={`dice-result-card ${p.recovered ? 'dice-success' : 'dice-failure'}`}>
+      <div className="dice-result-header">
+        <span className="dice-result-icon">✊</span>
+        <span className="dice-result-title">Recuperar Abalado</span>
+        <span className={`dice-result-badge ${p.recovered ? 'success' : 'failure'}`}>
+          {p.recovered
+            ? p.withRaise ? 'Recuperado com Ampliação' : 'Recuperado'
+            : 'Permanece Abalado'}
+        </span>
+      </div>
+
+      <div className="dice-result-rolls">
+        {traitRoll && (
+          <div className="dice-roll-group">
+            <span className="dice-roll-label">Espírito d{p.spiritDie}</span>
+            <div className="dice-roll-values">
+              {traitRoll.rolls?.map((r: number, i: number) => (
+                <span key={i} className={`dice-value ${traitRoll.aced ? 'aced' : ''}`}>
+                  {r}{traitRoll.aced && i < traitRoll.rolls.length - 1 ? '🔥' : ''}
+                </span>
+              )) ?? <span className="dice-value">{traitRoll.total}</span>}
+              <span className="dice-roll-total">= {traitRoll.total}</span>
+            </div>
+          </div>
+        )}
+        {wildRoll && (
+          <div className="dice-roll-group">
+            <span className="dice-roll-label">Wild d6</span>
+            <div className="dice-roll-values">
+              {wildRoll.rolls?.map((r: number, i: number) => (
+                <span key={i} className={`dice-value ${wildRoll.aced ? 'aced' : ''}`}>
+                  {r}{wildRoll.aced && i < wildRoll.rolls.length - 1 ? '🔥' : ''}
+                </span>
+              )) ?? <span className="dice-value">{wildRoll.total}</span>}
+              <span className="dice-roll-total">= {wildRoll.total}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="dice-result-summary">
+        <span className="dice-final">Total: <strong>{p.finalTotal}</strong></span>
+        <span className="dice-tn">TN: 4</span>
+      </div>
+    </div>
+  )
+}
+
 function DiceResultCard({ event }: { event: SessionEvent }) {
   if (event.type === 'attack_hit' || event.type === 'attack_miss') {
     return <AttackResultCard event={event} />
+  }
+  if (event.type === 'soak_roll') {
+    return <SoakRollCard event={event} />
+  }
+  if (event.type === 'recover_shaken' || event.type === 'recover_shaken_failed') {
+    return <RecoverShakenCard event={event} />
   }
   if (event.type !== 'trait_test') return null
 

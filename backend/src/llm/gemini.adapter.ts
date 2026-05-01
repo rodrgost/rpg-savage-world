@@ -1180,8 +1180,8 @@ export class GeminiAdapter implements Narrator {
       'Você mantém o resumo canônico de continuidade de uma sessão de RPG Savage Worlds.',
       'Objetivo: gerar um resumo curto, útil para contexto do próximo turno e também para exibição ao jogador.',
       'Regras:',
-      '- Use exatamente 5 blocos, nesta ordem: SITUAÇÃO ATUAL, AMEAÇAS ATIVAS, RECURSOS RELEVANTES, PERSONAGENS/FORÇAS, PRÓXIMO PROBLEMA.',
-      '- Cada bloco deve ter 1 frase curta e direta.',
+      '- Escreva em parágrafos corridos, sem títulos, rótulos ou seções.',
+      '- Use 1 a 3 parágrafos curtos — apenas as informações que ainda importam para a continuação da história.',
       '- Preserve apenas fatos que mudam a continuação imediata da história.',
       '- Não reconte a cena passo a passo, não descreva golpes, quedas, explosões ou mortes antigas a menos que continuem relevantes agora.',
       '- Itens ganhos, inimigos mortos e feitos do personagem só entram se ainda alterarem risco, recursos, posição ou objetivo imediato.',
@@ -1216,13 +1216,11 @@ export class GeminiAdapter implements Narrator {
       })
       return sanitizeNarrativeOutput(generated)
     } catch {
-      return [
-        `SITUAÇÃO ATUAL: ${state.worldState.activeLocation}; ${combatText.toLowerCase()}`,
-        `AMEAÇAS ATIVAS: ${threatsText}`,
-        `RECURSOS RELEVANTES: ${resourcesText}`,
-        `PERSONAGENS/FORÇAS: ${forcesText}`,
-        `PRÓXIMO PROBLEMA: sobreviver à próxima decisão com ${p.bennies} bennies, ${p.wounds}/${p.maxWounds} ferimentos e ${p.fatigue} fadiga.`
-      ].join('\n\n')
+      const parts: string[] = []
+      parts.push(`${p.name ?? 'O personagem'} está em ${state.worldState.activeLocation}. ${combatText}`)
+      if (threatsText !== 'Sem ameaça imediata confirmada.') parts.push(threatsText)
+      if (resourcesText !== 'Nenhum recurso relevante carregado.') parts.push(`Recursos disponíveis: ${resourcesText}.`)
+      return parts.join(' ')
     }
   }
 
@@ -1264,8 +1262,8 @@ export class GeminiAdapter implements Narrator {
       '- Use o resumo anterior como base principal e as mensagens fornecidas apenas para incorporar contexto que ainda importe para a continuação imediata.',
       '- Não reconte a ação passo a passo e não duplique fatos já cobertos pelo resumo anterior.',
       '- Preserve apenas fatos que mudam posição atual, ameaça ativa, recursos, forças em cena ou problema imediato.',
-      '- Use exatamente 5 blocos, nesta ordem: SITUAÇÃO ATUAL, AMEAÇAS ATIVAS, RECURSOS RELEVANTES, PERSONAGENS/FORÇAS, PRÓXIMO PROBLEMA.',
-      '- Cada bloco deve ter 1 frase curta e direta.',
+      '- Escreva em parágrafos corridos, sem títulos, rótulos ou seções.',
+      '- Use 1 a 3 parágrafos curtos — apenas as informações que ainda importam para a continuação da história.',
       '- Preserve nomes próprios e contagens relevantes quando afetarem o próximo turno.',
       '- Não use markdown, bullets, prefácio, saudação ou comentários metalinguísticos.'
     ].join('\n')
@@ -1399,8 +1397,9 @@ export class GeminiAdapter implements Narrator {
     const sysPrompt = [
       'Você cria descrições visuais curtas para geração de imagem de RPG.',
       'Escreva em português do Brasil.',
-      'Saída esperada: um único parágrafo curto, com 1 ou 2 frases, focado em atmosfera, composição, figurino, cenário e detalhes visuais memoráveis.',
-      'A descrição pode soar cinematográfica e lembrar referências amplas do gênero, mas sem copiar cenas específicas, personagens protegidos, atores, logotipos, títulos, marcas ou enquadramentos idênticos.',
+      'Saída esperada: um único parágrafo curto, com 1 ou 2 frases, focado em atmosfera, composição, cenário e detalhes visuais memoráveis.',
+      'Se o título remeter a um filme, série, game, HQ ou livro conhecido, inspire-se na estética da arte de capa ou pôster oficial dessa obra: paleta de cores predominante, composição, enquadramento e atmosfera visual — mas sem reproduzir personagens protegidos, atores reais, rostos reconhecíveis, logotipos, títulos ou marcas.',
+      'Caso o título não remeta a nenhuma obra conhecida, descreva uma cena épica e original coerente com o nome.',
       'Entregue somente a descrição visual final, sem listas, sem markdown, sem comentários sobre o pedido e sem instruções negativas.'
     ].join('\n')
 
@@ -1409,7 +1408,8 @@ export class GeminiAdapter implements Narrator {
     if (req.entityType === 'world') {
       prompt = [
         `Título do universo: ${req.title}.`,
-        'Descreva uma imagem ampla do cenário, com leitura imediata do mundo, escala épica e identidade visual forte.'
+        'Se esse título remeter a um filme, série, game, HQ ou livro famoso, descreva a imagem inspirada na arte de capa ou pôster oficial: paleta, composição e atmosfera marcantes dessa obra, sem copiar personagens ou logotipos.',
+        'Caso contrário, descreva uma imagem ampla e épica do cenário com identidade visual forte e escala imponente.'
       ].join('\n')
     } else if (req.entityType === 'campaign') {
       prompt = [
@@ -1667,9 +1667,10 @@ export class GeminiAdapter implements Narrator {
       '- Itens ganhos devem ter nomes criativos e coerentes com a ambientação.',
       '- NUNCA repita itemChanges de itens que já estão no inventário do jogador. Se o jogador já possui um item, NÃO o inclua novamente em itemChanges com changeType "gained". Consulte a seção INVENTÁRIO no contexto do turno.',
       '- Cada item deve aparecer NO MÁXIMO UMA VEZ no array itemChanges de uma mesma resposta.',
-      '- Armas à distância (arco, besta, pistola, rifle, escopeta, etc.) SEMPRE devem ter sua munição correspondente como item separado no inventário (flechas, virotes, balas, cartuchos, etc.). Ao usar uma arma à distância em combate, registre o consumo de munição com changeType "used" no item de munição correspondente.',
+      '- Armas à distância (arco, besta, pistola, rifle, escopeta, etc.) SEMPRE devem ter sua munição correspondente como item separado no inventário (flechas, virotes, balas, cartuchos, etc.).',
+      '- Munição (category "ammunition") SÓ deve aparecer em itemChanges com changeType "used" quando a AÇÃO DO JOGADOR deste turno for do tipo "attack" (disparo efetivamente efetuado). NUNCA registre consumo de munição em turnos de trait_test, custom, travel ou qualquer outro tipo que não seja attack — mesmo que NPCs hostis tenham sido introduzidos na narrativa.',
       '- Todo item DEVE ter o campo "category". Use: weapon (armas), armor (armaduras), consumable (consumíveis como poções/ração), ammunition (munição), vehicle (veículos: carro, moto, avião, barco, nave, etc.), property (propriedades: casa, apartamento, fazenda, escritório, etc.), quest (item narrativo/missão), misc (outros itens).',
-      '- Veículos e propriedades (category "vehicle" ou "property") PODEM ser adicionados com changeType "gained" durante turnos normais quando a narrativa justificar (compra, herança, conquista, recompensa). Jamais use "gained" com outras categorias em turno normal.',
+      '- Consumíveis, munição, itens de missão e misc (categories "consumable", "ammunition", "quest", "misc") PODEM ser adicionados com changeType "gained" quando comprados, encontrados ou entregues por um NPC neste turno. Veículos e propriedades ("vehicle", "property") também são permitidos. Jamais use "gained" com categories "weapon" ou "armor" em turno normal.',
       '- Nunca quebre a imersão. Nunca mencione regras, dados ou mecânicas no texto narrativo.',
       '- Não repita a mesma narrativa. Evolua a história a cada turno.',
       '- IMPORTANTE: Mantenha o JSON compacto. A narrativa deve ter no máximo 2-3 parágrafos curtos.',
@@ -1738,8 +1739,11 @@ export class GeminiAdapter implements Narrator {
         '=== REGRAS DE TURNO CANÔNICO ===',
         '- No turno normal, use o array "npcs" para NPCs já listados em NPCs PRESENTES.',
         '- EXCEÇÃO: se sua narrativa DESTE turno introduz uma criatura/entidade hostil que ainda não estava listada, você DEVE registrá-la em "npcs" com newlyIntroduced: true, disposition: "hostile" e um UUID gerado por você como "id". Use o MESMO id no actionPayload.targetId de qualquer opção de ataque contra essa entidade.',
-        '- No turno normal, NÃO crie itemChanges com changeType "gained" EXCETO para categorias "vehicle" (veículos) e "property" (propriedades) quando a narrativa justificar (compra, herança, conquista, recompensa).',
-        '- No turno normal, use itemChanges apenas para "lost" ou "used" de itens já presentes no INVENTÁRIO (exceto veículos/propriedades conforme regra acima).',
+        '- No turno normal, NÃO crie itemChanges com changeType "gained" EXCETO nas situações abaixo:',
+        '  (1) Qualquer categoria EXCETO "weapon" e "armor", quando a narrativa deste turno justificar (compra em loja, item encontrado, recompensa, herança, conquista).',
+        '  (2) Um NPC PRESENTE NA CENA entrega explicitamente um item ao jogador NESTE turno (ex: passa uma chave, entrega um documento). Use changeType "gained" com a categoria correta do item.',
+        '  Jamais use "gained" com categories "weapon" ou "armor" em turno normal.',
+        '- No turno normal, use itemChanges apenas para "lost", "used" ou "gained" (conforme regras acima) de itens relevantes à ação deste turno.',
         '- No turno normal, NÃO aplique statusChanges novos sem evidência direta no RESULTADO MECÂNICO ou em EFEITOS ATIVOS já existentes.',
         '- No turno normal, só preencha locationChange se a ação do jogador for travel ou se o RESULTADO MECÂNICO trouxer location_change.',
         '- Use apenas IDs de NPC já listados em NPCs PRESENTES (ou do novo NPC hostil desta narrativa) para actionPayload.targetId.',

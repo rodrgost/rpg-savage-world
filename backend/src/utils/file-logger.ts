@@ -22,6 +22,7 @@ export function log(tag: string, ...args: unknown[]): void {
 
 export function warn(tag: string, ...args: unknown[]): void {
   console.warn(`[${shortTimestamp()}] [${tag}]`, ...args)
+  writeLine(`[WARN] [${tag}] ${args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')}`)
 }
 
 export function error(tag: string, ...args: unknown[]): void {

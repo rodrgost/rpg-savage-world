@@ -38,6 +38,7 @@ function buildUniverseImagePrompt(params: { name: string; visualDescription?: st
     `Setting anchor: world name "${worldName || 'Unnamed world'}".`,
     ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
     'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, mood and visual storytelling driven by the setting itself.',
+    'Cover art reference: if the world name evokes a well-known film, TV series, game, comic, or book franchise, evoke the visual style, color palette, and composition of its official cover art or poster — without reproducing protected characters, real actors, recognizable faces, logos, titles, or trademarks.',
     'Restrictions: no text, no title, no logos, no watermarks, no UI, no typography, no close-up faces, no characters as the main subject.'
   ].join('\n')
 }

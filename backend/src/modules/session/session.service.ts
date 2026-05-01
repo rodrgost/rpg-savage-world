@@ -10,12 +10,7 @@ import { StatusEffectService } from '../../services/statusEffect.service.js'
 import {
   buildCanonicalAnchors,
   buildCanonicalPromptSection,
-  findCanonicalTextViolations,
-  isCanonicalLocation,
-  normalizeCanonicalText,
   type CanonicalAnchors,
-  type CanonicalTextScope,
-  type CanonicalTextViolation
 } from '../../services/canonical-anchors.js'
 import { SessionEventRepo } from '../../repositories/sessionEvent.repo.js'
 import { SessionSummaryRepo } from '../../repositories/sessionSummary.repo.js'
@@ -154,134 +149,6 @@ export class SessionService {
 
   private buildStrictRulesDigest(baseRulesDigest: string | undefined, anchors: CanonicalAnchors): string {
     return [baseRulesDigest?.trim(), buildCanonicalPromptSection(anchors)].filter(Boolean).join('\n\n')
-  }
-
-  private collectCanonicalTextViolations(
-    texts: Array<{ text?: string | null; scope: CanonicalTextScope; allowHistoricalProperNames?: boolean }>,
-    anchors: CanonicalAnchors
-  ): CanonicalTextViolation[] {
-    const seen = new Set<string>()
-    const violations: CanonicalTextViolation[] = []
-
-    for (const entry of texts) {
-      if (!entry.text?.trim()) continue
-
-      const matches = findCanonicalTextViolations(entry.text, anchors, {
-        scope: entry.scope,
-        allowHistoricalProperNames: entry.allowHistoricalProperNames
-      })
-
-      for (const violation of matches) {
-        const signature = `${violation.category}:${normalizeLookupValue(violation.token)}`
-        if (seen.has(signature)) continue
-        seen.add(signature)
-        violations.push(violation)
-      }
-    }
-
-    return violations
-  }
-
-  private formatCanonicalViolationReason(violations: CanonicalTextViolation[]): string {
-    const first = violations[0]
-    if (!first) return 'A ação menciona elementos não confirmados no contexto atual.'
-
-    switch (first.category) {
-      case 'item':
-        return `A ação menciona o item "${first.token}", que não está confirmado no inventário atual.`
-      case 'npc':
-        return `A ação menciona "${first.token}", mas esse personagem não está confirmado na cena atual.`
-      case 'location':
-        return `A ação menciona o local "${first.token}", que ainda não está confirmado no contexto atual.`
-      default:
-        return `A ação menciona "${first.token}", mas esse nome não está confirmado no contexto atual.`
-    }
-  }
-
-  private sanitizeNarrativeAgainstAnchors(narrative: string, anchors: CanonicalAnchors): string {
-    const violations = this.collectCanonicalTextViolations(
-      [{ text: narrative, scope: 'narrative', allowHistoricalProperNames: true }],
-      anchors
-    )
-
-    if (violations.length) {
-      warn(
-        'validateNarratorResponse',
-        `Narrativa com possíveis entidades fora de âncora (mantida): ${violations.map((v) => `${v.category}:${v.token}`).join(', ')}`
-      )
-    }
-
-    return narrative
-  }
-
-  private enforceCanonicalValidateActionResponse(
-    response: ValidateActionResponse,
-    input: string,
-    state: GameState,
-    anchors: CanonicalAnchors
-  ): ValidateActionResponse {
-    const violations = this.collectCanonicalTextViolations(
-      [
-        { text: response.interpretation, scope: 'action' },
-        { text: typeof response.actionPayload.input === 'string' ? response.actionPayload.input : null, scope: 'action' },
-        { text: response.feasibilityReason ?? null, scope: 'reason', allowHistoricalProperNames: true }
-      ],
-      anchors
-    )
-
-    if (response.actionType === 'travel') {
-      const destination = typeof response.actionPayload.to === 'string' ? response.actionPayload.to.trim() : ''
-      if (destination && !isCanonicalLocation(destination, anchors)) {
-        // Se o destino coincide com ID ou nome de NPC presente, é movimento em direção ao NPC — trata como custom
-        const isNpcInScene = state.npcs.some(
-          (npc) =>
-            (!npc.location || npc.location === state.worldState.activeLocation) &&
-            (npc.id === destination || normalizeCanonicalText(npc.name) === normalizeCanonicalText(destination))
-        )
-        if (isNpcInScene) {
-          return {
-            ...response,
-            actionType: 'custom',
-            actionPayload: { input }
-          }
-        }
-        violations.push({
-          category: 'location',
-          token: destination,
-          reason: 'Destino não confirmado nas âncoras canônicas.'
-        })
-      }
-    }
-
-    if (response.actionType === 'attack') {
-      const targetId = typeof response.actionPayload.targetId === 'string' ? response.actionPayload.targetId.trim() : ''
-      const sceneHasTarget = state.npcs.some(
-        (npc) => (!npc.location || npc.location === state.worldState.activeLocation) && npc.id === targetId
-      )
-      if (targetId && !sceneHasTarget) {
-        violations.push({
-          category: 'npc',
-          token: targetId,
-          reason: 'Alvo não confirmado na cena atual.'
-        })
-      }
-    }
-
-    if (!violations.length) return response
-
-    warn(
-      'validateCustomAction',
-      `Marcando ação livre como inviável por âncora inválida: ${violations.map((violation) => `${violation.category}:${violation.token}`).join(', ')}`
-    )
-
-    return {
-      feasible: false,
-      feasibilityReason: this.formatCanonicalViolationReason(violations),
-      diceCheck: null,
-      actionType: 'custom',
-      actionPayload: { input },
-      interpretation: input
-    }
   }
 
   private createNarrativeNpcStub(
@@ -600,10 +467,6 @@ export class SessionService {
           warn('validateNarratorOption', `Descartando travel sem destino válido: "${option.text}"`)
           return null
         }
-        if (mode === 'turn' && canonicalAnchors && !isCanonicalLocation(destination, canonicalAnchors)) {
-          warn('validateNarratorOption', `Descartando travel para local não confirmado: "${destination}"`)
-          return null
-        }
         actionPayload.to = destination
         break
       }
@@ -627,25 +490,6 @@ export class SessionService {
       return null
     }
 
-    if (mode === 'turn' && canonicalAnchors) {
-      const violations = this.collectCanonicalTextViolations(
-        [
-          { text: option.text, scope: 'option' },
-          { text: typeof actionPayload.input === 'string' ? actionPayload.input : null, scope: 'action' },
-          { text: feasibilityReason ?? null, scope: 'reason', allowHistoricalProperNames: true }
-        ],
-        canonicalAnchors
-      )
-
-      if (violations.length) {
-        warn(
-          'validateNarratorOption',
-          `Descartando opção com entidade fora de âncora: ${violations.map((violation) => `${violation.category}:${violation.token}`).join(', ')}`
-        )
-        return null
-      }
-    }
-
     return {
       ...option,
       actionPayload,
@@ -659,7 +503,8 @@ export class SessionService {
   private validateNarratorItemChanges(
     changes: NarratorTurnResponse['itemChanges'],
     state: GameState,
-    mode: 'start' | 'turn'
+    mode: 'start' | 'turn',
+    action?: PlayerAction
   ): NarratorTurnResponse['itemChanges'] {
     return changes.filter((change) => {
       if (change.quantity <= 0) return false
@@ -669,11 +514,16 @@ export class SessionService {
       }
 
       if (change.changeType === 'gained') {
-        const isBigAsset = change.category === 'vehicle' || change.category === 'property'
-        if (!isBigAsset) {
-          warn('validateNarratorItemChanges', `Descartando ganho de item não canônico no turno: "${change.name}"`)
+        const allowedGainCategories = ['vehicle', 'property', 'consumable', 'quest', 'misc', 'ammunition']
+        if (!allowedGainCategories.includes(change.category ?? '')) {
+          warn('validateNarratorItemChanges', `Descartando ganho de item não permitido (category "${change.category}") no turno: "${change.name}"`)
           return false
         }
+      }
+
+      if (change.changeType === 'used' && change.category === 'ammunition' && action?.type !== 'attack') {
+        warn('validateNarratorItemChanges', `Descartando consumo de munição indevido fora de ataque: "${change.name}"`)
+        return false
       }
 
       if (!this.inventory.hasItem(state, change.itemId) && !this.inventory.hasItem(state, change.name)) {
@@ -784,9 +634,10 @@ export class SessionService {
     const canonicalAnchors = buildCanonicalAnchors({
       state: canonicalNarrativeState,
       recentMessages,
-      summaryText
+      summaryText,
+      currentNarrative: response.narrative
     })
-    const itemChanges = this.validateNarratorItemChanges(response.itemChanges, state, mode)
+    const itemChanges = this.validateNarratorItemChanges(response.itemChanges, state, mode, action)
     const pendingItemRefs = new Set(
       itemChanges.flatMap((change) => [change.itemId, change.name]).map((value) => normalizeLookupValue(value))
     )
@@ -804,9 +655,7 @@ export class SessionService {
 
     return {
       ...response,
-      narrative: mode === 'turn'
-        ? this.sanitizeNarrativeAgainstAnchors(response.narrative, canonicalAnchors)
-        : response.narrative,
+      narrative: response.narrative,
       options,
       npcs: response.npcs.filter((npc) => sceneNpcIds.has(npc.id)),
       itemChanges,
@@ -1282,7 +1131,7 @@ export class SessionService {
       recentMessages: context.recentMessages
     })
 
-    return this.enforceCanonicalValidateActionResponse(validation, params.input, currentWithSceneNpcs, canonicalAnchors)
+    return validation
   }
 
   /**
@@ -1325,7 +1174,7 @@ export class SessionService {
 
     // 2.5 Salvar resultados de dados como mensagem de sistema (persistente no chat)
     const diceEvents = result.emittedEvents.filter(
-      (e) => e.type === 'trait_test' || e.type === 'attack_hit' || e.type === 'attack_miss' || e.type === 'soak_roll' || e.type === 'recover_shaken'
+      (e) => e.type === 'trait_test' || e.type === 'attack_hit' || e.type === 'attack_miss' || e.type === 'soak_roll' || e.type === 'recover_shaken' || e.type === 'recover_shaken_failed'
     )
     let systemMessage: ChatMessageRow | null = null
     if (diceEvents.length > 0) {
