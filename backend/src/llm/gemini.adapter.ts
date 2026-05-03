@@ -1217,7 +1217,7 @@ export class GeminiAdapter implements Narrator {
       return sanitizeNarrativeOutput(generated)
     } catch {
       const parts: string[] = []
-      parts.push(`${p.name ?? 'O personagem'} está em ${state.worldState.activeLocation}. ${combatText}`)
+      parts.push(`O personagem está em ${state.worldState.activeLocation}. ${combatText}`)
       if (threatsText !== 'Sem ameaça imediata confirmada.') parts.push(threatsText)
       if (resourcesText !== 'Nenhum recurso relevante carregado.') parts.push(`Recursos disponíveis: ${resourcesText}.`)
       return parts.join(' ')
