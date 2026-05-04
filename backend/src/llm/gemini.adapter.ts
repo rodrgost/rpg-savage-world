@@ -12,6 +12,7 @@ import type {
   NarrateStartRequest,
   NarrateTurnRequest,
   NarratorTurnResponse,
+  NpcAttackEntry,
   ActionOption,
   NPCMention,
   ItemChange,
@@ -835,7 +836,7 @@ export class GeminiAdapter implements Narrator {
         : readEnv('GEMINI_WORLD_MAX_OUTPUT_TOKENS', '16384'),
       16384
     ),
-    1024
+    4096
   )
   private readonly narrateStartMaxTokens = withMin(
     toNumber(
@@ -1338,10 +1339,18 @@ export class GeminiAdapter implements Narrator {
       'Comece diretamente no conteúdo narrativo do mundo.'
     ].join('\n')
 
+    const characterLines =
+      req.characters && req.characters.length > 0
+        ? req.characters.map((c) => `- ${c.name}${c.description ? `: ${c.description}` : ''}`)
+        : []
+
     const prompt = [
       `Nome da campanha: ${req.campaignName}.`,
       `Temática do mundo: ${req.thematic}.`,
       `Descrição atual (se existir): ${req.currentDescription?.trim() || 'nenhuma'}.`,
+      ...(characterLines.length > 0
+        ? [`Personagens existentes no mundo:\n${characterLines.join('\n')}`]
+        : []),
       'Mantenha consistência com a temática e evolua a história sem repetir literalmente a descrição atual.'
     ].join('\n')
 
@@ -1599,10 +1608,13 @@ export class GeminiAdapter implements Narrator {
       '    { "id": "<uuid>", "name": "<nome>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false }',
       '  ],',
       '  "itemChanges": [',
-      '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|vehicle|property|quest|misc" }',
+      '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|money|vehicle|property|quest|misc" }',
       '  ],',
       '  "statusChanges": [',
       '    { "effectId": "<uuid>", "name": "<nome do efeito>", "changeType": "applied|removed", "turnsRemaining": 3, "description": "<desc>" }',
+      '  ],',
+      '  "npcAttacks": [',
+      '    { "npcId": "<id do NPC que ataca>", "skillDie": <6|8|10|12>, "damageFormula": "<str+d6 ou 2d6 etc>", "ap": 0 }',
       '  ],',
       '  "locationChange": "<nova localização ou null>",',
       '  "chapterTitle": "<título do capítulo se mudou ou null>"',
@@ -1622,7 +1634,7 @@ export class GeminiAdapter implements Narrator {
       '  • Escalar uma superfície difícil, saltar um abismo, correr sob pressão → skill: "Atletismo"',
       '  • Convencer, barganhar, mentir → skill: "Persuasão"',
       '  • Intimidar alguém → skill: "Intimidação"',
-      '  • Curar ferimentos → skill: "Medicina"',
+      '  • Curar ferimentos → actionType: "heal", actionPayload: {} (não use trait_test para cura)',
       '  • Abrir fechadura trancada, desarmar armadilha → skill: "Ladinagem"',
       '  • Investigar pistas, pesquisar → skill: "Pesquisa"',
       '  • Conhecimento arcano → skill: "Ocultismo"',
@@ -1644,8 +1656,14 @@ export class GeminiAdapter implements Narrator {
       '  • Descansar, respirar fundo, aguardar',
       '  • Examinar um item que já está no inventário',
       '  • Verificar a hora, olhar ao redor sem alvo específico',
+      '  • Aceitar/receber/pegar um item que um NPC entrega diretamente — nenhuma resistência do NPC',
+      '  • Abordar NPC com disposition "friendly" para conversa/pergunta direta (perguntar a um aliado onde está alguém, pedir ajuda a um conhecido) — sem tentar forçar revelação de segredo, convencer contra a vontade ou negociar',
+      '  • Viajar para um local conhecido sem obstáculos ou ameaças mencionados — SEMPRE use actionType "travel" e diceCheck.required: false',
+      '  • Aguardar/observar passivamente sem alvo oculto específico (ficar no carro, vigiar de longe, esperar)',
       '  ATENÇÃO: se houver elemento de resistência, risco ou incerteza real no contexto, mesmo ações comuns podem exigir teste.',
       '  Ex.: abrir uma porta pode exigir Ladinagem se estiver trancada; pular pode exigir Atletismo se for um abismo.',
+      '  Ex. de Persuasão necessária: NPC com disposition "neutral" ou "hostile", NPC escondendo informação, barganha com valores em jogo.',
+      '- REGRA ESPECIAL — actionType "travel": diceCheck.required deve ser SEMPRE false. Viagem é narrativa; descreva obstáculos na narrativa, não em diceCheck.',
       '- "modifier": ajuste situacional (-2 para dificuldade alta, -4 para quase impossível, +2 para vantagem). Default: 0.',
       '- "tn": target number. Default 4. Aumente para situações especialmente difíceis (6, 8).',
       '- "reason": SEMPRE preencha com uma justificativa narrativa curta.',
@@ -1660,6 +1678,12 @@ export class GeminiAdapter implements Narrator {
       '- Para actionType "trait_test", inclua "skill" ou "attribute" no actionPayload.',
       '- Para actionType "attack", inclua "targetId" e "damageFormula" no actionPayload.',
       '  Exemplos de damageFormula: "str" (soco/desarmado), "str+d4" (faca/canivete), "str+d6" (espada curta/clava/machado leve), "str+d8" (espada longa/machado pesado), "str+d10" (montante/arma duas mãos), "2d6" (pistola), "2d8" (rifle).',
+      '- Para actionType "heal": inclua actionPayload: {} (cura o próprio jogador) ou actionPayload: { targetId: "<id do NPC aliado>" }.',
+      '- ATAQUES DE NPC: quando um NPC hostil ataca o jogador neste turno, preencha o campo "npcAttacks" (array).',
+      '  Cada entrada: { "npcId": "<id do NPC>", "skillDie": <6|8|10|12>, "damageFormula": "<fórmula>", "ap": 0 }.',
+      '  skillDie: 6 = soldado comum, 8 = guerreiro treinado, 10 = campeão, 12 = elite.',
+      '  damageFormula: "str+d4" (punho/faca), "str+d6" (espada), "str+d8" (machadão), "2d6" (pistola), "2d8" (rifle).',
+      '  Se o NPC não atacar neste turno, deixe "npcAttacks": [].',
       '- Ao narrar Extras abatidos (isWildCard=false): descreva-os saindo de combate/fugindo/caindo com 1 único ferimento.',
       '- Ao narrar Wild Cards feridos: acumule penalidades, eles continuam combatendo até 4+ ferimentos.',
       '- Para actionType "travel", inclua "to" no actionPayload.',
@@ -1669,7 +1693,7 @@ export class GeminiAdapter implements Narrator {
       '- Cada item deve aparecer NO MÁXIMO UMA VEZ no array itemChanges de uma mesma resposta.',
       '- Armas à distância (arco, besta, pistola, rifle, escopeta, etc.) SEMPRE devem ter sua munição correspondente como item separado no inventário (flechas, virotes, balas, cartuchos, etc.).',
       '- Munição (category "ammunition") SÓ deve aparecer em itemChanges com changeType "used" quando a AÇÃO DO JOGADOR deste turno for do tipo "attack" (disparo efetivamente efetuado). NUNCA registre consumo de munição em turnos de trait_test, custom, travel ou qualquer outro tipo que não seja attack — mesmo que NPCs hostis tenham sido introduzidos na narrativa.',
-      '- Todo item DEVE ter o campo "category". Use: weapon (armas), armor (armaduras), consumable (consumíveis como poções/ração), ammunition (munição), vehicle (veículos: carro, moto, avião, barco, nave, etc.), property (propriedades: casa, apartamento, fazenda, escritório, etc.), quest (item narrativo/missão), misc (outros itens).',
+      '- Todo item DEVE ter o campo "category". Use: weapon (armas), armor (armaduras), consumable (consumíveis como poções/ração), ammunition (munição), money (dinheiro/moedas/recursos monetários — o campo "quantity" representa a quantidade exata de moedas/créditos/gold), vehicle (veículos: carro, moto, avião, barco, nave, etc.), property (propriedades: casa, apartamento, fazenda, escritório, etc.), quest (item narrativo/missão), misc (outros itens).',
       '- Consumíveis, munição, itens de missão e misc (categories "consumable", "ammunition", "quest", "misc") PODEM ser adicionados com changeType "gained" quando comprados, encontrados ou entregues por um NPC neste turno. Veículos e propriedades ("vehicle", "property") também são permitidos. Jamais use "gained" com categories "weapon" ou "armor" em turno normal.',
       '- Nunca quebre a imersão. Nunca mencione regras, dados ou mecânicas no texto narrativo.',
       '- Não repita a mesma narrativa. Evolua a história a cada turno.',
@@ -1729,7 +1753,7 @@ export class GeminiAdapter implements Narrator {
         '',
         '=== REGRAS DE INÍCIO DE SESSÃO ===',
         '- Você PODE introduzir 1 NPC inicial coerente com a cena.',
-        '- Você PODE adicionar de 3 a 6 itens iniciais em itemChanges com changeType "gained".',
+        '- Você PODE adicionar de 3 a 9 itens iniciais em itemChanges com changeType "gained".',
         '- Os itens iniciais devem representar pertences que o personagem já possui ao começar a aventura.',
         '- Mesmo no início, não invente perícias, ids mecânicos ou destinos fora da ambientação fornecida.'
       )
@@ -1747,7 +1771,8 @@ export class GeminiAdapter implements Narrator {
         '- No turno normal, NÃO aplique statusChanges novos sem evidência direta no RESULTADO MECÂNICO ou em EFEITOS ATIVOS já existentes.',
         '- No turno normal, só preencha locationChange se a ação do jogador for travel ou se o RESULTADO MECÂNICO trouxer location_change.',
         '- Use apenas IDs de NPC já listados em NPCs PRESENTES (ou do novo NPC hostil desta narrativa) para actionPayload.targetId.',
-        '- Se faltar evidência canônica para mutação de estado, deixe os campos mutáveis vazios/null.'
+        '- Se faltar evidência canônica para mutação de estado, deixe os campos mutáveis vazios/null.',
+        '- Se algum NPC for abatido, não o inclua em turnos subsequentes. Descreva-os como abatidos, fugindo ou caindo, mas não os mantenha como alvo de ações futuras.'
       )
     }
 
@@ -1766,7 +1791,7 @@ export class GeminiAdapter implements Narrator {
       'Avalie se cada opção é viável considerando o inventário e estado do jogador.',
       'Inclua mudanças de itens ou status SOMENTE quando houver evidência canônica suficiente.',
       'Inclua um NPC em "npcs" somente se ele estiver canonicamente presente nesta cena.',
-      'Evolua a história — não repita cenários anteriores.',
+      'Evolua a história — não repita cenários anteriores. Seja justo e realista com as consequências, mas mantenha a narrativa fluida e interessante.',
       'IMPORTANTE: Seja direto e conciso na narrativa. Máximo 2-3 parágrafos curtos.'
     )
 
@@ -1856,6 +1881,14 @@ export class GeminiAdapter implements Narrator {
       const actionPayload = (o.actionPayload && typeof o.actionPayload === 'object'
         ? sanitizeJsonLikeValue(o.actionPayload)
         : sanitizeJsonLikeValue({ input: fallbackInput })) as Record<string, unknown>
+
+      // Normalizar aliases de ataque: "target" → "targetId"
+      if (actionType === 'attack') {
+        if (!actionPayload.targetId && typeof actionPayload.target === 'string') {
+          actionPayload.targetId = actionPayload.target
+          delete actionPayload.target
+        }
+      }
       const text = sanitizeInlineText(
         o.text ?? (typeof actionPayload.input === 'string' ? actionPayload.input : ''),
         ''
@@ -1895,6 +1928,29 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
+    // Pós-processamento: corrigir diceCheck.required em opções que o LLM marcou incorretamente
+    for (const option of options) {
+      if (!option.diceCheck) continue
+
+      // Travel nunca requer dado — é ação narrativa
+      if (option.actionType === 'travel' && option.diceCheck.required) {
+        warn('sanitizeNarratorResponse', `Travel com required=true corrigido para false: "${option.text}"`)
+        option.diceCheck = { ...option.diceCheck, required: false }
+      }
+
+      // Custom ou trait_test: verificar se o texto da opção é trivial
+      if (
+        option.diceCheck.required &&
+        (option.actionType === 'custom' || option.actionType === 'trait_test')
+      ) {
+        const trivial = classifyTrivialAction(option.text)
+        if (trivial.trivial) {
+          warn('sanitizeNarratorResponse', `Opção trivial com required=true corrigida: "${option.text}"`)
+          option.diceCheck = { ...option.diceCheck, required: false, reason: trivial.reason }
+        }
+      }
+    }
+
     // Parse NPCs
     const rawNpcs = Array.isArray(raw.npcs) ? raw.npcs : []
     const npcs: NPCMention[] = rawNpcs.map((n: unknown) => {
@@ -1908,14 +1964,17 @@ export class GeminiAdapter implements Narrator {
     })
 
     // Parse item changes
+    const VALID_ITEM_CATEGORIES = new Set(['weapon', 'armor', 'consumable', 'ammunition', 'money', 'vehicle', 'property', 'quest', 'misc'])
     const rawItems = Array.isArray(raw.itemChanges) ? raw.itemChanges : []
     const parsedItems: ItemChange[] = rawItems.map((it: unknown) => {
       const item = (it && typeof it === 'object' ? it : {}) as Record<string, unknown>
+      const rawCategory = typeof item.category === 'string' ? item.category : undefined
       return {
         itemId: typeof item.itemId === 'string' ? item.itemId : randomUUID(),
         name: sanitizeInlineText(item.name, 'Item'),
         quantity: typeof item.quantity === 'number' ? item.quantity : 1,
-        changeType: (['gained', 'lost', 'used'].includes(item.changeType as string) ? item.changeType : 'gained') as ItemChange['changeType']
+        changeType: (['gained', 'lost', 'used'].includes(item.changeType as string) ? item.changeType : 'gained') as ItemChange['changeType'],
+        ...(rawCategory && VALID_ITEM_CATEGORIES.has(rawCategory) ? { category: rawCategory as ItemChange['category'] } : {})
       }
     })
 
@@ -1945,12 +2004,24 @@ export class GeminiAdapter implements Narrator {
       }
     })
 
+    // Parse npc attacks
+    const rawNpcAttacks = Array.isArray(raw.npcAttacks) ? raw.npcAttacks : []
+    const npcAttacks: NpcAttackEntry[] = rawNpcAttacks.flatMap((entry: unknown) => {
+      const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+      const npcId = typeof e.npcId === 'string' ? e.npcId.trim() : ''
+      const skillDie = typeof e.skillDie === 'number' ? e.skillDie : 0
+      const damageFormula = typeof e.damageFormula === 'string' ? e.damageFormula.trim() : ''
+      if (!npcId || !damageFormula || ![4, 6, 8, 10, 12].includes(skillDie)) return []
+      return [{ npcId, skillDie, damageFormula, ap: typeof e.ap === 'number' ? e.ap : 0 }]
+    })
+
     return {
       narrative,
       options,
       npcs,
       itemChanges,
       statusChanges,
+      npcAttacks,
       locationChange: sanitizeNullableInlineText(raw.locationChange),
       chapterTitle: sanitizeNullableInlineText(raw.chapterTitle)
     }
@@ -2035,11 +2106,15 @@ export class GeminiAdapter implements Narrator {
     ] as const
 
     let lastError: Error | null = null
+    let truncatedOnPreviousAttempt = false
 
     for (const [index, attempt] of attempts.entries()) {
+      const attemptMaxTokens = truncatedOnPreviousAttempt
+        ? Math.min(effectiveMaxTokens * 2, 16384)
+        : effectiveMaxTokens
       try {
         const generated = await this.generateTextDetailed(promptOrContents, {
-          maxOutputTokens: effectiveMaxTokens,
+          maxOutputTokens: attemptMaxTokens,
           timeoutMs: this.narratorTimeoutMs,
           responseMimeType: 'application/json',
           temperature: attempt.temperature,
@@ -2047,14 +2122,16 @@ export class GeminiAdapter implements Narrator {
         }, index + 1)
         log(
           'narratorResponse',
-          `LLM raw length: ${generated.text.length} maxTokens: ${effectiveMaxTokens} attempt=${index + 1} finish=${generated.finishReason ?? 'unknown'}`
+          `LLM raw length: ${generated.text.length} maxTokens: ${attemptMaxTokens} attempt=${index + 1} finish=${generated.finishReason ?? 'unknown'}`
         )
 
         if (generated.finishReason === 'MAX_TOKENS') {
           lastError = new Error('Resposta narrativa truncada por limite de tokens')
-          warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: output truncado por limite de tokens`)
+          warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: output truncado por limite de tokens (maxTokens=${attemptMaxTokens})`)
+          truncatedOnPreviousAttempt = true
           continue
         }
+        truncatedOnPreviousAttempt = false
 
         const parsed = parseJsonObjectDetailed(generated.text)
         if (!parsed) {
@@ -2158,7 +2235,7 @@ export class GeminiAdapter implements Narrator {
       '  • Escalar, saltar abismo, correr sob pressão → skill: "Atletismo"',
       '  • Convencer, enganar, barganhar → skill: "Persuasão"',
       '  • Intimidar → skill: "Intimidação"',
-      '  • Curar ferimentos → skill: "Medicina"',
+      '  • Curar ferimentos → actionType: "heal", actionPayload: {} (não use trait_test para cura)',
       '  • Arrombar fechadura, desarmar armadilha → skill: "Ladinagem"',
       '  • Investigar pistas → skill: "Pesquisa"',
       '  • Resistir a veneno/doença → attribute: "vigor"',
@@ -2168,7 +2245,9 @@ export class GeminiAdapter implements Narrator {
       '  ATENÇÃO contextual: "abrir a porta" pode exigir Ladinagem se o contexto indicar que está trancada;',
       '  "pular" pode exigir Atletismo se for um abismo real.',
       '',
-      '- Para combate → actionType: "attack", inclua targetId no actionPayload.',
+      '- Para combate → actionType: "attack", inclua targetId e damageFormula no actionPayload.',
+      '  Exemplos de damageFormula: "str" (soco/desarmado), "str+d4" (faca), "str+d6" (espada curta), "str+d8" (espada longa), "str+d10" (montante), "2d6" (pistola), "2d8" (rifle).',
+      '  Use a arma equipada pelo personagem se disponível no inventário, senão use "str" (desarmado).',
       '- Para testes de habilidade → actionType: "trait_test", inclua skill ou attribute no actionPayload.',
       '- Para deslocamento a um LOCAL DIFERENTE do atual → actionType: "travel", inclua "to" no actionPayload com o nome do local de destino.',
       '  ATENÇÃO: mover-se em direção a um NPC que já está na cena (ex: "ir em direção ao homem", "se aproximar do estranho") NÃO é "travel" — use actionType: "custom".',
@@ -2329,7 +2408,7 @@ export class GeminiAdapter implements Narrator {
       '- Armadura ou vestimenta de proteção se aplicável',
       '- Provisões básicas de viagem (ração, cantil, bolsa)',
       '- 1 a 2 itens temáticos/narrativos que conectem o personagem ao mundo (amuleto de família, carta misteriosa, mapa antigo, diário, etc.)',
-      '- Moedas ou recursos iniciais',
+      '- Dinheiro inicial OBRIGATÓRIO: inclua 1 item com category "money" e o nome adequado ao cenário (ex: "Moedas de Ouro", "Créditos", "Dólares", "Gil", etc.) e "quantity" com a quantidade exata numérica coerente com a ambientação e o contexto do personagem.',
       '- Para ambientações modernas/futuristas: se o personagem tiver profissão ou contexto que justifique, inclua um veículo (category "vehicle": carro, moto, nave, etc.) ou propriedade (category "property": apartamento, base, etc.) como item inicial.',
       'Mencione os itens naturalmente dentro da narrativa de abertura (ex: descreva o personagem conferindo seus pertences, ou um NPC entregando algo).',
       'Use o mesmo formato itemChanges já definido no system prompt. Cada item DEVE ter o campo "category" preenchido corretamente.'

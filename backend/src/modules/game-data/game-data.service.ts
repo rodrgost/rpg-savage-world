@@ -547,11 +547,22 @@ export class GameDataService {
     return { campaignId }
   }
 
-  async generateCampaignStoryPreview(params: { worldName: string; thematic: string; currentDescription?: string }) {
+  async generateCampaignStoryPreview(params: { userId: string; worldName: string; thematic: string; currentDescription?: string; worldId?: string }) {
+    let characters: Array<{ name: string; description?: string }> | undefined
+
+    if (params.worldId) {
+      const allChars = await this.characters.listAccessible({ userId: params.userId, worldId: params.worldId })
+      characters = allChars.slice(0, 5).map((c) => ({
+        name: c.name,
+        description: c.description || undefined
+      }))
+    }
+
     const storyDescription = await this.narrator.expandAdventureStory({
       campaignName: params.worldName,
       thematic: params.thematic,
-      currentDescription: params.currentDescription
+      currentDescription: params.currentDescription,
+      characters: characters && characters.length > 0 ? characters : undefined
     })
 
     return { storyDescription }

@@ -987,11 +987,7 @@
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: var(--panel-padding);
-  border: 1px solid rgba(46, 54, 80, 0.9);
-  border-radius: var(--radius-xl);
-  background: linear-gradient(180deg, rgba(18, 23, 33, 0.96) 0%, rgba(12, 16, 24, 0.94) 100%);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+  padding: var(--space-2) 0;
 }
 
 .page-game .game-header h2 {
@@ -1001,7 +997,7 @@
 }
 
 .page-game .chat-log {
-  max-height: min(70vh, 720px);
+  max-height: min(82vh, 960px);
 }
 
 .page-game .msg pre {

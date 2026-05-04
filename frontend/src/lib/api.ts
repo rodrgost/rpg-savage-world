@@ -362,6 +362,7 @@ export async function incrementCampaignStoryPreview(params: {
   worldName: string
   thematic: string
   currentDescription?: string
+  worldId?: string
 }): Promise<string> {
   const response = await apiRequest<{ storyDescription: string }>('/campaigns/increment-preview', {
     method: 'POST',

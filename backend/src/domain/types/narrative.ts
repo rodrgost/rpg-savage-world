@@ -11,6 +11,7 @@ export type ItemCategory =
   | 'armor'
   | 'consumable'
   | 'ammunition'
+  | 'money'
   | 'vehicle'
   | 'property'
   | 'quest'
@@ -142,6 +143,17 @@ export type ActionOption = {
 
 // ─── Resposta completa de um turno narrativo ───
 
+export type NpcAttackEntry = {
+  /** ID do NPC que ataca */
+  npcId: string
+  /** Dado de ataque (lados, ex: 6 = d6) */
+  skillDie: number
+  /** Fórmula de dano (ex: "str+d6", "2d6") */
+  damageFormula: string
+  /** Penetração de armadura (default 0) */
+  ap?: number
+}
+
 export type NarratorTurnResponse = {
   /** Texto narrativo descrevendo o passo da história */
   narrative: string
@@ -153,6 +165,8 @@ export type NarratorTurnResponse = {
   itemChanges: ItemChange[]
   /** Efeitos de status aplicados ou removidos */
   statusChanges: StatusChange[]
+  /** Ataques de NPCs hostis contra o jogador neste turno */
+  npcAttacks?: NpcAttackEntry[]
   /** Nova localização, se houve mudança */
   locationChange?: string | null
   /** Título do capítulo, se mudou */

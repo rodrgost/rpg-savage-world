@@ -111,6 +111,38 @@ const TRIVIAL_PATTERNS: TrivialPattern[] = [
   {
     pattern: /\b(respirar fundo|tomar folego|tomar fôlego|descansar um momento|sentar para descansar)\b/,
     reason: 'Descanso breve não requer teste'
+  },
+
+  // Aceitar / receber / pegar item entregue por NPC (sem busca ativa)
+  {
+    pattern: /\b(aceitar|receber|pegar|tomar|apanhar)\b.{0,35}\b(envelope|carta|pacote|bilhete|nota|objeto|item|chave|documento|ficha|papel|parcel)\b/,
+    reason: 'Receber algo entregue diretamente é automático'
+  },
+  {
+    pattern: /\b(aceitar|receber|pegar)\b.{0,20}\b(o que|o item|a encomenda|a entrega|o presente)\b/,
+    reason: 'Receber algo entregue diretamente é automático'
+  },
+
+  // Aguardar / observar passivamente sem alvo oculto
+  {
+    pattern: /\b(ficar|permanecer|aguardar|esperar)\b.{0,30}\b(no carro|no local|na posicao|na posição|no lugar|no quarto|de fora|do lado de fora)\b/,
+    reason: 'Aguardar passivamente não requer teste'
+  },
+  {
+    pattern: /\b(observar|vigiar|monitorar)\b.{0,30}\b(o movimento|os arredores|o local|o ambiente|a area|a área|de longe|a distancia|à distância)\b/,
+    reason: 'Observação passiva do ambiente não requer teste'
+  },
+
+  // Ignorar / evitar (sem ação ativa)
+  {
+    pattern: /^(ignorar|evitar|nao dar atencao|não dar atenção|deixar para la|deixar para lá)\b/,
+    reason: 'Ignorar algo não requer teste'
+  },
+
+  // Entrar / sair de local acessível (sem obstáculo)
+  {
+    pattern: /\b(entrar no|sair do|sair de dentro do|entrar na|sair da)\b.{0,20}\b(carro|veiculo|veículo|quarto|motel|loja|restaurante)\b/,
+    reason: 'Entrar ou sair de local acessível é automático'
   }
 ]
 

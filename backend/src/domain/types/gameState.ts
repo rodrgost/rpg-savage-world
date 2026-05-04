@@ -39,6 +39,12 @@ export type NPCCombatant = {
   tags?: string[]
   disposition?: 'hostile' | 'neutral' | 'friendly'
   location?: string
+  /** Dado de ataque do NPC (ex: 6 = d6). Preenchido pelo LLM ao introduzir NPCs hostis. */
+  attackSkillDie?: DieType
+  /** Fórmula de dano do NPC (ex: "str+d6", "2d6"). Preenchido pelo LLM. */
+  damageFormula?: string
+  /** Penetração de Armadura do ataque do NPC. */
+  ap?: number
 }
 
 export type CombatState = {
@@ -92,12 +98,17 @@ export interface GameState {
 
 // ─── Actions ───
 
+export type CalledShotLocation = 'head' | 'vitals' | 'limb'
+
 export type PlayerAction =
   | { type: 'trait_test'; skill?: string; attribute?: string; modifier?: number; description?: string }
-  | { type: 'attack'; skill?: string; targetId: string; modifier?: number; damageFormula?: string; ap?: number }
+  | { type: 'attack'; skill?: string; targetId: string; modifier?: number; damageFormula?: string; ap?: number; calledShot?: CalledShotLocation }
   | { type: 'soak_roll' }
   | { type: 'spend_benny'; purpose: 'reroll' | 'soak' | 'unshake' }
   | { type: 'recover_shaken' }
+  | { type: 'heal'; targetId?: string; modifier?: number }
+  | { type: 'apply_fatigue'; amount: number; reason?: string }
+  | { type: 'recover_fatigue'; amount?: number }
   | { type: 'travel'; to: string }
   | { type: 'flag'; key: string; value: boolean }
   | { type: 'custom'; input: string }

@@ -1,4 +1,5 @@
-import type { DieType, EngineResult, GameState, NPCCombatant, PlayerAction } from '../domain/types/gameState.js'
+import type { CalledShotLocation, DieType, EngineResult, GameState, NPCCombatant, PlayerAction } from '../domain/types/gameState.js'
+import type { NpcAttackEntry } from '../domain/types/narrative.js'
 import { getCanonicalSkillLabel, resolveSkillDie } from '../domain/savage-worlds/constants.js'
 import { rollTrait, rollDamage, countRaises } from './dice-engine.js'
 
@@ -90,7 +91,8 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
       const attackSkill = getCanonicalSkillLabel(action.skill) ?? 'Luta'
       const attackDie = getSkillDie(nextState, attackSkill)
       const penalty = woundPenalty(nextState.player.wounds)
-      const attackModifier = (action.modifier ?? 0) + penalty
+      const calledShotPenalty = action.calledShot ? -2 : 0
+      const attackModifier = (action.modifier ?? 0) + penalty + calledShotPenalty
       const attackTN = target.parry
       const ap = action.ap ?? 0
 
@@ -126,13 +128,20 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
         }
       }
 
-      const totalDamage = damageResult.total + raiseBonusDamage
+      // Called Shot bonus damage (head or vitals: +4)
+      const calledShotDamageBonus = (action.calledShot === 'head' || action.calledShot === 'vitals') ? 4 : 0
+
+      const totalDamage = damageResult.total + raiseBonusDamage + calledShotDamageBonus
       const effectiveToughness = Math.max(0, target.toughness - ap)
       const dmgResult = resolveDamageVsToughness(totalDamage, effectiveToughness)
 
-      if (dmgResult.shaken || dmgResult.wounds > 0) {
-        if (dmgResult.wounds > 0) {
-          target.wounds = Math.min(target.wounds + dmgResult.wounds, target.maxWounds + 1)
+      // Called Shot limb: cap wounds at 1
+      const finalWounds = action.calledShot === 'limb' ? Math.min(dmgResult.wounds, 1) : dmgResult.wounds
+      const finalShaken = dmgResult.shaken || finalWounds > 0
+
+      if (finalShaken || finalWounds > 0) {
+        if (finalWounds > 0) {
+          target.wounds = Math.min(target.wounds + finalWounds, target.maxWounds + 1)
           target.isShaken = true
         } else {
           applyShaken(target)
@@ -152,8 +161,10 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
           attackRaises,
           damageTotal: totalDamage,
           raiseBonusDamage,
+          calledShotDamageBonus,
+          calledShot: action.calledShot ?? null,
           targetToughness: target.toughness,
-          woundsInflicted: dmgResult.wounds,
+          woundsInflicted: finalWounds,
           targetShaken: target.isShaken,
           targetWounds: target.wounds,
           targetIncapacitated: isIncapacitated,
@@ -180,7 +191,8 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
 
       nextState.player.bennies -= 1
       const vigorDie = nextState.player.attributes.vigor
-      const soakResult = rollTrait(vigorDie, true)
+      const soakPenalty = woundPenalty(nextState.player.wounds)
+      const soakResult = rollTrait(vigorDie, true, soakPenalty)
 
       let woundsSoaked = 0
       if (soakResult.isSuccess) {
@@ -197,6 +209,7 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
         type: 'soak_roll',
         payload: {
           vigorDie,
+          modifier: soakPenalty,
           traitRoll: soakResult.traitRoll,
           wildRoll: soakResult.wildRoll,
           finalTotal: soakResult.finalTotal,
@@ -295,6 +308,79 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
       break
     }
 
+    // ─── Heal (Medicina test to remove wounds) ───
+    case 'heal': {
+      const healingDie = getSkillDie(nextState, 'Medicina')
+      const penalty = woundPenalty(nextState.player.wounds)
+      const healerBonus = nextState.player.edges.some((e) => e === 'Curandeiro' || e === 'healer') ? 2 : 0
+      const healModifier = (action.modifier ?? 0) + penalty + healerBonus
+      const tn = 4
+
+      const healResult = rollTrait(healingDie, true, healModifier)
+
+      if (healResult.isSuccess) {
+        const woundsHealed = 1 + healResult.raises
+        if (action.targetId) {
+          const targetNpc = nextState.npcs.find((n) => n.id === action.targetId)
+          if (targetNpc) {
+            targetNpc.wounds = Math.max(0, targetNpc.wounds - woundsHealed)
+          }
+        } else {
+          nextState.player.wounds = Math.max(0, nextState.player.wounds - woundsHealed)
+        }
+        emittedEvents.push({
+          type: 'heal_success',
+          payload: {
+            healingDie,
+            modifier: healModifier,
+            traitRoll: healResult.traitRoll,
+            wildRoll: healResult.wildRoll,
+            finalTotal: healResult.finalTotal,
+            woundsHealed,
+            targetId: action.targetId ?? 'player',
+            remainingWounds: action.targetId
+              ? (nextState.npcs.find((n) => n.id === action.targetId)?.wounds ?? 0)
+              : nextState.player.wounds
+          }
+        })
+      } else {
+        emittedEvents.push({
+          type: 'heal_failure',
+          payload: {
+            healingDie,
+            modifier: healModifier,
+            traitRoll: healResult.traitRoll,
+            wildRoll: healResult.wildRoll,
+            finalTotal: healResult.finalTotal,
+            targetId: action.targetId ?? 'player'
+          }
+        })
+      }
+      break
+    }
+
+    // ─── Apply Fatigue ───
+    case 'apply_fatigue': {
+      const amount = Math.max(1, action.amount ?? 1)
+      nextState.player.fatigue = Math.min(nextState.player.fatigue + amount, nextState.player.maxFatigue + 1)
+      emittedEvents.push({
+        type: 'fatigue_applied',
+        payload: { amount, reason: action.reason ?? '', fatigue: nextState.player.fatigue, maxFatigue: nextState.player.maxFatigue }
+      })
+      break
+    }
+
+    // ─── Recover Fatigue ───
+    case 'recover_fatigue': {
+      const amount = Math.max(1, action.amount ?? 1)
+      nextState.player.fatigue = Math.max(0, nextState.player.fatigue - amount)
+      emittedEvents.push({
+        type: 'fatigue_recovered',
+        payload: { amount, fatigue: nextState.player.fatigue }
+      })
+      break
+    }
+
     // ─── Custom (free text → LLM) ───
     case 'custom': {
       emittedEvents.push({ type: 'custom_action', payload: { input: action.input } })
@@ -314,5 +400,95 @@ function rollExplodingInline(sides: number, rng: () => number = Math.random): nu
     if (r !== sides) break
   }
   return total
+}
+
+// ─── NPC → Player Attack ───
+
+export function applyNpcAttack(
+  state: GameState,
+  entry: NpcAttackEntry
+): { nextState: GameState; emittedEvents: EngineResult['emittedEvents'] } {
+  const emittedEvents: EngineResult['emittedEvents'] = []
+  const nextState: GameState = structuredClone(state)
+
+  const npc = nextState.npcs.find((n) => n.id === entry.npcId)
+  if (!npc) {
+    emittedEvents.push({ type: 'npc_attack_target_not_found', payload: { npcId: entry.npcId } })
+    return { nextState, emittedEvents }
+  }
+
+  // NPCs incapacitados não atacam
+  if (npc.wounds > npc.maxWounds) {
+    return { nextState, emittedEvents }
+  }
+
+  const skillDie = entry.skillDie as DieType
+  const npcWoundPenalty = -Math.min(npc.wounds, 3)
+  const attackResult = rollTrait(skillDie, npc.isWildCard, npcWoundPenalty)
+  const attackTN = nextState.player.parry
+
+  if (attackResult.finalTotal < attackTN) {
+    emittedEvents.push({
+      type: 'npc_attack_miss',
+      payload: {
+        npcId: npc.id,
+        npcName: npc.name,
+        skillDie,
+        attackRoll: attackResult.finalTotal,
+        targetParry: attackTN,
+        traitRoll: attackResult.traitRoll,
+        wildRoll: attackResult.wildRoll
+      }
+    })
+    return { nextState, emittedEvents }
+  }
+
+  // Hit → rola dano
+  const npcStrengthDie = (npc.attributes.strength ?? 6) as DieType
+  const attackRaises = countRaises(attackResult.finalTotal, attackTN)
+  const damageResult = rollDamage(entry.damageFormula, npcStrengthDie)
+
+  let raiseBonusDamage = 0
+  for (let i = 0; i < attackRaises; i++) {
+    raiseBonusDamage += rollExplodingInline(6)
+  }
+
+  const totalDamage = damageResult.total + raiseBonusDamage
+  const ap = entry.ap ?? 0
+  const effectiveToughness = Math.max(0, nextState.player.toughness - ap)
+  const dmgResult = resolveDamageVsToughness(totalDamage, effectiveToughness)
+
+  if (dmgResult.shaken || dmgResult.wounds > 0) {
+    if (dmgResult.wounds > 0) {
+      nextState.player.wounds = Math.min(nextState.player.wounds + dmgResult.wounds, nextState.player.maxWounds + 1)
+      nextState.player.isShaken = true
+    } else {
+      applyShaken(nextState.player)
+    }
+  }
+
+  emittedEvents.push({
+    type: 'npc_attack_hit',
+    payload: {
+      npcId: npc.id,
+      npcName: npc.name,
+      skillDie,
+      attackRoll: attackResult.finalTotal,
+      targetParry: attackTN,
+      attackRaises,
+      damageTotal: totalDamage,
+      raiseBonusDamage,
+      playerToughness: nextState.player.toughness,
+      woundsInflicted: dmgResult.wounds,
+      playerShaken: nextState.player.isShaken,
+      playerWounds: nextState.player.wounds,
+      playerIncapacitated: nextState.player.wounds > nextState.player.maxWounds,
+      traitRoll: attackResult.traitRoll,
+      wildRoll: attackResult.wildRoll,
+      damageRolls: damageResult.dice
+    }
+  })
+
+  return { nextState, emittedEvents }
 }
 

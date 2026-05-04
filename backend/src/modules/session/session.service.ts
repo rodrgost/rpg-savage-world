@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common'
 import { createInitialState } from '../../domain/defaults/initialState.js'
 import type { AttributeName, DieType, GameState, Hindrance, PlayerAction, SWAttributes } from '../../domain/types/gameState.js'
 import type { NarratorTurnResponse, ValidateActionResponse } from '../../domain/types/narrative.js'
-import { applyAction } from '../../core/rule-engine.js'
+import { applyAction, applyNpcAttack } from '../../core/rule-engine.js'
 import { SnapshotService } from '../../services/snapshot.service.js'
 import { SummaryService } from '../../services/summary.service.js'
 import { InventoryService } from '../../services/inventory.service.js'
@@ -526,7 +526,7 @@ export class SessionService {
         return false
       }
 
-      if (!this.inventory.hasItem(state, change.itemId) && !this.inventory.hasItem(state, change.name)) {
+      if (change.changeType !== 'gained' && !this.inventory.hasItem(state, change.itemId) && !this.inventory.hasItem(state, change.name)) {
         warn('validateNarratorItemChanges', `Descartando mudança de item ausente do inventário: "${change.name}"`)
         return false
       }
@@ -1174,7 +1174,7 @@ export class SessionService {
 
     // 2.5 Salvar resultados de dados como mensagem de sistema (persistente no chat)
     const diceEvents = result.emittedEvents.filter(
-      (e) => e.type === 'trait_test' || e.type === 'attack_hit' || e.type === 'attack_miss' || e.type === 'soak_roll' || e.type === 'recover_shaken' || e.type === 'recover_shaken_failed'
+      (e) => e.type === 'trait_test' || e.type === 'attack_hit' || e.type === 'attack_miss' || e.type === 'soak_roll' || e.type === 'recover_shaken' || e.type === 'recover_shaken_failed' || e.type === 'heal_success' || e.type === 'heal_failure'
     )
     let systemMessage: ChatMessageRow | null = null
     if (diceEvents.length > 0) {
@@ -1270,6 +1270,44 @@ export class SessionService {
     finalState = this.inventory.applyItemChanges(finalState, dedupedItemChanges)
     finalState = this.statusEffects.applyStatusChanges(finalState, narratorResponse.statusChanges)
     finalState = this.statusEffects.tickEffects(finalState)
+
+    // 5.5. Processar ataques de NPCs contra o jogador
+    const npcAttackEvents: Array<{ type: string; payload: unknown }> = []
+    for (const entry of narratorResponse.npcAttacks ?? []) {
+      // Validar: NPC deve estar na cena e skillDie deve ser DieType válido
+      const sceneNpc = finalState.npcs.find(
+        (n) => n.id === entry.npcId && (!n.location || n.location === finalState.worldState.activeLocation)
+      )
+      if (!sceneNpc) {
+        warn('applyNpcAttack', `NPC "${entry.npcId}" não encontrado na cena — ataque ignorado`)
+        continue
+      }
+      if (!isDieType(entry.skillDie) || !entry.damageFormula?.trim()) {
+        warn('applyNpcAttack', `Ataque de NPC "${entry.npcId}" com skillDie/damageFormula inválido — ignorado`)
+        continue
+      }
+      const npcAttackResult = applyNpcAttack(finalState, entry)
+      finalState = npcAttackResult.nextState
+      for (const ev of npcAttackResult.emittedEvents) {
+        npcAttackEvents.push({ type: ev.type, payload: ev.payload })
+        await this.events.append({
+          sessionId: params.sessionId,
+          turn: finalState.meta.turn,
+          type: ev.type,
+          payload: ev.payload as Record<string, unknown>
+        })
+      }
+    }
+
+    // Salvar eventos de ataques de NPC como system message
+    if (npcAttackEvents.length > 0) {
+      await this.chatMessages.appendAndGet({
+        sessionId: params.sessionId,
+        turn: finalState.meta.turn,
+        role: 'system',
+        engineEvents: npcAttackEvents.map((e) => ({ type: e.type, payload: e.payload as Record<string, unknown> }))
+      })
+    }
 
     if (narratorResponse.locationChange) {
       finalState = {
@@ -1424,6 +1462,12 @@ export class SessionService {
         return { type: 'recover_shaken' }
       case 'soak_roll':
         return { type: 'soak_roll' }
+      case 'heal':
+        return {
+          type: 'heal',
+          targetId: typeof payload.targetId === 'string' ? payload.targetId : undefined,
+          modifier: typeof payload.modifier === 'number' ? payload.modifier : 0
+        }
       default:
         return {
           type: 'custom',
@@ -1503,8 +1547,10 @@ export class SessionService {
         return action.input
       case 'trait_test':
         return `Teste de ${normalizeSkillName(action.skill) ?? action.attribute ?? 'perícia'}${action.description ? ` — ${action.description}` : ''}`
-      case 'attack':
-        return `Ataque contra ${action.targetId} usando ${normalizeSkillName(action.skill) ?? 'Luta'}`
+      case 'attack': {
+        const calledShotLabel = action.calledShot ? ` (tiro certeiro: ${action.calledShot})` : ''
+        return `Ataque contra ${action.targetId} usando ${normalizeSkillName(action.skill) ?? 'Luta'}${calledShotLabel}`
+      }
       case 'travel':
         return `Viajar para ${action.to}`
       case 'flag':
@@ -1515,6 +1561,12 @@ export class SessionService {
         return `Usar Benny: ${action.purpose}`
       case 'recover_shaken':
         return 'Tentar recuperar de abalado'
+      case 'heal':
+        return action.targetId ? `Curar ferimentos de ${action.targetId}` : 'Curar ferimentos'
+      case 'apply_fatigue':
+        return `Aplicar fadiga: ${action.reason ?? 'esforço'}`
+      case 'recover_fatigue':
+        return 'Recuperar fadiga'
       default:
         return 'Ação desconhecida'
     }

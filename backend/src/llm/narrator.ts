@@ -22,10 +22,16 @@ export type SummarizeHistoryRequest = {
   currentState: GameState
 }
 
+export type ExpandWorldCharacter = {
+  name: string
+  description?: string
+}
+
 export type ExpandWorldRequest = {
   campaignName: string
   thematic: string
   currentDescription?: string
+  characters?: ExpandWorldCharacter[]
 }
 
 export type ExpandWorldLoreRequest = {

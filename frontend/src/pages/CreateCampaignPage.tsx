@@ -176,7 +176,8 @@ export function CreateCampaignPage({ uid }: Props) {
       const nextDescription = await incrementCampaignStoryPreview({
         worldName,
         thematic,
-        currentDescription: shouldContinuePreviousContext ? storyDescription : undefined
+        currentDescription: shouldContinuePreviousContext ? storyDescription : undefined,
+        worldId: resolvedWorldId || undefined
       })
       setStoryDescription(nextDescription)
       setLastGeneratedContextKey(contextKey)

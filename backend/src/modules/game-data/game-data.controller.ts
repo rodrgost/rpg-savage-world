@@ -48,7 +48,8 @@ const UpdateCampaignBody = z.object({
 const IncrementCampaignPreviewBody = z.object({
   worldName: z.string().min(1),
   thematic: z.string().min(1),
-  currentDescription: z.string().optional()
+  currentDescription: z.string().optional(),
+  worldId: z.string().optional()
 })
 
 const CampaignImagePreviewBody = z
@@ -190,9 +191,9 @@ export class GameDataController {
   }
 
   @Post('/campaigns/increment-preview')
-  async incrementCampaignPreview(@CurrentUser('uid') _userId: string, @Body() body: unknown) {
+  async incrementCampaignPreview(@CurrentUser('uid') userId: string, @Body() body: unknown) {
     const parsed = IncrementCampaignPreviewBody.parse(body)
-    return await this.gameData.generateCampaignStoryPreview(parsed)
+    return await this.gameData.generateCampaignStoryPreview({ userId, ...parsed })
   }
 
   @Post('/campaigns/:campaignId/increment')

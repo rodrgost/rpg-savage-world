@@ -620,26 +620,27 @@ button:disabled {
 .chat-log {
   display: grid;
   gap: var(--space-2);
-  max-height: 420px;
+  max-height: 60vh;
   overflow-y: auto;
   padding-right: 6px;
 }
 
 .msg {
-  padding: var(--space-3);
-  border-radius: var(--radius-sm);
+  padding: var(--space-3) 0;
+  border-radius: 0;
   border: none;
-  background: var(--bg-muted);
+  background: none;
 }
 
 .msg.player {
-  border: 1px solid var(--accent);
+  border-left: 3px solid var(--accent);
+  padding-left: var(--space-3);
   background: var(--accent-soft);
 }
 
 .msg.narrator {
   border: none;
-  background: var(--bg-muted);
+  background: none;
 }
 
 .msg.narrator .narrative-text p {
@@ -750,10 +751,10 @@ button:disabled {
 
 .option-btn {
   text-align: left;
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-field);
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
   transition: all 150ms ease;
   display: flex;
@@ -778,12 +779,12 @@ button:disabled {
 
 /* ─── System Summary Message ─── */
 .msg.system-summary {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(99, 102, 241, 0.06) 100%);
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  background: none;
+  border: none;
   border-left: 4px solid #8b5cf6;
-  border-radius: var(--radius-sm, 8px);
-  padding: 12px 16px;
-  margin: 12px 0;
+  border-radius: 0;
+  padding: 10px 14px;
+  margin: 8px 0;
 }
 
 .summary-header {
