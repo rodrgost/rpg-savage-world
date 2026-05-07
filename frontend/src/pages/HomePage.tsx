@@ -37,7 +37,7 @@ export function HomePage({ accountLabel }: Props) {
       <div className="panel home-hero">
         <div className="home-hero-copy">
           <span className="home-eyebrow">Painel do mestre e dos jogadores</span>
-          <h2>O RPG Adaptável agora abre apenas com sessão autenticada.</h2>
+          <h2>A Mesa Infinita agora abre apenas com sessão autenticada.</h2>
           <p>
             Sua conta ativa é <strong>{accountLabel}</strong>. A partir daqui, o fluxo recomendado é montar o universo,
             definir a campanha, revisar os personagens e então abrir a mesa em tempo real.

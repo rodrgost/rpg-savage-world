@@ -14,6 +14,8 @@ export type RollDetail = {
   rolls: number[]
   total: number
   aced: boolean
+  /** Identifica a origem do dado: 'str' = Força, 'weapon' = dano da arma, 'bonus' = bônus extra */
+  label?: 'str' | 'weapon' | 'bonus'
 }
 
 export type TraitRollResult = {
@@ -114,17 +116,17 @@ export function rollDamage(
 
     if (clean === 'str' || clean === '+str') {
       // Dado de Força: cada dado explode individualmente
-      dice.push(rollExploding(strengthDie, rng))
+      dice.push({ ...rollExploding(strengthDie, rng), label: 'str' as const })
     } else if (clean === '-str') {
       const roll = rollExploding(strengthDie, rng)
-      dice.push({ ...roll, total: -roll.total })
+      dice.push({ ...roll, total: -roll.total, label: 'str' as const })
     } else if (/^[+-]?\d*d\d+/.test(clean)) {
       // Notação de dados: 2d6, d8, +1d6, etc.
       const sign = clean.startsWith('-') ? -1 : 1
       const spec = parseDice(clean.replace(/^[+-]/, ''))
       for (let i = 0; i < spec.count; i++) {
         const roll = rollExploding(spec.sides, rng)
-        dice.push(sign < 0 ? { ...roll, total: -roll.total } : roll)
+        dice.push(sign < 0 ? { ...roll, total: -roll.total, label: 'weapon' as const } : { ...roll, label: 'weapon' as const })
       }
       modifier += spec.modifier * sign
     } else {

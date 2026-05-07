@@ -102,7 +102,7 @@ export type CalledShotLocation = 'head' | 'vitals' | 'limb'
 
 export type PlayerAction =
   | { type: 'trait_test'; skill?: string; attribute?: string; modifier?: number; description?: string }
-  | { type: 'attack'; skill?: string; targetId: string; modifier?: number; damageFormula?: string; ap?: number; calledShot?: CalledShotLocation }
+  | { type: 'attack'; skill?: string; targetId: string; modifier?: number; damageFormula?: string; ap?: number; calledShot?: CalledShotLocation; hasMoved?: boolean }
   | { type: 'soak_roll' }
   | { type: 'spend_benny'; purpose: 'reroll' | 'soak' | 'unshake' }
   | { type: 'recover_shaken' }

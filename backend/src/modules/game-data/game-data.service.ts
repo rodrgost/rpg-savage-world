@@ -73,7 +73,7 @@ function buildCharacterImagePrompt(params: {
     `Profession: ${profession || 'Traveler'}.`,
     ...(additional ? [`Visual details: ${additional}.`] : []),
     ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
-    'Composition: centered character, warm lighting, friendly expression, fully clothed, no weapons pointed at viewer.'
+    'Composition: centered character, warm lighting, fully clothed.'
   ].join('\n')
 }
 
@@ -512,6 +512,7 @@ export class GameDataService {
     userId: string
     worldId: string
     thematic: string
+    name?: string
     storyDescription?: string
     visibility?: Visibility
     image?: StoredImage
@@ -539,6 +540,7 @@ export class GameDataService {
       ownerId: params.userId,
       visibility,
       thematic: params.thematic,
+      name: params.name,
       storyDescription: params.storyDescription?.trim() ?? '',
       image: normalizedImage,
       youtubeUrl: params.youtubeUrl
@@ -547,25 +549,19 @@ export class GameDataService {
     return { campaignId }
   }
 
-  async generateCampaignStoryPreview(params: { userId: string; worldName: string; thematic: string; currentDescription?: string; worldId?: string }) {
-    let characters: Array<{ name: string; description?: string }> | undefined
-
-    if (params.worldId) {
-      const allChars = await this.characters.listAccessible({ userId: params.userId, worldId: params.worldId })
-      characters = allChars.slice(0, 5).map((c) => ({
-        name: c.name,
-        description: c.description || undefined
-      }))
-    }
-
-    const storyDescription = await this.narrator.expandAdventureStory({
+  async generateCampaignStoryPreview(params: { userId: string; worldName: string; thematic?: string; currentDescription?: string }) {
+    const result = await this.narrator.expandAdventureStory({
       campaignName: params.worldName,
       thematic: params.thematic,
-      currentDescription: params.currentDescription,
-      characters: characters && characters.length > 0 ? characters : undefined
+      currentDescription: params.currentDescription
     })
 
-    return { storyDescription }
+    return {
+      storyDescription: result.storyDescription,
+      storyCharacters: result.storyCharacters,
+      name: result.name,
+      thematic: result.thematic
+    }
   }
 
   async listCampaigns(params: { userId: string; worldId?: string }) {
@@ -606,8 +602,10 @@ export class GameDataService {
   async updateCampaign(params: {
     userId: string
     campaignId: string
+    name?: string
     thematic: string
     storyDescription: string
+    storyCharacters?: Array<{ name: string; role: string; description: string; status: string }>
     visibility?: Visibility
     image?: StoredImage
     youtubeUrl?: string
@@ -641,8 +639,10 @@ export class GameDataService {
 
     await this.campaigns.updateCampaign({
       campaignId: params.campaignId,
+      name: params.name?.trim() || undefined,
       thematic: params.thematic,
       storyDescription: params.storyDescription?.trim() ?? '',
+      storyCharacters: params.storyCharacters,
       visibility: params.visibility ? normalizeVisibility(params.visibility) : undefined,
       image: normalizedImage,
       youtubeUrl: params.youtubeUrl
@@ -680,14 +680,14 @@ export class GameDataService {
     const worldName = world?.name ?? 'Mundo desconhecido'
 
     const thematic = campaign.thematic?.trim() || campaign.name?.trim() || 'Campanha sem temática definida'
-    const storyDescription = await this.narrator.expandAdventureStory({
+    const result = await this.narrator.expandAdventureStory({
       campaignName: worldName,
       thematic,
       currentDescription: campaign.storyDescription
     })
 
-    await this.campaigns.updateStoryDescription(campaign.id, storyDescription)
-    return { storyDescription }
+    await this.campaigns.updateStoryDescription(campaign.id, result.storyDescription, result.storyCharacters)
+    return { storyDescription: result.storyDescription, storyCharacters: result.storyCharacters }
   }
 
   async createCharacter(params: {

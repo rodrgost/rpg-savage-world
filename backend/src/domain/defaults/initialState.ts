@@ -1,4 +1,5 @@
 import type { DieType, GameState, Hindrance, SWAttributes } from '../types/gameState.js'
+import { DIE_STEPS } from '../types/gameState.js'
 import {
   calcPace,
   calcParry,
@@ -25,10 +26,30 @@ export function createInitialState(params: { sessionId: string; campaignId: stri
   const hindrances = char?.hindrances ?? []
   const armor = char?.armor ?? 0
 
+  // elderly / Idoso: -1 step em Agilidade, Força e Vigor
+  if (hindrances.some((h) => h.name === 'elderly' || h.name === 'Idoso')) {
+    const stepDown = (die: DieType): DieType => {
+      const idx = DIE_STEPS.indexOf(die)
+      return idx > 0 ? DIE_STEPS[idx - 1] : DIE_STEPS[0]
+    }
+    attributes.agility = stepDown(attributes.agility)
+    attributes.strength = stepDown(attributes.strength)
+    attributes.vigor = stepDown(attributes.vigor)
+  }
+
   const fightingDie = resolveSkillDie(skills, 'Luta') ?? 0
   const pace = calcPace(edges, hindrances)
   const parry = calcParry(fightingDie as DieType | 0, edges)
   const toughness = calcToughness(attributes.vigor, armor, edges, hindrances)
+
+  // Ajusta Bennies iniciais por Vantagens/Complicações
+  const startingBennies = Math.max(
+    0,
+    CHARACTER_CREATION.startingBennies
+      + (edges.some((e) => e === 'luck' || e === 'Sortudo') ? 1 : 0)
+      + (edges.some((e) => e === 'young' || e === 'Jovem') ? 1 : 0)
+      + (hindrances.some((h) => h.name === 'badLuck' || h.name === 'Azarado') ? -1 : 0)
+  )
 
   return {
     meta: {
@@ -49,7 +70,7 @@ export function createInitialState(params: { sessionId: string; campaignId: stri
       fatigue: 0,
       maxFatigue: CHARACTER_CREATION.maxFatigue,
       isShaken: false,
-      bennies: CHARACTER_CREATION.startingBennies,
+      bennies: startingBennies,
       pace,
       parry,
       toughness,

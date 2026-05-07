@@ -31,6 +31,7 @@ export const SKILLS: readonly SkillDefinition[] = [
   { key: 'athletics', label: 'Atletismo', linkedAttribute: 'agility', description: 'Correr, escalar, saltar e nadar' },
   { key: 'boating', label: 'Navegação', linkedAttribute: 'agility', description: 'Pilotar embarcações' },
   { key: 'driving', label: 'Condução', linkedAttribute: 'agility', description: 'Pilotar veículos terrestres' },
+  { key: 'piloting', label: 'Pilotagem', linkedAttribute: 'agility', description: 'Pilotar aeronaves' },
   { key: 'fighting', label: 'Luta', linkedAttribute: 'agility', description: 'Combate corpo a corpo' },
   { key: 'riding', label: 'Montaria', linkedAttribute: 'agility', description: 'Cavalgar montarias' },
   { key: 'shooting', label: 'Tiro', linkedAttribute: 'agility', description: 'Armas de projétil e distância' },
@@ -61,27 +62,6 @@ export const SKILLS: readonly SkillDefinition[] = [
 
 export const CORE_SKILL_KEYS = SKILLS.map((s) => s.key)
 
-const SKILL_ALIAS_TO_KEY: Readonly<Record<string, string>> = {
-  Apostar: 'gambling',
-  Atirar: 'shooting',
-  Cavalgar: 'riding',
-  Ciências: 'science',
-  Conjurar: 'spellcasting',
-  Curar: 'healing',
-  Desempenho: 'performance',
-  Dirigir: 'driving',
-  Intimidar: 'intimidation',
-  Investigar: 'research',
-  Lutar: 'fighting',
-  Navegar: 'boating',
-  Notar: 'notice',
-  Persuadir: 'persuasion',
-  Pilotar: 'driving',
-  Psionismo: 'focus',
-  Reparar: 'repair',
-  Roubar: 'thievery'
-}
-
 function normalizeSkillLookupValue(value: string): string {
   return value
     .normalize('NFD')
@@ -95,13 +75,6 @@ const SKILL_DEFINITION_BY_LOOKUP = new Map<string, SkillDefinition>()
 for (const skill of SKILLS) {
   SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(skill.key), skill)
   SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(skill.label), skill)
-}
-
-for (const [alias, skillKey] of Object.entries(SKILL_ALIAS_TO_KEY)) {
-  const def = SKILLS.find((skill) => skill.key === skillKey)
-  if (def) {
-    SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(alias), def)
-  }
 }
 
 export function findSkillDefinition(skillName: string | null | undefined): SkillDefinition | undefined {
@@ -165,7 +138,7 @@ export const EDGES: readonly EdgeDefinition[] = [
   { key: 'alertness', label: 'Alerta', category: 'background', description: '+2 em testes de Percepção', requirements: [] },
   { key: 'ambidextrous', label: 'Ambidestro', category: 'background', description: 'Ignora penalidade de mão inábil', requirements: [{ attribute: { name: 'agility', min: 8 } }] },
   { key: 'attractive', label: 'Atraente', category: 'background', description: '+1 em Persuasão e Atuação para quem se importa com aparência', requirements: [{ attribute: { name: 'vigor', min: 6 } }] },
-  { key: 'brawny', label: 'Corpulento', category: 'background', description: '+1 de Resistência e +1 de limite de carga', requirements: [{ attribute: { name: 'strength', min: 6 }, skill: { name: 'vigor', min: 6 } }] },
+  { key: 'brawny', label: 'Corpulento', category: 'background', description: '+1 de Resistência e +1 de limite de carga', requirements: [{ attribute: { name: 'strength', min: 6 } }, { attribute: { name: 'vigor', min: 6 } }] },
   { key: 'luck', label: 'Sortudo', category: 'background', description: '+1 Benny por sessão', requirements: [] },
   { key: 'quickDraw', label: 'Saque Rápido', category: 'background', description: 'Pode sacar uma arma como ação livre', requirements: [{ attribute: { name: 'agility', min: 8 } }] },
   { key: 'rich', label: 'Rico', category: 'background', description: '3× os fundos iniciais', requirements: [] },

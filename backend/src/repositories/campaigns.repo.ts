@@ -1,5 +1,6 @@
 import { FieldValue, firestore } from '../infrastructure/firebase.js'
 import type { Visibility } from './worlds.repo.js'
+import type { StoryCharacter } from '../llm/narrator.js'
 
 export type CampaignDoc = {
   worldId: string
@@ -7,6 +8,7 @@ export type CampaignDoc = {
   visibility?: Visibility
   thematic: string
   storyDescription: string
+  storyCharacters?: StoryCharacter[]
   image?: {
     mimeType: string
     base64: string
@@ -45,7 +47,9 @@ export class CampaignsRepo {
     ownerId: string
     visibility: Visibility
     thematic: string
+    name?: string
     storyDescription: string
+    storyCharacters?: StoryCharacter[]
     image?: { mimeType: string; base64: string }
     youtubeUrl?: string
   }): Promise<void> {
@@ -59,9 +63,10 @@ export class CampaignsRepo {
         visibility: params.visibility,
         thematic: params.thematic,
         storyDescription: params.storyDescription,
+        ...(params.storyCharacters ? { storyCharacters: params.storyCharacters } : {}),
         ...(image ? { image } : {}),
         ...(params.youtubeUrl ? { youtubeUrl: params.youtubeUrl } : {}),
-        name: params.thematic,
+        name: params.name ?? params.thematic,
         status: 'active',
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
@@ -115,10 +120,11 @@ export class CampaignsRepo {
     await firestore.collection('campaigns').doc(campaignId).delete()
   }
 
-  async updateStoryDescription(campaignId: string, storyDescription: string): Promise<void> {
+  async updateStoryDescription(campaignId: string, storyDescription: string, storyCharacters?: StoryCharacter[]): Promise<void> {
     await firestore.collection('campaigns').doc(campaignId).set(
       {
         storyDescription,
+        ...(storyCharacters !== undefined ? { storyCharacters } : {}),
         updatedAt: FieldValue.serverTimestamp()
       },
       { merge: true }
@@ -127,8 +133,10 @@ export class CampaignsRepo {
 
   async updateCampaign(params: {
     campaignId: string
+    name?: string
     thematic: string
     storyDescription: string
+    storyCharacters?: StoryCharacter[]
     visibility?: Visibility
     image?: { mimeType: string; base64: string }
     youtubeUrl?: string
@@ -137,8 +145,9 @@ export class CampaignsRepo {
     await firestore.collection('campaigns').doc(params.campaignId).set(
       {
         thematic: params.thematic,
-        name: params.thematic,
+        name: params.name ?? params.thematic,
         storyDescription: params.storyDescription,
+        ...(params.storyCharacters !== undefined ? { storyCharacters: params.storyCharacters } : {}),
         ...(params.visibility !== undefined ? { visibility: params.visibility } : {}),
         ...(image ? { image } : {}),
         ...(params.youtubeUrl !== undefined ? { youtubeUrl: params.youtubeUrl || '' } : {}),

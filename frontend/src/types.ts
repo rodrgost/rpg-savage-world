@@ -13,6 +13,13 @@ export type Hindrance = {
   severity: 'minor' | 'major'
 }
 
+export type StoryCharacter = {
+  name: string
+  role: string
+  description: string
+  status: string
+}
+
 export type Campaign = {
   id: string
   worldId: string
@@ -22,6 +29,7 @@ export type Campaign = {
   name?: string
   thematic: string
   storyDescription: string
+  storyCharacters?: StoryCharacter[]
   image?: {
     mimeType: string
     base64: string
@@ -215,6 +223,8 @@ export type DiceRollDetail = {
   rolls: number[]
   total: number
   aced: boolean
+  /** Identifica a origem do dado: 'str' = Força, 'weapon' = dano da arma */
+  label?: 'str' | 'weapon' | 'bonus'
 }
 
 export type TraitTestPayload = {

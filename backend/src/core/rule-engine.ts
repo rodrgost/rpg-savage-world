@@ -1,6 +1,6 @@
 import type { CalledShotLocation, DieType, EngineResult, GameState, NPCCombatant, PlayerAction } from '../domain/types/gameState.js'
 import type { NpcAttackEntry } from '../domain/types/narrative.js'
-import { getCanonicalSkillLabel, resolveSkillDie } from '../domain/savage-worlds/constants.js'
+import { findSkillDefinition, getCanonicalSkillLabel, resolveSkillDie } from '../domain/savage-worlds/constants.js'
 import { rollTrait, rollDamage, countRaises } from './dice-engine.js'
 
 // ─── Savage Worlds Rule Engine ───
@@ -20,6 +20,73 @@ function findNPC(state: GameState, targetId: string): NPCCombatant | undefined {
 
 function woundPenalty(wounds: number): number {
   return -Math.min(wounds, 3)
+}
+
+/**
+ * Calcula bônus/penalidade de Vantagens (Edges) e Complicações (Hindrances)
+ * para um teste de atributo ou perícia específico.
+ */
+function traitEdgeHindranceBonus(state: GameState, skillName: string | undefined): number {
+  let bonus = 0
+  const edges = state.player.edges
+  const hindrances = state.player.hindrances
+  const skillKey = findSkillDefinition(skillName)?.key ?? ''
+
+  // ── Vantagens ──────────────────────────────────────────────────────────────
+  // alertness / Alerta: +2 em Percepção
+  if (skillKey === 'notice' && edges.some((e) => e === 'alertness' || e === 'Alerta')) bonus += 2
+
+  // healer / Curandeiro: +2 em Medicina
+  if (skillKey === 'healing' && edges.some((e) => e === 'healer' || e === 'Curandeiro')) bonus += 2
+
+  // investigator / Investigador: +2 em Pesquisa e Percepção
+  if ((skillKey === 'notice' || skillKey === 'research') && edges.some((e) => e === 'investigator' || e === 'Investigador')) bonus += 2
+
+  // woodsman / Mateiro: +2 em Sobrevivência e Furtividade
+  if ((skillKey === 'survival' || skillKey === 'stealth') && edges.some((e) => e === 'woodsman' || e === 'Mateiro')) bonus += 2
+
+  // strongWilled / Determinado: +2 em testes de Espírito para resistir Intimidação ou Provocação
+  if ((skillKey === 'intimidation' || skillKey === 'taunt') && edges.some((e) => e === 'strongWilled' || e === 'Determinado')) bonus += 2
+
+  // ── Complicações ────────────────────────────────────────────────────────────
+  // allThumbs / Desastrado: -2 em dispositivos mecânicos e eletrônicos
+  if ((skillKey === 'electronics' || skillKey === 'hacking' || skillKey === 'repair')
+    && hindrances.some((h) => h.name === 'allThumbs' || h.name === 'Desastrado')) bonus -= 2
+
+  // clueless / Desinformado: -1 em Conhecimento Geral e Percepção
+  if ((skillKey === 'commonKnowledge' || skillKey === 'notice')
+    && hindrances.some((h) => h.name === 'clueless' || h.name === 'Desinformado')) bonus -= 1
+
+  // clumsy / Desajeitado: -2 em Atletismo e Furtividade
+  if ((skillKey === 'athletics' || skillKey === 'stealth')
+    && hindrances.some((h) => h.name === 'clumsy' || h.name === 'Desajeitado')) bonus -= 2
+
+  // mean / Rude: -1 em Persuasão
+  if (skillKey === 'persuasion' && hindrances.some((h) => h.name === 'mean' || h.name === 'Rude')) bonus -= 1
+
+  // outsider / Forasteiro: -2 em Persuasão
+  if (skillKey === 'persuasion' && hindrances.some((h) => h.name === 'outsider' || h.name === 'Forasteiro')) bonus -= 2
+
+  // acrobat / Acrobata: +2 em Atletismo para acrobacias
+  if (skillKey === 'athletics' && edges.some((e) => e === 'acrobat' || e === 'Acrobata')) bonus += 2
+
+  // berserk / Berserk: +1 em Luta enquanto em Fúria Berserk
+  if (skillKey === 'fighting' && state.player.statusEffects.some((se) => se.id === 'berserk_rage')) bonus += 1
+
+  // badEyes / Má Visão: -1 (minor) ou -2 (major) em testes visuais à distância
+  if (skillKey === 'shooting' || skillKey === 'notice') {
+    const badEyes = hindrances.find((h) => h.name === 'badEyes' || h.name === 'Má Visão')
+    if (badEyes) bonus += badEyes.severity === 'major' ? -2 : -1
+  }
+
+  // phobia / Fobia: -1 (minor) ou -2 (major) em todos os testes quando o objeto de medo está presente
+  // O narrator deve adicionar um StatusEffect com id prefixado 'phobia_' quando a fobia for ativada
+  if (state.player.statusEffects.some((se) => se.id.startsWith('phobia_'))) {
+    const phobia = hindrances.find((h) => h.name === 'phobia' || h.name === 'Fobia')
+    if (phobia) bonus += phobia.severity === 'major' ? -2 : -1
+  }
+
+  return bonus
 }
 
 function applyShaken(target: { isShaken: boolean; wounds: number; maxWounds: number }): { wasAlreadyShaken: boolean; woundsApplied: number } {
@@ -56,25 +123,36 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
         : action.attribute
           ? getAttributeDie(nextState, action.attribute)
           : 4 as DieType
-      const penalty = woundPenalty(nextState.player.wounds)
-      const modifier = (action.modifier ?? 0) + penalty
+      // nerveOfSteel / Nervos de Aço: reduz penalidade de ferimento em 1
+      const rawWoundPenalty = woundPenalty(nextState.player.wounds)
+      const nerveBonus = nextState.player.edges.some((e) => e === 'nerveOfSteel' || e === 'Nervos de Aço') ? 1 : 0
+      const edgeHindranceMod = traitEdgeHindranceBonus(nextState, skillName)
+      const modifier = (action.modifier ?? 0) + Math.min(0, rawWoundPenalty + nerveBonus) + edgeHindranceMod
       const tn = 4
 
       const result = rollTrait(traitDie, true, modifier)
+
+      // charismatic / Carismático: re-rola uma falha de Persuasão uma vez por interação
+      const skillKey = findSkillDefinition(skillName)?.key ?? ''
+      const isCharismaticReroll = skillKey === 'persuasion'
+        && result.finalTotal < tn
+        && nextState.player.edges.some((e) => e === 'charismatic' || e === 'Carismático')
+      const finalResult = isCharismaticReroll ? rollTrait(traitDie, true, modifier) : result
 
       emittedEvents.push({
         type: 'trait_test',
         payload: {
           trait: traitName,
           dieSides: traitDie,
-          traitRoll: result.traitRoll,
-          wildRoll: result.wildRoll,
+          traitRoll: finalResult.traitRoll,
+          wildRoll: finalResult.wildRoll,
           modifier,
-          finalTotal: result.finalTotal,
+          finalTotal: finalResult.finalTotal,
           targetNumber: tn,
-          isSuccess: result.finalTotal >= tn,
-          raises: countRaises(result.finalTotal, tn),
-          description: action.description
+          isSuccess: finalResult.finalTotal >= tn,
+          raises: countRaises(finalResult.finalTotal, tn),
+          description: action.description,
+          charismaticReroll: isCharismaticReroll
         }
       })
       break
@@ -89,10 +167,14 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
       }
 
       const attackSkill = getCanonicalSkillLabel(action.skill) ?? 'Luta'
+      const attackSkillKey = findSkillDefinition(attackSkill)?.key ?? ''
       const attackDie = getSkillDie(nextState, attackSkill)
       const penalty = woundPenalty(nextState.player.wounds)
       const calledShotPenalty = action.calledShot ? -2 : 0
-      const attackModifier = (action.modifier ?? 0) + penalty + calledShotPenalty
+      // marksman / Atirador: +1 em Tiro se não se moveu
+      const marksmanBonus = (!action.hasMoved && attackSkillKey === 'shooting'
+        && nextState.player.edges.some((e) => e === 'marksman' || e === 'Atirador')) ? 1 : 0
+      const attackModifier = (action.modifier ?? 0) + penalty + calledShotPenalty + marksmanBonus
       const attackTN = target.parry
       const ap = action.ap ?? 0
 
@@ -131,7 +213,16 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
       // Called Shot bonus damage (head or vitals: +4)
       const calledShotDamageBonus = (action.calledShot === 'head' || action.calledShot === 'vitals') ? 4 : 0
 
-      const totalDamage = damageResult.total + raiseBonusDamage + calledShotDamageBonus
+      // assassin / Assassino: +2 de dano contra alvos Atordoados (Shaken = Vulnerável)
+      const assassinBonus = (target.isShaken && nextState.player.edges.some((e) => e === 'assassin' || e === 'Assassino')) ? 2 : 0
+
+      // champion / Campeão: +2 de dano contra criaturas sobrenaturais malignas
+      const championBonus = (target.tags?.includes('supernatural') && nextState.player.edges.some((e) => e === 'champion' || e === 'Campeão')) ? 2 : 0
+
+      // berserk / Berserk: +1 de dano enquanto em Fúria
+      const berserkDamageBonus = nextState.player.statusEffects.some((se) => se.id === 'berserk_rage') ? 1 : 0
+
+      const totalDamage = damageResult.total + raiseBonusDamage + calledShotDamageBonus + assassinBonus + championBonus + berserkDamageBonus
       const effectiveToughness = Math.max(0, target.toughness - ap)
       const dmgResult = resolveDamageVsToughness(totalDamage, effectiveToughness)
 
@@ -263,7 +354,9 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
 
       const spiritDie = nextState.player.attributes.spirit
       const penalty = woundPenalty(nextState.player.wounds)
-      const recoverResult = rollTrait(spiritDie, true, penalty)
+      // combatReflexes / Reflexos de Combate: +2 para recuperar Atordoamento
+      const combatReflexBonus = nextState.player.edges.some((e) => e === 'combatReflexes' || e === 'Reflexos de Combate') ? 2 : 0
+      const recoverResult = rollTrait(spiritDie, true, penalty + combatReflexBonus)
 
       if (recoverResult.isSuccess) {
         nextState.player.isShaken = false
@@ -425,7 +518,9 @@ export function applyNpcAttack(
   const skillDie = entry.skillDie as DieType
   const npcWoundPenalty = -Math.min(npc.wounds, 3)
   const attackResult = rollTrait(skillDie, npc.isWildCard, npcWoundPenalty)
-  const attackTN = nextState.player.parry
+  // dodge / Esquivar: +2 de TN efetivo contra ataques à distância
+  const dodgeBonus = (entry.isRanged && nextState.player.edges.some((e) => e === 'dodge' || e === 'Esquivar')) ? 2 : 0
+  const attackTN = nextState.player.parry + dodgeBonus
 
   if (attackResult.finalTotal < attackTN) {
     emittedEvents.push({
@@ -462,6 +557,16 @@ export function applyNpcAttack(
     if (dmgResult.wounds > 0) {
       nextState.player.wounds = Math.min(nextState.player.wounds + dmgResult.wounds, nextState.player.maxWounds + 1)
       nextState.player.isShaken = true
+
+      // berserk / Berserk: entra em Fúria ao receber ferimento (se ainda não estiver)
+      if (nextState.player.edges.some((e) => e === 'berserk' || e === 'Berserk')
+        && !nextState.player.statusEffects.some((se) => se.id === 'berserk_rage')) {
+        nextState.player.statusEffects = [
+          ...nextState.player.statusEffects,
+          { id: 'berserk_rage', name: 'Fúria Berserk' }
+        ]
+        emittedEvents.push({ type: 'berserk_rage_activated', payload: {} })
+      }
     } else {
       applyShaken(nextState.player)
     }

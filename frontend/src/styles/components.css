@@ -96,6 +96,13 @@
   position: relative;
 }
 
+/* Trava a página do jogo em 100vh — sem scroll externo */
+.app-shell:has(.page-game) {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 /* ─── Content Container ────────────────────────────── */
 
 .content {
@@ -106,7 +113,17 @@
 }
 
 .app-shell:has(.page-game) .content {
-  width: min(100%, var(--content-max-width-game));
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
 }
 
 /* ─── Panel / Card ─────────────────────────────────── */
@@ -603,12 +620,21 @@ button:disabled {
   justify-content: center;
 }
 
-.die-btn:hover {
+.die-btn:hover:not(:disabled) {
   border-color: var(--border-strong);
+  background: var(--bg-chip-active);
   color: var(--text-primary);
+  box-shadow: none;
 }
 
 .die-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.die-btn.active:hover:not(:disabled) {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
@@ -734,11 +760,11 @@ button:disabled {
 
 /* ─── Action Options ─── */
 .action-options {
-  margin-top: var(--space-3);
+  margin-top: var(--space-2);
 }
 
 .action-options h4 {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 6px;
   font-size: var(--font-sm);
   color: var(--text-secondary);
 }
@@ -751,7 +777,7 @@ button:disabled {
 
 .option-btn {
   text-align: left;
-  padding: var(--space-2) var(--space-3);
+  padding: 8px var(--space-2);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: rgba(255, 255, 255, 0.02);
@@ -1235,11 +1261,58 @@ button:disabled {
 }
 
 .chat-panel {
-  min-height: 300px;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── Game HUD (barra única: título + status + ações) ─── */
+.game-hud {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg-base) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.game-hud-title {
+  font-size: var(--font-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  flex-shrink: 1;
+  min-width: 0;
+  background: var(--gradient-accent);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hud-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-default);
+  flex-shrink: 0;
+}
+
+.hud-spacer {
   flex: 1;
 }
 
-/* ─── Game Header ─── */
+/* ─── Game Header (legado — mantido para compatibilidade) ─── */
 .game-header {
   display: flex;
   align-items: center;
@@ -1259,9 +1332,9 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px 14px;
-  padding: var(--space-2) 0;
-  margin-bottom: var(--space-3);
+  gap: 6px 12px;
+  padding: 6px 0;
+  margin-bottom: 0;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -1293,6 +1366,17 @@ button:disabled {
 
 .subheader-status .location-tag {
   color: var(--accent);
+}
+
+.hud-icon {
+  margin-right: 2px;
+}
+
+.hud-label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-right: 2px;
 }
 
 .subheader-actions {

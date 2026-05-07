@@ -28,18 +28,29 @@ const HindranceAllocationBody = z.object({
 
 // ─── Campaign (campanha dentro de um mundo) ───────────────
 
+const StoryCharacterBody = z.object({
+  name: z.string().min(1),
+  role: z.string().min(1),
+  description: z.string().default(''),
+  status: z.string().default('desconhecido')
+})
+
 const CreateCampaignBody = z.object({
   worldId: z.string().min(1),
   thematic: z.string().min(1),
+  name: z.string().optional(),
   storyDescription: z.string().optional(),
+  storyCharacters: z.array(StoryCharacterBody).min(0).max(7).optional(),
   visibility: VisibilityBody.optional(),
   image: StoredImageBody.optional(),
   youtubeUrl: z.string().url().optional().or(z.literal(''))
 })
 
 const UpdateCampaignBody = z.object({
+  name: z.string().min(1).optional(),
   thematic: z.string().min(1),
   storyDescription: z.string().optional().default(''),
+  storyCharacters: z.array(StoryCharacterBody).min(0).max(7).optional(),
   visibility: VisibilityBody.optional(),
   image: StoredImageBody.optional(),
   youtubeUrl: z.string().url().optional().or(z.literal(''))
@@ -47,9 +58,8 @@ const UpdateCampaignBody = z.object({
 
 const IncrementCampaignPreviewBody = z.object({
   worldName: z.string().min(1),
-  thematic: z.string().min(1),
-  currentDescription: z.string().optional(),
-  worldId: z.string().optional()
+  thematic: z.string().optional(),
+  currentDescription: z.string().optional()
 })
 
 const CampaignImagePreviewBody = z

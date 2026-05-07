@@ -152,6 +152,8 @@ export type NpcAttackEntry = {
   damageFormula: string
   /** Penetração de armadura (default 0) */
   ap?: number
+  /** Se o ataque é à distância (disparo, arremesso) — afeta a Vantagem Esquivar */
+  isRanged?: boolean
 }
 
 export type NarratorTurnResponse = {

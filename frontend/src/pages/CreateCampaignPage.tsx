@@ -12,7 +12,7 @@ import {
   incrementCampaignStoryPreview,
   updateCampaign
 } from '../lib/api'
-import type { Visibility } from '../types'
+import type { StoryCharacter, Visibility } from '../types'
 
 type StoredImage = {
   mimeType: string
@@ -32,8 +32,10 @@ export function CreateCampaignPage({ uid }: Props) {
   const [worldName, setWorldName] = useState('')
   const [ownerId, setOwnerId] = useState('')
   const [visibility, setVisibility] = useState<Visibility>('private')
+  const [name, setName] = useState('')
   const [thematic, setThematic] = useState('')
   const [storyDescription, setStoryDescription] = useState('')
+  const [storyCharacters, setStoryCharacters] = useState<StoryCharacter[]>([])
   const [imagePreview, setImagePreview] = useState<StoredImage | null>(null)
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [lastGeneratedContextKey, setLastGeneratedContextKey] = useState('')
@@ -65,29 +67,30 @@ export function CreateCampaignPage({ uid }: Props) {
     loadWorld()
   }, [resolvedWorldId])
 
-  // Load existing campaign in edit mode
+  // Load campaign data
   useEffect(() => {
     async function loadData() {
+      if (!campaignId) return
       try {
-        if (isEditMode && campaignId) {
-          const campaign = await getCampaign(campaignId)
-          setOwnerId(campaign.ownerId)
-          setVisibility(campaign.visibility)
-          setResolvedWorldId(campaign.worldId)
-          setThematic(campaign.thematic)
-          setStoryDescription(campaign.storyDescription ?? '')
-          setImagePreview(campaign.image ?? null)
-          setYoutubeUrl(campaign.youtubeUrl ?? '')
-        }
+        const campaign = await getCampaign(campaignId)
+        setOwnerId(campaign.ownerId)
+        setVisibility(campaign.visibility)
+        setResolvedWorldId(campaign.worldId)
+        setName(campaign.name ?? campaign.thematic ?? '')
+        setThematic(campaign.thematic)
+        setStoryDescription(campaign.storyDescription ?? '')
+        setStoryCharacters(campaign.storyCharacters ?? [])
+        setImagePreview(campaign.image ?? null)
+        setYoutubeUrl(campaign.youtubeUrl ?? '')
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Falha ao carregar dados')
       }
     }
     loadData()
-  }, [isEditMode, campaignId])
+  }, [campaignId])
 
   async function handleGenerateImage() {
-    if (isEditMode && !isOwner) return
+    if (!isOwner) return
 
     if (!thematic.trim()) {
       setError('Informe a temática antes de gerar imagem.')
@@ -117,8 +120,10 @@ export function CreateCampaignPage({ uid }: Props) {
     try {
       if (isEditMode && campaignId) {
         await updateCampaign(campaignId, {
+          name: name.trim() || undefined,
           thematic,
           storyDescription,
+          storyCharacters: storyCharacters.length > 0 ? storyCharacters : undefined,
           visibility,
           image: imagePreview ?? undefined,
           youtubeUrl: youtubeUrl.trim() || undefined
@@ -128,6 +133,7 @@ export function CreateCampaignPage({ uid }: Props) {
         await createCampaign({
           worldId: resolvedWorldId,
           thematic,
+          name: name.trim() || undefined,
           storyDescription,
           visibility,
           image: imagePreview ?? undefined,
@@ -162,27 +168,45 @@ export function CreateCampaignPage({ uid }: Props) {
   }
 
   async function handleIncrementWithLlm() {
-    if (!worldName.trim() || !thematic.trim()) {
-      setError('Informe a temática antes de incrementar com LLM.')
-      return
-    }
-
     setError('')
     setLlmLoading(true)
     try {
       const contextKey = buildContextKey(worldName, thematic)
       const shouldContinuePreviousContext = contextKey === lastGeneratedContextKey
 
-      const nextDescription = await incrementCampaignStoryPreview({
+      const result = await incrementCampaignStoryPreview({
         worldName,
-        thematic,
-        currentDescription: shouldContinuePreviousContext ? storyDescription : undefined,
-        worldId: resolvedWorldId || undefined
+        thematic: thematic.trim() || undefined,
+        currentDescription: shouldContinuePreviousContext ? storyDescription : undefined
       })
-      setStoryDescription(nextDescription)
-      setLastGeneratedContextKey(contextKey)
+      setStoryDescription(result.storyDescription)
+      if (result.storyCharacters.length > 0) setStoryCharacters(result.storyCharacters)
+      if (result.name && !name.trim()) setName(result.name)
+      if (result.thematic && !thematic.trim()) setThematic(result.thematic)
+      setLastGeneratedContextKey(buildContextKey(worldName, result.thematic ?? thematic))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Falha ao incrementar campanha com LLM')
+    } finally {
+      setLlmLoading(false)
+    }
+  }
+
+  async function handleRegenerateLlm() {
+    setError('')
+    setLlmLoading(true)
+    try {
+      const result = await incrementCampaignStoryPreview({
+        worldName,
+        thematic: thematic.trim() || undefined,
+        currentDescription: undefined
+      })
+      setStoryDescription(result.storyDescription)
+      if (result.storyCharacters.length > 0) setStoryCharacters(result.storyCharacters)
+      if (result.name && !name.trim()) setName(result.name)
+      if (result.thematic && !thematic.trim()) setThematic(result.thematic)
+      setLastGeneratedContextKey(buildContextKey(worldName, result.thematic ?? thematic))
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Falha ao regerar campanha com LLM')
     } finally {
       setLlmLoading(false)
     }
@@ -202,19 +226,39 @@ export function CreateCampaignPage({ uid }: Props) {
       {isEditMode && !isOwner && <p className="muted readonly-note">Esta campanha está disponível somente para leitura para você.</p>}
 
       <form className="form-grid" onSubmit={handleSubmit}>
+        {isOwner && (
+          <div className="llm-actions-top">
+            <button disabled={llmLoading || loading} onClick={handleIncrementWithLlm} type="button">
+              {llmLoading ? 'Gerando com LLM...' : 'Incrementar com LLM'}
+            </button>
+            <button disabled={llmLoading || loading} onClick={handleRegenerateLlm} type="button" className="button-secondary">
+              {llmLoading ? 'Gerando...' : 'Regerar do zero'}
+            </button>
+          </div>
+        )}
+
+        <label>
+          Nome da campanha
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Ex: A Queda dos Reis"
+            disabled={!isOwner}
+          />
+        </label>
+
         <label>
           Temática / era da campanha
           <input
             value={thematic}
             onChange={(event) => setThematic(event.target.value)}
             placeholder="Ex: Reinos Fragmentados e magia decadente"
-            readOnly={isEditMode}
-            disabled={isEditMode}
+            disabled={!isOwner}
             required
           />
         </label>
 
-        {(!isEditMode || isOwner) && (
+        {isOwner && (
           <button
             disabled={imageLoading || llmLoading || loading || !thematic.trim()}
             onClick={handleGenerateImage}
@@ -237,7 +281,7 @@ export function CreateCampaignPage({ uid }: Props) {
         <div className="lore-section">
           <div className="lore-section-header">
             <span className="lore-section-title">História / descrição da campanha</span>
-            {!isEditMode && (
+            {isOwner && (
               <div className="lore-tabs">
                 <button
                   type="button"
@@ -257,7 +301,7 @@ export function CreateCampaignPage({ uid }: Props) {
             )}
           </div>
 
-          {!isEditMode && storyTab === 'edit' ? (
+          {storyTab === 'edit' && isOwner ? (
             <textarea
               className="lore-textarea"
               value={storyDescription}
@@ -270,21 +314,35 @@ export function CreateCampaignPage({ uid }: Props) {
               {storyDescription.trim() ? (
                 <Markdown remarkPlugins={[remarkGfm]}>{storyDescription}</Markdown>
               ) : (
-                <p className="muted">Nenhuma história ainda. {isEditMode ? '' : 'Gere com LLM ou edite manualmente.'}</p>
+                <p className="muted">Nenhuma história ainda. {isOwner ? 'Gere com LLM ou edite manualmente.' : ''}</p>
               )}
             </div>
           )}
 
-          {!isEditMode && hasPendingContextChange && (
+          {hasPendingContextChange && isOwner && (
             <p className="muted">Parâmetros alterados. O próximo incremento vai gerar um novo contexto.</p>
           )}
-
-          {!isEditMode && (
-            <button disabled={llmLoading || loading || !thematic.trim()} onClick={handleIncrementWithLlm} type="button">
-              {llmLoading ? 'Incrementando com LLM...' : 'Incrementar história com LLM'}
-            </button>
-          )}
         </div>
+
+        {storyCharacters.length > 0 && (
+          <div className="lore-section">
+            <div className="lore-section-header">
+              <span className="lore-section-title">Personagens relevantes da história</span>
+            </div>
+            <div className="story-characters-grid">
+              {storyCharacters.map((char, index) => (
+                <div key={index} className="story-character-card">
+                  <div className="story-character-header">
+                    <strong className="story-character-name">{char.name}</strong>
+                    <span className="story-character-role">{char.role}</span>
+                  </div>
+                  {char.description && <p className="story-character-description">{char.description}</p>}
+                  <span className="story-character-status">{char.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <label>
           Música ambiente (YouTube)
@@ -293,19 +351,19 @@ export function CreateCampaignPage({ uid }: Props) {
             value={youtubeUrl}
             onChange={(event) => setYoutubeUrl(event.target.value)}
             placeholder="https://www.youtube.com/watch?v=... ou https://youtu.be/..."
-            disabled={isEditMode && !isOwner}
+            disabled={!isOwner}
           />
         </label>
 
         <label>
           Visibilidade
-          <select value={visibility} onChange={(event) => setVisibility(event.target.value as Visibility)} disabled={isEditMode && !isOwner}>
+          <select value={visibility} onChange={(event) => setVisibility(event.target.value as Visibility)} disabled={!isOwner}>
             <option value="private">Privada</option>
             <option value="public">Pública</option>
           </select>
         </label>
 
-        {(!isEditMode || isOwner) && (
+        {isOwner && (
           <button disabled={loading || llmLoading || !uid || !thematic.trim()} type="submit">
             {loading ? (isEditMode ? 'Salvando...' : 'Criando...') : isEditMode ? 'Salvar campanha' : 'Criar campanha'}
           </button>

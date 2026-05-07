@@ -398,7 +398,12 @@ export class SessionService {
     })
     if (missingRequiredItems.length) {
       feasible = false
-      feasibilityReason = feasibilityReason ?? `Item necessário ausente: ${missingRequiredItems[0]}.`
+      const missingRef = missingRequiredItems[0]
+      const resolvedName =
+        state.player.inventory?.find(
+          (i) => i.id === missingRef || i.name.toLowerCase() === missingRef.toLowerCase()
+        )?.name ?? missingRef
+      feasibilityReason = feasibilityReason ?? `Item necessário ausente: ${resolvedName}.`
     }
 
     switch (option.actionType) {
@@ -511,14 +516,6 @@ export class SessionService {
 
       if (mode === 'start') {
         return change.changeType === 'gained'
-      }
-
-      if (change.changeType === 'gained') {
-        const allowedGainCategories = ['vehicle', 'property', 'consumable', 'quest', 'misc', 'ammunition']
-        if (!allowedGainCategories.includes(change.category ?? '')) {
-          warn('validateNarratorItemChanges', `Descartando ganho de item não permitido (category "${change.category}") no turno: "${change.name}"`)
-          return false
-        }
       }
 
       if (change.changeType === 'used' && change.category === 'ammunition' && action?.type !== 'attack') {
@@ -1272,8 +1269,13 @@ export class SessionService {
     finalState = this.statusEffects.tickEffects(finalState)
 
     // 5.5. Processar ataques de NPCs contra o jogador
+    // No Savage Worlds cada personagem age no seu próprio turno de iniciativa.
+    // Quando o jogador usa 'attack', o NPC já recebeu dano neste turno —
+    // processar npcAttacks simultaneamente resultaria no jogador sofrendo dano
+    // no mesmo turno em que atacou, o que é incorreto mecanicamente.
+    const pendingNpcAttacks = normalizedAction.type === 'attack' ? [] : (narratorResponse.npcAttacks ?? [])
     const npcAttackEvents: Array<{ type: string; payload: unknown }> = []
-    for (const entry of narratorResponse.npcAttacks ?? []) {
+    for (const entry of pendingNpcAttacks) {
       // Validar: NPC deve estar na cena e skillDie deve ser DieType válido
       const sceneNpc = finalState.npcs.find(
         (n) => n.id === entry.npcId && (!n.location || n.location === finalState.worldState.activeLocation)
@@ -1431,6 +1433,10 @@ export class SessionService {
 
     switch (option.actionType) {
       case 'trait_test':
+        // Defesa em profundidade: se o LLM ou sanitizer marcou required=false, tratar como ação narrativa
+        if (dc?.required === false) {
+          return { type: 'custom', input: option.text }
+        }
         return {
           type: 'trait_test',
           skill: normalizeSkillName(dc?.skill ?? (typeof payload.skill === 'string' ? payload.skill : undefined)),
@@ -1508,7 +1514,8 @@ export class SessionService {
     return changes.filter((c) => {
       if (c.changeType !== 'gained') return true // lost/used sempre passam
       const nameKey = c.name.toLowerCase().trim()
-      if (inventoryNames.has(nameKey)) {
+      const nonStackableCategories = new Set(['weapon', 'armor', 'vehicle', 'property'])
+      if (inventoryNames.has(nameKey) && nonStackableCategories.has(c.category ?? '')) {
         warn('deduplicateItemChanges', `Item já no inventário, ignorando gained: "${c.name}"`)
         return false
       }

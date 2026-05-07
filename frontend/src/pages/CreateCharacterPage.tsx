@@ -138,7 +138,7 @@ export function CreateCharacterPage({ uid }: Props) {
   const isOwner = !isEditMode || !ownerId || ownerId === uid
   const isReadOnly = isEditMode && !isOwner
 
-  const fightingDie = skills['Lutar'] ?? 0
+  const fightingDie = skills['Luta'] ?? 0
   const vigorDie = attributes['vigor'] ?? 4
   const derivedParry = calcParry(fightingDie || 0)
   const derivedToughness = calcToughness(vigorDie)

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import {
   executeCustomAction,
@@ -83,25 +83,10 @@ function normalizeLookupKey(value: string): string {
     .toLowerCase()
 }
 
-const SKILL_ALIAS_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
-  ['luta', 'lutar'],
-  ['tiro', 'atirar'],
-  ['conducao', 'dirigir', 'pilotar'],
-  ['montaria', 'cavalgar'],
-  ['medicina', 'curar'],
-  ['percepcao', 'notar'],
-  ['reparos', 'reparar'],
-  ['pesquisa', 'investigar'],
-  ['ciencia', 'ciencias'],
-  ['jogatina', 'apostar'],
-  ['intimidacao', 'intimidar'],
-  ['atuacao', 'desempenho'],
-  ['persuasao', 'persuadir'],
-  ['foco', 'psionismo'],
-  ['magias', 'conjurar'],
-  ['navegacao', 'navegar'],
-  ['ladinagem', 'roubar']
-] as const
+/** Traduz chaves canônicas de atributo (inglês) para labels PT-BR */
+const ATTR_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  ATTRIBUTES.map((a) => [a.key, a.label])
+)
 
 function normalizeActionPayload(actionPayload: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
@@ -126,12 +111,7 @@ function resolveDiceCheckTrait(
 }
 
 function areEquivalentSkills(left: string, right: string): boolean {
-  const normalizedLeft = normalizeLookupKey(left)
-  const normalizedRight = normalizeLookupKey(right)
-
-  if (normalizedLeft === normalizedRight) return true
-
-  return SKILL_ALIAS_GROUPS.some((group) => group.includes(normalizedLeft) && group.includes(normalizedRight))
+  return normalizeLookupKey(left) === normalizeLookupKey(right)
 }
 
 function resolvePlayerTraitDie(
@@ -375,7 +355,29 @@ function formatState(state: GameState): string {
 
 // ─── Components ───
 
-function NarrativeBubble({ message }: { message: ChatMessage }) {
+function NarrativeBubble({ message, isNew }: { message: ChatMessage; isNew?: boolean }) {
+  const fullText = message.narrative ?? ''
+  const [displayedText, setDisplayedText] = useState(isNew ? '' : fullText)
+
+  useEffect(() => {
+    if (!isNew) return
+    setDisplayedText('')
+    let index = 0
+    const CHARS_PER_TICK = 3
+    const TICK_MS = 20
+    const id = setInterval(() => {
+      index += CHARS_PER_TICK
+      if (index >= fullText.length) {
+        setDisplayedText(fullText)
+        clearInterval(id)
+      } else {
+        setDisplayedText(fullText.slice(0, index))
+      }
+    }, TICK_MS)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [message.messageId])
+
   if (message.role === 'player') {
     return (
       <div className="msg player">
@@ -420,7 +422,7 @@ function NarrativeBubble({ message }: { message: ChatMessage }) {
     <div className="msg narrator">
       <strong>Narrador</strong>
       <div className="narrative-text">
-        {splitNarrativeParagraphs(message.narrative).map((paragraph, i) => (
+        {splitNarrativeParagraphs(displayedText).map((paragraph, i) => (
           <p key={i}>{paragraph}</p>
         ))}
       </div>
@@ -733,19 +735,26 @@ function AttackResultCard({ event }: { event: SessionEvent }) {
       {isHit && (
         <>
           <div className="dice-result-rolls attack-damage-rolls">
-            {p.damageRolls?.map((dr, i) => (
-              <div key={i} className="dice-roll-group">
-                <span className="dice-roll-label">Dano d{dr.sides}</span>
-                <div className="dice-roll-values">
-                  {dr.rolls.map((r: number, j: number) => (
-                    <span key={j} className={`dice-value ${dr.aced ? 'aced' : ''}`}>
-                      {r}{dr.aced && j < dr.rolls.length - 1 ? '🔥' : ''}
-                    </span>
-                  ))}
-                  <span className="dice-roll-total">= {dr.total}</span>
+            {p.damageRolls?.map((dr, i) => {
+              const diceLabel = dr.label === 'str'
+                ? `Força d${dr.sides}`
+                : dr.label === 'bonus'
+                  ? `Bônus d${dr.sides}`
+                  : `Arma d${dr.sides}`
+              return (
+                <div key={i} className="dice-roll-group">
+                  <span className="dice-roll-label">{diceLabel}</span>
+                  <div className="dice-roll-values">
+                    {dr.rolls.map((r: number, j: number) => (
+                      <span key={j} className={`dice-value ${dr.aced ? 'aced' : ''}`}>
+                        {r}{dr.aced && j < dr.rolls.length - 1 ? '🔥' : ''}
+                      </span>
+                    ))}
+                    <span className="dice-roll-total">= {dr.total}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
           <div className="dice-result-summary">
             <span className="dice-final">Dano: <strong>{p.damageTotal}</strong></span>
@@ -913,7 +922,8 @@ function DiceResultCard({ event }: { event: SessionEvent }) {
   if (event.type !== 'trait_test') return null
 
   const p = event.payload as unknown as TraitTestPayload
-  const traitName = p.trait?.trim() || 'Teste'
+  const rawTrait = p.trait?.trim() ?? ''
+  const traitName = (ATTR_LABEL_MAP[rawTrait] ?? rawTrait) || 'Teste'
   const traitRoll = p.traitRoll
   const wildRoll = p.wildRoll
   const modifier = p.modifier ?? 0
@@ -1263,6 +1273,7 @@ function SidebarEffects({ effects }: { effects: Array<{ id: string; name: string
 
 export function GamePage() {
   const { sessionId = '' } = useParams()
+  const navigate = useNavigate()
 
   const [state, setState] = useState<GameState | null>(null)
   const [summary, setSummary] = useState<SummaryDoc | null>(null)
@@ -1270,6 +1281,7 @@ export function GamePage() {
   const [currentOptions, setCurrentOptions] = useState<ActionOption[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [latestNarratorId, setLatestNarratorId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   /* Quick-action state */
@@ -1432,6 +1444,7 @@ export function GamePage() {
           itemChanges: nr.itemChanges,
           statusChanges: nr.statusChanges
         }
+        setLatestNarratorId(narratorMsg.messageId)
       }
     }
 
@@ -1553,8 +1566,8 @@ export function GamePage() {
     }
   }
 
-  async function handleCustomSubmit(e: FormEvent) {
-    e.preventDefault()
+  async function handleCustomSubmit(e?: FormEvent) {
+    e?.preventDefault()
     if (!sessionId || !input.trim()) return
     const text = input.trim()
     setError('')
@@ -1648,7 +1661,7 @@ export function GamePage() {
     setError('')
     setLoading(true)
     setCurrentOptions([])
-    pushOptimisticPlayerMessage(`Teste de ${skill ?? attribute}`)
+    pushOptimisticPlayerMessage(`Teste de ${ATTR_LABEL_MAP[skill ?? ''] ?? skill ?? ATTR_LABEL_MAP[attribute ?? ''] ?? attribute}`)
     try {
       const result = await executeTraitTest({ sessionId, skill, attribute }, handleEnginePhase)
       handlePayload(result)
@@ -1739,53 +1752,65 @@ export function GamePage() {
       {/* ── YouTube Ambient ── */}
       {youtubeUrl && <YouTubeAmbient youtubeUrl={youtubeUrl} />}
 
-      {/* ── Header do Jogo ── */}
-      <div className="game-header">
-        <h2>{worldInfo ? `${worldInfo.thematic} — ${worldInfo.campaignName}` : 'Carregando...'}</h2>
-      </div>
+      {/* ── HUD: título + status + ações numa única barra ── */}
+      <div className="game-hud">
+        <button
+          type="button"
+          className="game-back-btn"
+          onClick={() => navigate(-1)}
+          title="Voltar"
+        >
+          ← Voltar
+        </button>
+        <span className="hud-divider" />
+        <span className="game-hud-title">
+          {worldInfo ? `${worldInfo.thematic} — ${worldInfo.campaignName}` : 'Carregando...'}
+        </span>
 
-      {/* ── Sub-header sticky: status + atalhos ── */}
-      {state && (
-        <div className="game-subheader">
-          <div className="subheader-status">
-            <span>❤️ {state.player.wounds}/{state.player.maxWounds}</span>
-            <span>🎲 {state.player.bennies}</span>
-            <span>🛡️ {state.player.parry}</span>
-            <span>💪 {state.player.toughness}</span>
-            {state.player.isShaken && <span className="shaken-badge">ABALADO</span>}
-            <span className="location-tag">📍 {state.worldState.activeLocation}</span>
-          </div>
-          <div className="subheader-actions">
-            <button
-              type="button"
-              className="subheader-btn"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              title="Ficha do Personagem"
-            >
-              📋 {state.player.name ?? 'Ficha'}
-            </button>
-            <button
-              type="button"
-              className="subheader-btn"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              title="Ações avançadas"
-            >
-              ⚔️ Ações
-            </button>
-            {bennies > 0 && (
+        {state && (
+          <>
+            <span className="hud-divider" />
+            <div className="subheader-status">
+              <span title="Ferimentos"><span className="hud-icon">❤️</span><span className="hud-label">Vida</span> {state.player.wounds}/{state.player.maxWounds}</span>
+              <span title="Bennies disponíveis"><span className="hud-icon">🎲</span><span className="hud-label">Bennies</span> {state.player.bennies}</span>
+              <span title="Aparar (defesa corpo a corpo)"><span className="hud-icon">🛡️</span><span className="hud-label">Aparar</span> {state.player.parry}</span>
+              <span title="Resistência (absorção de dano)"><span className="hud-icon">💪</span><span className="hud-label">Resist.</span> {state.player.toughness}</span>
+              {state.player.isShaken && <span className="shaken-badge">ABALADO</span>}
+              <span className="location-tag" title="Localização atual"><span className="hud-icon">📍</span>{state.worldState.activeLocation}</span>
+            </div>
+            <span className="hud-spacer" />
+            <div className="subheader-actions">
               <button
                 type="button"
-                className="subheader-btn accent"
-                onClick={() => handleSpendBenny('reroll')}
-                disabled={loading}
-                title="Gastar Benny para re-rolar"
+                className="subheader-btn"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                title="Ficha do Personagem"
               >
-                🎲 Benny
+                📋 {state.player.name ?? 'Ficha'}
               </button>
-            )}
-          </div>
-        </div>
-      )}
+              <button
+                type="button"
+                className="subheader-btn"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                title="Ações avançadas"
+              >
+                ⚔️ Ações
+              </button>
+              {bennies > 0 && (
+                <button
+                  type="button"
+                  className="subheader-btn accent"
+                  onClick={() => handleSpendBenny('reroll')}
+                  disabled={loading}
+                  title="Gastar Benny para re-rolar"
+                >
+                  🎲 Benny
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* ── Sidebar do Personagem (fixa à direita) ── */}
       <CharacterSidebar
@@ -1801,7 +1826,7 @@ export function GamePage() {
       <div className="chat-panel">
         <div className="chat-log">
           {displayMessages.map((msg, i) => (
-            <NarrativeBubble key={msg.messageId ?? `msg-${i}`} message={msg} />
+            <NarrativeBubble key={msg.messageId ?? `msg-${i}`} message={msg} isNew={msg.messageId === latestNarratorId} />
           ))}
           {loading && (
             <div className="msg narrator loading">
@@ -1962,14 +1987,31 @@ export function GamePage() {
       {/* ── Chat livre ── */}
       <form className="form-grid" onSubmit={handleCustomSubmit}>
         <div className="input-row">
-          <input
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Descreva sua ação..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleCustomSubmit()
+              }
+            }}
+            placeholder="Descreva sua ação... (Enter para enviar, Shift+Enter para nova linha)"
+            rows={2}
           />
-          <button disabled={loading || validating || !sessionId || !input.trim()} type="submit">
-            {validating ? 'Validando...' : loading ? '...' : 'Enviar'}
-          </button>
+          <div className="input-actions">
+            <button disabled={loading || validating || !sessionId || !input.trim()} type="submit">
+              {validating ? 'Validando...' : loading ? '...' : 'Enviar'}
+            </button>
+            <button
+              type="button"
+              className="scroll-top-btn"
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              title="Ir ao topo da página"
+            >
+              ↑
+            </button>
+          </div>
         </div>
         {error && <p className="error">{error}</p>}
       </form>

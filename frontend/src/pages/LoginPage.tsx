@@ -261,7 +261,7 @@ export function LoginPage({ currentUser }: Props) {
       <section className="auth-stage">
         <div className="auth-panel auth-panel--hero">
           <span className="auth-kicker">Acesso protegido</span>
-          <h1>Entre para abrir o RPG Adaptável.</h1>
+          <h1>Entre para abrir a Mesa Infinita.</h1>
           <p>
             Agora a aplicação inteira exige autenticação real. Isso protege os dados de mundos, campanhas,
             personagens e sessões do chat.

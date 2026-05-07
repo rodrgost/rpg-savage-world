@@ -22,16 +22,24 @@ export type SummarizeHistoryRequest = {
   currentState: GameState
 }
 
-export type ExpandWorldCharacter = {
-  name: string
-  description?: string
-}
-
 export type ExpandWorldRequest = {
   campaignName: string
-  thematic: string
+  thematic?: string
   currentDescription?: string
-  characters?: ExpandWorldCharacter[]
+}
+
+export type StoryCharacter = {
+  name: string
+  role: string
+  description: string
+  status: string
+}
+
+export type ExpandAdventureStoryResult = {
+  storyDescription: string
+  storyCharacters: StoryCharacter[]
+  name?: string
+  thematic?: string
 }
 
 export type ExpandWorldLoreRequest = {
@@ -87,7 +95,7 @@ export interface Narrator {
   summarize(req: SummarizeRequest): Promise<string>
   summarizeHistory(req: SummarizeHistoryRequest): Promise<string>
   expandWorld(req: ExpandWorldRequest): Promise<string>
-  expandAdventureStory(req: ExpandWorldRequest): Promise<string>
+  expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult>
   expandWorldLore(req: ExpandWorldLoreRequest): Promise<string>
   generateImageDescription(req: GenerateImageDescriptionRequest): Promise<string>
   suggestCharacterFromWorld(req: SuggestCharacterFromWorldRequest): Promise<SuggestedCharacter>

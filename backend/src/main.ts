@@ -17,6 +17,13 @@ async function bootstrap(): Promise<void> {
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
   })
+  // Evitar que o servidor Node.js encerre conexões de streaming por inatividade.
+  // keepAliveTimeout > timeout do proxy reverso (Railway usa ~75s).
+  const httpServer = app.getHttpServer() as import('http').Server
+  httpServer.keepAliveTimeout = 185_000   // 3 min
+  httpServer.headersTimeout = 190_000     // ligeiramente maior que keepAliveTimeout
+  httpServer.requestTimeout = 0           // sem timeout para requests (streaming pode levar >120s)
+
   await app.listen(env.port)
 }
 

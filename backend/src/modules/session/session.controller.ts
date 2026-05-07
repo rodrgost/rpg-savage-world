@@ -104,6 +104,10 @@ export class SessionController {
     res.setHeader('X-Accel-Buffering', 'no')
     res.flushHeaders()
 
+    const heartbeat = setInterval(() => {
+      if (!res.writableEnded) res.write('\n')
+    }, 10_000)
+
     try {
       const result = await this.sessions.applyTurnStreamed(
         { ownerId: userId, sessionId, action: parsed.action },
@@ -122,6 +126,8 @@ export class SessionController {
         res.write(JSON.stringify({ phase: 'error', message }) + '\n')
         res.end()
       }
+    } finally {
+      clearInterval(heartbeat)
     }
   }
 
@@ -144,6 +150,10 @@ export class SessionController {
     res.setHeader('X-Accel-Buffering', 'no')
     res.flushHeaders()
 
+    const heartbeat = setInterval(() => {
+      if (!res.writableEnded) res.write('\n')
+    }, 10_000)
+
     try {
       const result = await this.sessions.chooseOptionStreamed(
         { ownerId: userId, sessionId, optionId: parsed.optionId },
@@ -162,6 +172,8 @@ export class SessionController {
         res.write(JSON.stringify({ phase: 'error', message }) + '\n')
         res.end()
       }
+    } finally {
+      clearInterval(heartbeat)
     }
   }
 

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { listCharacters, listCampaigns, startSession } from '../lib/api'
+import { listCharacters, listCampaigns, listWorlds, startSession } from '../lib/api'
 import { OwnerAvatar } from '../components/OwnerAvatar'
-import type { Campaign, Character } from '../types'
+import type { Campaign, Character, World } from '../types'
 import { ATTRIBUTES, dieLabel } from '../data/savage-worlds'
 
 type Props = {
@@ -12,10 +12,23 @@ type Props = {
   ownerPhotoUrl?: string
 }
 
+const ATTR_SHORT: Record<string, string> = {
+  agility: 'Agi',
+  smarts: 'Ast',
+  spirit: 'Esp',
+  strength: 'For',
+  vigor: 'Vig',
+}
+
+function cleanHindranceName(name: string): string {
+  return name.replace(/\s*\((Menor|Maior|Minor|Major)\)\s*/gi, '').trim()
+}
+
 export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
   const navigate = useNavigate()
   const [characters, setCharacters] = useState<Character[]>([])
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [worlds, setWorlds] = useState<World[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [startingId, setStartingId] = useState<string | null>(null)
@@ -23,10 +36,11 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
   useEffect(() => {
     if (!uid) return
     setLoading(true)
-    Promise.all([listCharacters(), listCampaigns()])
-      .then(([charItems, campaignItems]) => {
+    Promise.all([listCharacters(), listCampaigns(), listWorlds()])
+      .then(([charItems, campaignItems, worldItems]) => {
         setCharacters(charItems)
         setCampaigns(campaignItems)
+        setWorlds(worldItems)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Falha ao carregar personagens'))
       .finally(() => setLoading(false))
@@ -65,7 +79,9 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
       <div className="character-card-grid">
         {characters.map((character) => {
           const campaign = campaigns.find((c) => c.id === character.campaignId)
+          const world = worlds.find((w) => w.id === (character.worldId ?? campaign?.worldId))
           const campaignName = campaign?.thematic ?? 'Campanha desconhecida'
+          const worldName = world?.name ?? 'Universo desconhecido'
           const isOwner = character.ownerId === uid
           const resolvedOwnerLabel = isOwner
             ? ownerLabel
@@ -80,6 +96,17 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
               key={character.id}
               onClick={() => navigate(`/characters/${character.id}/edit`)}
             >
+              {/* Topo: contexto + nome */}
+              <header className="character-card-context">
+                <p className="char-breadcrumb">
+                  <span>{worldName}</span>
+                  <span className="char-breadcrumb-sep">›</span>
+                  <span>{campaignName}</span>
+                </p>
+                <h3 className="char-name">{character.name}</h3>
+              </header>
+
+              {/* Imagem */}
               {character.image && (
                 <img
                   alt={`Avatar de ${character.name}`}
@@ -87,45 +114,46 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                   src={`data:${character.image.mimeType};base64,${character.image.base64}`}
                 />
               )}
-              <header className="character-card-header">
+
+              {/* Dados gerais */}
+              <div className="character-card-body">
                 <div className="entity-card-meta">
                   <OwnerAvatar label={resolvedOwnerLabel} photoUrl={resolvedOwnerPhoto} />
                   <span className={`badge ${character.visibility === 'public' ? 'badge--success' : 'badge--warn'}`}>
                     {character.visibility === 'public' ? 'Público' : 'Privado'}
                   </span>
                 </div>
-                <h3>{character.name}</h3>
-                <p className="muted">
-                  {character.characterClass ?? 'Sem classe'} • {character.profession ?? 'Sem profissão'}
-                </p>
-              </header>
 
-              <div className="character-card-body">
-                <p className="muted">Campanha: {campaignName}</p>
+                <p className="char-subtitle muted">
+                  {[character.characterClass, character.profession, character.race]
+                    .filter(Boolean)
+                    .join(' • ') || 'Sem classe'}
+                </p>
 
                 {/* Atributos */}
                 <div className="character-sheet-summary">
                   <p className="muted">Atributos</p>
-                  <p>
+                  <div className="char-attributes-grid">
                     {ATTRIBUTES.map((a) => (
-                      <span key={a.key} style={{ marginRight: 8 }}>
-                        <strong>{a.label}:</strong> {dieLabel(character.attributes[a.key] ?? 4)}
-                      </span>
+                      <div key={a.key} className="char-attr-cell">
+                        <span className="char-attr-label">{ATTR_SHORT[a.key] ?? a.label}</span>
+                        <span className="char-attr-value">{dieLabel(character.attributes[a.key] ?? 4)}</span>
+                      </div>
                     ))}
-                  </p>
+                  </div>
                 </div>
 
                 {/* Perícias */}
                 {character.skills && Object.keys(character.skills).length > 0 && (
                   <div className="character-sheet-summary">
                     <p className="muted">Perícias</p>
-                    <p>
+                    <div className="char-chips">
                       {Object.entries(character.skills).map(([name, die]) => (
-                        <span key={name} style={{ marginRight: 8 }}>
+                        <span key={name} className="chip chip--skill">
                           {name} {dieLabel(die)}
                         </span>
                       ))}
-                    </p>
+                    </div>
                   </div>
                 )}
 
@@ -133,7 +161,11 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                 {character.edges && character.edges.length > 0 && (
                   <div className="character-sheet-summary">
                     <p className="muted">Vantagens</p>
-                    <p>{character.edges.join(', ')}</p>
+                    <div className="char-chips">
+                      {character.edges.map((edge) => (
+                        <span key={edge} className="chip chip--edge">{edge}</span>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -141,9 +173,20 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                 {character.hindrances && character.hindrances.length > 0 && (
                   <div className="character-sheet-summary">
                     <p className="muted">Complicações</p>
-                    <p>
-                      {character.hindrances.map((h) => `${h.name} (${h.severity === 'major' ? 'Maior' : 'Menor'})`).join(', ')}
-                    </p>
+                    <div className="char-chips">
+                      {character.hindrances.map((h, i) => {
+                        const baseName = cleanHindranceName(h.name)
+                        const severityLabel = h.severity === 'major' ? 'Maior' : 'Menor'
+                        return (
+                          <span
+                            key={i}
+                            className={`chip ${h.severity === 'major' ? 'chip--major' : 'chip--minor'}`}
+                          >
+                            {baseName} ({severityLabel})
+                          </span>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

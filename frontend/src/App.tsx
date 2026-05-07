@@ -44,7 +44,7 @@ function AuthenticatedLayout({
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-inner">
-          <h1>RPG Adaptável</h1>
+          <h1>Mesa Infinita</h1>
           <nav>
             <NavLink className={({ isActive }) => (isActive ? 'active' : '')} end to="/">
               Home
@@ -147,8 +147,8 @@ export function App() {
           <Route path="/characters/new" element={<CreateCharacterPage uid={uid} />} />
           <Route path="/characters/:characterId/edit" element={<CreateCharacterPage uid={uid} />} />
           <Route path="/rules" element={<RulesPage />} />
-          <Route path="/game/:sessionId" element={<GamePage />} />
         </Route>
+        <Route path="/game/:sessionId" element={<GamePage />} />
       </Route>
 
       <Route path="*" element={<Navigate to={currentUser && !currentUser.isAnonymous ? '/' : '/login'} replace />} />

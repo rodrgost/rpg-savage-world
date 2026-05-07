@@ -110,7 +110,20 @@ export class SummaryService {
 
     const keyEvents = await this.events.listSince({ sessionId, afterTurn: lastTurnIncluded })
     const recentRaw = await this.chatMessages.getRecent(sessionId, 10)
-    const recentMessages = this.buildMessagesForSummary(recentRaw)
+
+    // Quando não há resumo anterior, inclui também as primeiras mensagens (cena de abertura)
+    // para que o LLM não perca o contexto do início do jogo.
+    const openingRaw = existing?.summaryText ? [] : await this.chatMessages.getOldest(sessionId, 5)
+
+    // Mesclar abertura + recentes, deduplicar por messageId, ordenar por seq
+    const seenIds = new Set<string>()
+    const mergedRaw = [...openingRaw, ...recentRaw].filter((m) => {
+      if (seenIds.has(m.messageId)) return false
+      seenIds.add(m.messageId)
+      return true
+    }).sort((a, b) => a.seq - b.seq)
+
+    const recentMessages = this.buildMessagesForSummary(mergedRaw)
 
     const summaryText = trimIncompleteSummaryText(await this.narrator.summarize({
       previousSummary: existing?.summaryText ?? '',
