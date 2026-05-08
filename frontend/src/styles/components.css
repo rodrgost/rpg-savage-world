@@ -662,22 +662,41 @@ button:disabled {
   border-left: 3px solid var(--accent);
   padding-left: var(--space-3);
   background: var(--accent-soft);
+  padding-right: 0;
 }
 
-.msg.player .player-header {
+.msg.player .player-content {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
+  gap: 0;
+}
+
+.msg.player .player-text {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+}
+
+.msg.player .player-text strong {
+  display: block;
   margin-bottom: 4px;
 }
 
+.msg.player .player-text p {
+  margin: 0;
+}
+
 .player-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  width: 72px;
+  height: 72px;
+  border-radius: 0 4px 4px 0;
   object-fit: cover;
-  border: 1px solid var(--accent);
+  object-position: top center;
+  border-left: 2px solid var(--accent);
   flex-shrink: 0;
+  align-self: stretch;
+  height: auto;
+  min-height: 72px;
 }
 
 .msg.narrator {

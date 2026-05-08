@@ -390,7 +390,11 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
   if (message.role === 'player') {
     return (
       <div className="msg player">
-        <div className="player-header">
+        <div className="player-content">
+          <div className="player-text">
+            <strong>{playerName ?? 'Você'}</strong>
+            <p>{message.playerInput}</p>
+          </div>
           {playerImage && (
             <img
               className="player-avatar"
@@ -398,9 +402,7 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
               alt={playerName ?? 'Jogador'}
             />
           )}
-          <strong>{playerName ?? 'Você'}</strong>
         </div>
-        <p>{message.playerInput}</p>
       </div>
     )
   }
