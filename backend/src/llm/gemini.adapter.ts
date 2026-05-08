@@ -225,7 +225,8 @@ function extractDeepSeekText(response: DeepSeekChatCompletionResponse): string {
 
 function stripMarkdownFence(text: string): string {
   const trimmed = text.trim()
-  const match = trimmed.match(/^```(?:markdown|md|text)?\s*\n([\s\S]*?)\n```$/i)
+  // Aceita qualquer language tag (json, markdown, md, text, js, ts, etc.) ou nenhuma
+  const match = trimmed.match(/^```[a-zA-Z0-9]*\s*\r?\n([\s\S]*?)\r?\n```\s*$/i)
   if (!match?.[1]) return trimmed
   return match[1].trim()
 }
@@ -2389,7 +2390,7 @@ export class GeminiAdapter implements Narrator {
 
         if (parsed.source !== 'direct' && parsed.source !== 'fragment' && parsed.source !== 'repaired') {
           lastError = new Error(`Resposta narrativa recuperada via ${parsed.source}`)
-          warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: rejecting parse source ${parsed.source}`)
+          warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: rejecting parse source ${parsed.source} — raw prefix: ${generated.text.slice(0, 300).replace(/\n/g, '\\n')}`)
           continue
         }
 
