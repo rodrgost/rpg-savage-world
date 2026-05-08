@@ -95,5 +95,7 @@ export function logLlmResponse(tag: string, opts: {
 }
 
 export function logLlmError(tag: string, error: unknown): void {
-  writeLine(`✖ LLM ERROR [${tag}]  ${error instanceof Error ? error.message : String(error)}`)
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(`[${shortTimestamp()}] [LLM ERROR] [${tag}]`, message)
+  writeLine(`✖ LLM ERROR [${tag}]  ${message}`)
 }

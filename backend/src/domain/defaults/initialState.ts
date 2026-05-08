@@ -11,6 +11,7 @@ import {
 
 export type CharacterInput = {
   characterId: string
+  name?: string
   attributes?: Partial<SWAttributes>
   skills?: Record<string, DieType>
   edges?: string[]
@@ -61,6 +62,7 @@ export function createInitialState(params: { sessionId: string; campaignId: stri
     },
     player: {
       characterId: char?.characterId ?? '',
+      name: char?.name ?? '',
       attributes,
       skills,
       edges,

@@ -664,6 +664,22 @@ button:disabled {
   background: var(--accent-soft);
 }
 
+.msg.player .player-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.player-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--accent);
+  flex-shrink: 0;
+}
+
 .msg.narrator {
   border: none;
   background: none;

@@ -14,7 +14,8 @@ import {
   resetSession,
   removeInventoryItem,
   getWorld,
-  getCampaign
+  getCampaign,
+  getCharacter
 } from '../lib/api'
 import type { EnginePhaseData } from '../lib/api'
 import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, NarratorTurnResponse, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
@@ -355,18 +356,26 @@ function formatState(state: GameState): string {
 
 // ─── Components ───
 
-function NarrativeBubble({ message, isNew }: { message: ChatMessage; isNew?: boolean }) {
+function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerImage }: {
+  message: ChatMessage
+  isNew?: boolean
+  charsPerTick?: number
+  playerName?: string
+  playerImage?: { mimeType: string; base64: string } | null
+}) {
   const fullText = message.narrative ?? ''
-  const [displayedText, setDisplayedText] = useState(isNew ? '' : fullText)
+  const [displayedText, setDisplayedText] = useState(isNew && charsPerTick > 0 ? '' : fullText)
 
   useEffect(() => {
-    if (!isNew) return
+    if (!isNew || charsPerTick <= 0) {
+      setDisplayedText(fullText)
+      return
+    }
     setDisplayedText('')
     let index = 0
-    const CHARS_PER_TICK = 3
     const TICK_MS = 20
     const id = setInterval(() => {
-      index += CHARS_PER_TICK
+      index += charsPerTick
       if (index >= fullText.length) {
         setDisplayedText(fullText)
         clearInterval(id)
@@ -376,12 +385,21 @@ function NarrativeBubble({ message, isNew }: { message: ChatMessage; isNew?: boo
     }, TICK_MS)
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [message.messageId])
+  }, [message.messageId, isNew, charsPerTick])
 
   if (message.role === 'player') {
     return (
       <div className="msg player">
-        <strong>Você</strong>
+        <div className="player-header">
+          {playerImage && (
+            <img
+              className="player-avatar"
+              src={`data:${playerImage.mimeType};base64,${playerImage.base64}`}
+              alt={playerName ?? 'Jogador'}
+            />
+          )}
+          <strong>{playerName ?? 'Você'}</strong>
+        </div>
         <p>{message.playerInput}</p>
       </div>
     )
@@ -1295,6 +1313,9 @@ export function GamePage() {
   const [pendingDiceOption, setPendingDiceOption] = useState<ActionOption | null>(null)
   const [pendingValidation, setPendingValidation] = useState<{ input: string; validation: ValidateActionResponse } | null>(null)
   const [validating, setValidating] = useState(false)
+  const [playerImage, setPlayerImage] = useState<{ mimeType: string; base64: string } | null>(null)
+  const [playerName, setPlayerName] = useState<string | null>(null)
+  const [typewriterSpeed, setTypewriterSpeed] = useState<number>(3)
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
@@ -1379,6 +1400,16 @@ export function GamePage() {
         setState(payload.state)
         setSummary(payload.summary ?? null)
         pendingEngineMessagesRef.current.clear()
+        // Fetch character image for avatar
+        const characterId = payload.state?.player?.characterId
+        if (characterId) {
+          getCharacter(characterId)
+            .then((char) => {
+              setPlayerImage(char.image ?? null)
+              setPlayerName(char.name ?? null)
+            })
+            .catch(() => { /* avatar é opcional */ })
+        }
         const hydratedMessages = commitMessages(payload.messages ?? [])
         // Extract options from last narrator message
         const lastNarrator = [...hydratedMessages].reverse().find(
@@ -1429,10 +1460,10 @@ export function GamePage() {
     let narratorMsg: ChatMessage | null = null
     if (result.narratorResponse?.narrative) {
       const nr = result.narratorResponse
-      const alreadyPresent = msgs.some(
+      const existingMsg = msgs.find(
         (m) => m.role === 'narrator' && m.narrative === nr.narrative
       )
-      if (!alreadyPresent) {
+      if (!existingMsg) {
         narratorMsg = {
           messageId: `narrator-${Date.now()}`,
           sessionId: result.state.meta.sessionId,
@@ -1445,6 +1476,9 @@ export function GamePage() {
           statusChanges: nr.statusChanges
         }
         setLatestNarratorId(narratorMsg.messageId)
+      } else {
+        // Mensagem já veio do Firestore — ainda precisa disparar a animação
+        setLatestNarratorId(existingMsg.messageId)
       }
     }
 
@@ -1796,6 +1830,17 @@ export function GamePage() {
               >
                 ⚔️ Ações
               </button>
+              <select
+                className="subheader-btn"
+                value={typewriterSpeed}
+                onChange={(e) => setTypewriterSpeed(Number(e.target.value))}
+                title="Velocidade do narrador"
+              >
+                <option value={0}>⚡ Instantâneo</option>
+                <option value={1}>🐢 Lento</option>
+                <option value={3}>💬 Normal</option>
+                <option value={6}>🚀 Rápido</option>
+              </select>
               {bennies > 0 && (
                 <button
                   type="button"
@@ -1826,7 +1871,7 @@ export function GamePage() {
       <div className="chat-panel">
         <div className="chat-log">
           {displayMessages.map((msg, i) => (
-            <NarrativeBubble key={msg.messageId ?? `msg-${i}`} message={msg} isNew={msg.messageId === latestNarratorId} />
+            <NarrativeBubble key={msg.messageId ?? `msg-${i}`} message={msg} isNew={msg.messageId === latestNarratorId} charsPerTick={typewriterSpeed} playerName={playerName ?? state?.player.name} playerImage={playerImage} />
           ))}
           {loading && (
             <div className="msg narrator loading">

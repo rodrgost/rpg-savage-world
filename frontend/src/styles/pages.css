@@ -743,7 +743,9 @@
 }
 
 .card-image--character {
-  aspect-ratio: 16 / 7;
+  aspect-ratio: 3 / 4;
+  object-position: top center;
+  max-height: 280px;
 }
 
 /* ── Body ── */

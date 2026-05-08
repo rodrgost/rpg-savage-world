@@ -65,6 +65,7 @@ export interface GameState {
 
   player: {
     characterId: string
+    name: string
     attributes: SWAttributes
     skills: Record<string, DieType>
     edges: string[]

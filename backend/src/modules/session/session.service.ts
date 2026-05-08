@@ -837,6 +837,7 @@ export class SessionService {
       worldId: campaign.worldId,
       character: {
         characterId: params.characterId,
+        name: character.name ?? '',
         attributes: swAttributes,
         skills,
         edges,
@@ -1006,6 +1007,7 @@ export class SessionService {
       worldId: worldId,
       character: {
         characterId,
+        name: character.name ?? '',
         attributes: swAttributes,
         skills,
         edges,

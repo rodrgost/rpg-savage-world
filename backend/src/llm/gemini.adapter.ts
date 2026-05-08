@@ -479,6 +479,84 @@ const NAME_FALLBACK_POOL = [
 const CLASS_FALLBACK_POOL = ['Guerreiro', 'Arcanista', 'Patrulheiro', 'Ladino', 'Bardo', 'Clérigo']
 const PROFESSION_FALLBACK_POOL = ['Batedor', 'Cartógrafa', 'Mercenário', 'Erudita', 'Mensageiro', 'Caçadora']
 
+type CharacterCategory = 'fighter' | 'arcane' | 'rogue' | 'support'
+
+const APPEARANCE_BY_CATEGORY: Record<CharacterCategory, string[]> = {
+  fighter: [
+    'compleição robusta, cicatriz diagonal no queixo e olhar firme',
+    'ombros largos e mãos calejadas pelas batalhas, cabelos raspados nas laterais',
+    'estatura imponente, tatuagem tribal no antebraço esquerdo',
+    'cabelos curtos e escuros, nariz quebrado e expressão resoluta'
+  ],
+  arcane: [
+    'traços finos e olhos que parecem calcular tudo ao redor',
+    'cabelos longos antes do tempo grisalhos, dedos manchados de tinta arcana',
+    'estatura esguia, olhar distante e contemplativo, marcas de runa no pescoço',
+    'pele pálida, olhos escuros e expressão sempre analítica'
+  ],
+  rogue: [
+    'estatura baixa e ágil, olhar calculista e movimentos quase silenciosos',
+    'cabelos escuros e curtos, cicatriz fina no supercílio esquerdo',
+    'compleição magra e nervosa, sempre atento ao que acontece ao redor',
+    'rosto comum que facilmente se perde na multidão, olhos atentos'
+  ],
+  support: [
+    'cabelos longos e ruivos, rosto anguloso e gestos expressivos',
+    'pele bronzeada, porte elegante e mãos ágeis sempre com algo para anotar',
+    'olhos claros e penetrantes, postura ereta e ar de quem sabe mais do que diz',
+    'estatura mediana, traços marcantes e sorriso que nunca entrega os planos'
+  ]
+}
+
+const CLOTHING_BY_CATEGORY: Record<CharacterCategory, string[]> = {
+  fighter: [
+    'veste armadura de couro remendada com placas de metal nos ombros',
+    'usa cota de malha surrada sob um capote de viagem com remendos de batalha',
+    'porta proteções de couro reforçadas, sempre com a arma principal à mão',
+    'veste uniforme militar fora de uso, ainda conservado com disciplina'
+  ],
+  arcane: [
+    'usa robes de tecido escuro com bordados sutis nas mangas',
+    'veste túnica simples sobre calças práticas, carregando uma bolsa cheia de pergaminhos',
+    'porta manto de viagem com bolsos internos repletos de componentes e anotações',
+    'veste roupas comuns propositalmente modestas para não atrair atenção'
+  ],
+  rogue: [
+    'trajes escuros e práticos, cheios de bolsos ocultos e correias ajustáveis',
+    'usa roupas de viajante comum que escondem armadura leve sob o casaco',
+    'veste couro flexível escuro, silencioso ao menor movimento',
+    'roupas de tecido grosso com capuz sempre pronto para cobrir o rosto'
+  ],
+  support: [
+    'porta bolsa de couro repleta de mapas, instrumentos e anotações de campo',
+    'veste robes de estudioso com remendos nos cotovelos e manchas de tinta',
+    'usa vestes práticas para longas jornadas, com espaço para livros e ferramentas',
+    'carrega um cajado de viagem e veste roupas resistentes mas sem ostentação'
+  ]
+}
+
+const PERSONALITY_POOL = [
+  'reservado, mas incondicionalmente leal a quem conquista sua confiança',
+  'impulsivo e movido pela adrenalina do momento',
+  'calculista — nunca age sem avaliar os riscos antes',
+  'curioso e determinado a desvendar segredos ocultos',
+  'sarcástico por fora, profundamente compassivo por dentro',
+  'pragmático e direto, sem paciência para rodeios',
+  'idealista que ainda acredita que o bem pode prevalecer',
+  'desconfiado com estranhos, mas honrado com aliados'
+]
+
+function resolveCharacterCategory(characterClass: string, profession: string): CharacterCategory {
+  const key = (characterClass + ' ' + profession)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  if (/guerreir|patrulheir|ca[cç]ador|mercen|batalh|soldad|cavalei/.test(key)) return 'fighter'
+  if (/arcani|mago|brux|feiticei|bardo|cleric|curand|druida/.test(key)) return 'arcane'
+  if (/ladino|assassin|bateador|batedor|espi|mensageir|ladr/.test(key)) return 'rogue'
+  return 'support'
+}
+
 function pickRandom<T>(items: T[], fallback: T): T {
   if (!items.length) return fallback
   const index = Math.floor(Math.random() * items.length)
@@ -523,7 +601,11 @@ function diversifySuggestedCharacter(input: SuggestedCharacter): SuggestedCharac
   }
 
   if (!output.description.trim()) {
-    output.description = `${output.name} é ${output.profession.toLowerCase()} de perfil ${output.characterClass.toLowerCase()}, em busca de um lugar no conflito central do mundo.`
+    const category = resolveCharacterCategory(output.characterClass, output.profession)
+    const appearance = pickRandom(APPEARANCE_BY_CATEGORY[category], 'olhos firmes e postura determinada')
+    const clothing = pickRandom(CLOTHING_BY_CATEGORY[category], 'usa roupas práticas de viagem')
+    const personality = pickRandom(PERSONALITY_POOL, 'determinado a encontrar seu lugar no mundo')
+    output.description = `${output.name} é ${output.profession.toLowerCase()} de perfil ${output.characterClass.toLowerCase()}, com ${appearance}. ${clothing.charAt(0).toUpperCase() + clothing.slice(1)}. ${personality.charAt(0).toUpperCase() + personality.slice(1)}.`
   }
 
   return output
@@ -1581,11 +1663,13 @@ export class GeminiAdapter implements Narrator {
       '  "race": "<raça/espécie coerente com a temática>",',
       '  "characterClass": "<classe do personagem>",',
       '  "profession": "<profissão ou ofício>",',
-      '  "description": "<OBRIGATÓRIO: 1 ou 2 frases descrevendo aparência, motivação e papel do personagem no contexto do mundo>"',
+      '  "description": "<OBRIGATÓRIO: 2 a 3 frases cobrindo: (1) um traço visual marcante — ex: cor/estilo do cabelo, olhos, compleição, cicatriz ou detalhe físico; (2) vestimenta ou equipamento típico; (3) um traço de personalidade dominante e a motivação central do personagem>"',
       '}',
-      'IMPORTANTE: o campo "description" é OBRIGATÓRIO e deve conter 1-2 frases descritivas. Nunca retorne description vazio.',
-      'Cada campo deve ter no máximo 100 caracteres, exceto description que pode ter até 200 caracteres.',
-      'Todos os campos devem ser strings curtas em português do Brasil.'
+      'IMPORTANTE: o campo "description" é OBRIGATÓRIO. Nunca retorne description vazio ou genérico.',
+      'A description DEVE ser coerente com characterClass e profession: um Guerreiro tem compleição de combatente e usa armadura/equipamento de batalha; um Arcanista/Clérigo/Bardo usa vestes ou mantos; um Ladino/Batedor usa roupas discretas e leves.',
+      'A description DEVE incluir detalhes visuais concretos (aparência física + roupa/equipamento coerentes com a classe) E um traço de personalidade claro.',
+      'Cada campo deve ter no máximo 100 caracteres, exceto description que pode ter até 280 caracteres.',
+      'Todos os campos devem ser strings em português do Brasil.'
     ].join('\n')
 
     const prompt = [
@@ -1629,8 +1713,8 @@ export class GeminiAdapter implements Narrator {
         'RACA: <raça ou espécie>',
         'CLASSE: <classe do personagem>',
         'PROFISSAO: <profissão ou ofício>',
-        'DESCRICAO: <OBRIGATÓRIO: 1-2 frases descrevendo aparência, motivação e papel do personagem>',
-        'IMPORTANTE: a linha DESCRICAO é obrigatória e NÃO pode ficar vazia.',
+        'DESCRICAO: <OBRIGATÓRIO: 2-3 frases com: traço visual marcante (cabelo/olhos/compleição/cicatriz), vestimenta ou equipamento típico COERENTE com a classe (guerreiro = armadura, arcanista = vestes/mantos, ladino = roupas discretas), e traço de personalidade + motivação>',
+        'IMPORTANTE: DESCRICAO é obrigatória, NÃO pode ficar vazia e DEVE ser coerente com a CLASSE e a PROFISSÃO informadas.',
         'NÃO use os nomes Kael, Khael, Kaell, Cael.'
       ].join('\n')
 
@@ -1677,13 +1761,15 @@ export class GeminiAdapter implements Narrator {
       'Você é o Narrador de um RPG Savage Worlds. Responda em português do Brasil, sempre em segunda pessoa do singular ("Você entra...", "Você vê...").',
       '',
       '━━━ REGRA PRINCIPAL DO CAMPO "narrative" ━━━',
-      'Escreva APENAS o resultado concreto e direto da ação que o jogador escolheu. Máximo 2 a 3 frases. Tom direto, sem floreios.',
+      'Escreva APENAS o resultado concreto e direto da ação que o jogador escolheu. Máximo 2 a 3 frases.',
+      'FOCO e EXTENSÃO são fixos: sem divagações, sem recapitulações, sem conclusões editoriais.',
+      'TOM e VOCABULÁRIO devem seguir a atmosfera do universo (ver seção VOZ NARRATIVA mais abaixo, se presente).',
       '',
       'ESCREVA: o que fisicamente aconteceu como consequência desta ação específica.',
       'NÃO ESCREVA:',
       '  • o que não mudou: "a noite continua escura", "tudo permanece quieto", "a estrada segue deserta"',
       '  • ausência de coisas: "sem ameaças à vista", "o perigo ficou para trás", "nenhum som suspeito"',
-      '  • atmosfera genérica: "o vento sopra", "sons distantes da natureza", "o silêncio pesa"',
+      '  • atmosfera genérica descontextualizada: "o vento sopra", "sons distantes da natureza", "o silêncio pesa"',
       '  • status mecânicos: "Abalado", "Ferido", "Fadiga" — use palavras narrativas se relevante ("o braço lateja", "sua visão embaça")',
       '  • estado emocional de NPC repetido do turno anterior sem mudança: "ainda está assustado", "permanece calado"',
       '  • ações além das que o jogador escolheu: NPCs não se movem, não entram em veículos, não tomam decisões sozinhos',
@@ -1842,6 +1928,22 @@ export class GeminiAdapter implements Narrator {
         `Nome: ${world.name ?? 'Sem nome'}`,
         ...(world.description ? [`Descrição: ${world.description}`] : []),
         ...(world.lore ? ['', world.lore] : [])
+      )
+
+      // Instrução de voz narrativa baseada no lore do universo
+      lines.push(
+        '',
+        '=== VOZ NARRATIVA (leia antes de escrever qualquer "narrative") ===',
+        'Antes de redigir o campo "narrative" de cada turno, faça internamente os seguintes passos:',
+        '1. Releia a seção "## Atmosfera e Tom" do universo acima.',
+        '2. Identifique: qual é o humor emocional dominante? Que tensão ou sensação essa atmosfera evoca? Que tipo de imagens e palavras aparecem nela?',
+        '3. Use essas referências ESPECÍFICAS — não estereótipos de gênero — para calibrar o vocabulário do turno atual.',
+        '',
+        'Restrições obrigatórias para o campo "narrative":',
+        '- Tom neutro de livro de regras é PROIBIDO. A narrativa deve ter o sotaque deste universo.',
+        '- Nunca use linguagem genérica de RPG ("você avança corajosamente", "o inimigo é derrotado"). Prefira imagens concretas do mundo.',
+        '- Se o universo tem atmosfera de decadência, use decadência — palavras gastas, ferrugem, silêncios. Se tem grandiosidade, use grandiosidade — escala, mito, peso.',
+        '- A voz narrativa deve ser sentida na escolha de palavras e metáforas, nunca declarada.'
       )
     }
 
@@ -2087,6 +2189,15 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
+    // Garantir que toda opção tenha diceCheck com reason não-vazio (requisito estrutural)
+    for (const option of options) {
+      if (!option.diceCheck) {
+        option.diceCheck = { required: false, skill: null, attribute: null, modifier: 0, tn: 4, reason: 'Ação narrativa sem teste de dados' }
+      } else if (!option.diceCheck.reason.trim()) {
+        option.diceCheck = { ...option.diceCheck, reason: option.diceCheck.required ? 'Teste necessário para a ação' : 'Ação sem custo mecânico' }
+      }
+    }
+
     // Parse NPCs
     const rawNpcs = Array.isArray(raw.npcs) ? raw.npcs : []
     const npcs: NPCMention[] = rawNpcs.map((n: unknown) => {
@@ -2276,7 +2387,7 @@ export class GeminiAdapter implements Narrator {
           continue
         }
 
-        if (parsed.source !== 'direct' && parsed.source !== 'fragment') {
+        if (parsed.source !== 'direct' && parsed.source !== 'fragment' && parsed.source !== 'repaired') {
           lastError = new Error(`Resposta narrativa recuperada via ${parsed.source}`)
           warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: rejecting parse source ${parsed.source}`)
           continue
@@ -2685,6 +2796,7 @@ export class GeminiAdapter implements Narrator {
       )
     } catch (error) {
       logLlmError('narrateTurn', error)
+      warn('narrateTurn', `Fallback ativado: ${error instanceof Error ? error.message : String(error)}`)
       return {
         isFallback: true,
         narrative: `Sua ação ecoa no ambiente. As consequências ainda não são claras, mas o mundo ao redor reage de formas sutis. O que fará agora?`,
