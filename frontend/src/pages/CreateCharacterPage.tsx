@@ -446,12 +446,12 @@ export function CreateCharacterPage({ uid }: Props) {
             {selectedCampaignId && (
               <div className="form-row-2">
                 <button
-                  className="button-secondary"
+                  className="btn-ai-gen"
                   disabled={suggestLoading}
                   onClick={handleSuggest}
                   type="button"
                 >
-                  {suggestLoading ? 'Gerando sugestão...' : '✨ Sugerir pela IA'}
+                  {suggestLoading ? <><span className="btn-ai-spinner" /> Gerando sugestão…</> : '✨ Sugerir pela IA'}
                 </button>
                 {(name || gender || race || characterClass || profession || description) && (
                   <button
@@ -518,13 +518,13 @@ export function CreateCharacterPage({ uid }: Props) {
               </div>
             )}
             <button
-              className="button-secondary button-full"
+              className="btn-ai-gen button-full"
               disabled={imageLoading || !selectedCampaignId || !profession || !characterClass}
               onClick={handleImagePreview}
               type="button"
               style={{ marginTop: image ? 'var(--space-3)' : 0 }}
             >
-              {imageLoading ? 'Gerando imagem...' : '🖼️ Gerar imagem com IA'}
+              {imageLoading ? <><span className="btn-ai-spinner" /> Gerando imagem…</> : '🖼️ Gerar imagem com IA'}
             </button>
           </div>
         </div>

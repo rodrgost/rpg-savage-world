@@ -651,72 +651,188 @@ button:disabled {
   padding-right: 6px;
 }
 
+/* ─── Turn Separator ─── */
+.turn-separator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  pointer-events: none;
+}
+
+.turn-separator::before,
+.turn-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-subtle), transparent);
+}
+
+.turn-separator-label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+/* ─── Chat Empty State ─── */
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  opacity: 0.7;
+}
+
+.chat-empty-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(74, 108, 247, 0.4));
+}
+
+.chat-empty-text {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-style: italic;
+  max-width: 30ch;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ─── Base message ─── */
 .msg {
   padding: var(--space-3) 0;
   border-radius: 0;
   border: none;
   background: none;
+  animation: fadeInUp 200ms ease both;
 }
 
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Player message (balão direita) ─── */
 .msg.player {
-  border-left: 3px solid var(--accent);
-  padding-left: var(--space-3);
-  background: var(--accent-soft);
+  display: flex;
+  justify-content: flex-end;
+  padding-left: var(--space-8);
   padding-right: 0;
+  background: none;
+  border: none;
 }
 
 .msg.player .player-content {
   display: flex;
   align-items: stretch;
   gap: 0;
+  max-width: 85%;
+  border-radius: var(--radius-md) 0 var(--radius-md) var(--radius-md);
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(74, 108, 247, 0.18) 0%, rgba(61, 90, 254, 0.10) 100%);
+  border: 1px solid rgba(74, 108, 247, 0.28);
+  box-shadow: 0 2px 12px rgba(61, 90, 254, 0.12);
 }
 
 .msg.player .player-text {
   flex: 1;
   min-width: 0;
-  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  padding: var(--space-3) var(--space-3);
 }
 
 .msg.player .player-text strong {
   display: block;
   margin-bottom: 4px;
+  font-size: var(--font-xs);
+  font-variant: small-caps;
+  color: var(--accent);
+  letter-spacing: 0.06em;
 }
 
 .msg.player .player-text p {
   margin: 0;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  line-height: 1.5;
 }
 
 .player-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 0 4px 4px 0;
+  width: 64px;
+  border-radius: 0;
   object-fit: cover;
   object-position: top center;
-  border-left: 2px solid var(--accent);
+  border-left: 1px solid rgba(74, 108, 247, 0.3);
   flex-shrink: 0;
   align-self: stretch;
-  height: auto;
-  min-height: 72px;
+  min-height: 60px;
 }
 
+/* ─── Narrator message (atmosférico) ─── */
 .msg.narrator {
-  border: none;
-  background: none;
+  border-left: 3px solid #c9963a;
+  padding-left: var(--space-4);
+  background: linear-gradient(90deg, rgba(201, 150, 58, 0.05) 0%, transparent 60%);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.msg.narrator strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--font-xs);
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  color: #c9963a;
+  opacity: 0.85;
+  margin-bottom: var(--space-2);
 }
 
 .msg.narrator .narrative-text p {
-  margin: 0 0 8px;
-  line-height: 1.6;
+  margin: 0 0 10px;
+  line-height: 1.75;
+  font-size: var(--font-md);
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
 }
 
 .msg.narrator .narrative-text p:last-child {
   margin-bottom: 0;
 }
 
-.msg.loading .typing-indicator {
-  font-style: italic;
-  color: var(--text-secondary);
-  animation: pulse 1.5s ease-in-out infinite;
+/* ─── Loading / Typing Indicator ─── */
+.msg.loading {
+  border-left: 3px solid rgba(201, 150, 58, 0.35);
+  padding-left: var(--space-4);
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-1) 0;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c9963a;
+  opacity: 0.4;
+  animation: typingBlink 1.2s ease-in-out infinite;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBlink {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+  40%           { opacity: 1;    transform: scale(1); }
 }
 
 @keyframes pulse {
@@ -795,47 +911,93 @@ button:disabled {
 
 /* ─── Action Options ─── */
 .action-options {
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
 }
 
-.action-options h4 {
-  margin: 0 0 6px;
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
+.action-options-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.action-options-title::before,
+.action-options-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
 }
 
 .options-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: var(--space-2);
 }
 
+.options-grid--single    { grid-template-columns: 1fr; }
+.options-grid--double    { grid-template-columns: 1fr 1fr; }
+.options-grid--quad      { grid-template-columns: 1fr 1fr; }
+
 .option-btn {
   text-align: left;
-  padding: 8px var(--space-2);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.02);
+  padding: 12px var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: linear-gradient(135deg, rgba(22, 27, 40, 0.96) 0%, rgba(15, 19, 30, 0.98) 100%);
   cursor: pointer;
-  transition: all 150ms ease;
+  transition: all 180ms ease;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
+  position: relative;
+  overflow: hidden;
+}
+
+.option-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 180ms ease;
 }
 
 .option-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: rgba(74, 108, 247, 0.55);
+  background: linear-gradient(135deg, rgba(74, 108, 247, 0.1) 0%, rgba(22, 27, 40, 0.98) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(61, 90, 254, 0.15);
+}
+
+.option-btn:hover:not(:disabled)::before {
+  opacity: 1;
 }
 
 .option-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .option-btn.infeasible {
-  opacity: 0.5;
+  opacity: 0.4;
   border-style: dashed;
+  border-color: var(--border-subtle);
+}
+
+.option-btn.infeasible .option-text {
+  text-decoration: line-through;
+  text-decoration-color: rgba(255,255,255,0.3);
 }
 
 /* ─── System Summary Message ─── */
@@ -889,14 +1051,19 @@ button:disabled {
 
 /* ─── Dice Check Badge on Option Buttons ─── */
 .option-btn.has-dice-check {
-  border-color: #f59e0b;
-  border-width: 2px;
-  background: linear-gradient(135deg, var(--bg-field) 0%, rgba(245, 158, 11, 0.06) 100%);
+  border-color: rgba(245, 158, 11, 0.45);
+  border-width: 1px;
+  background: linear-gradient(135deg, rgba(18, 14, 6, 0.98) 0%, rgba(245, 158, 11, 0.07) 100%);
+}
+
+.option-btn.has-dice-check::before {
+  background: #f59e0b;
 }
 
 .option-btn.has-dice-check:hover:not(:disabled) {
   border-color: #d97706;
-  background: linear-gradient(135deg, var(--accent-soft) 0%, rgba(245, 158, 11, 0.12) 100%);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(22, 14, 4, 0.98) 100%);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.18);
 }
 
 .dice-check-badge {
@@ -1053,29 +1220,36 @@ button:disabled {
 
 /* ─── Dice Result Card (inline no chat) ─── */
 .dice-events-block {
-  margin: 8px 0;
+  margin: 10px 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--border-default);
+  background: rgba(255,255,255,0.015);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
 .dice-result-card {
-  border-radius: var(--radius-sm, 8px);
+  border-radius: var(--radius-sm);
   padding: 12px 16px;
-  margin: 4px 0;
+  margin: 2px 0;
   border-left: 4px solid #6b7280;
-  background: rgba(255, 255, 255, 0.03);
-  animation: slideUp 200ms ease;
+  background: rgba(255, 255, 255, 0.025);
+  animation: slideUp 220ms ease;
+  transition: box-shadow 200ms ease;
 }
 
 .dice-result-card.dice-success {
   border-left-color: #22c55e;
   background: rgba(34, 197, 94, 0.06);
+  box-shadow: inset 4px 0 16px rgba(34, 197, 94, 0.06), 0 2px 8px rgba(34, 197, 94, 0.08);
 }
 
 .dice-result-card.dice-failure {
   border-left-color: #ef4444;
   background: rgba(239, 68, 68, 0.06);
+  box-shadow: inset 4px 0 16px rgba(239, 68, 68, 0.06), 0 2px 8px rgba(239, 68, 68, 0.08);
 }
 
 .dice-result-header {
@@ -1145,22 +1319,24 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 6px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.08);
-  font-size: var(--font-sm);
+  font-size: var(--font-base);
   font-weight: 700;
-  color: var(--text-primary, #e5e5e5);
+  color: var(--text-primary);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: box-shadow 150ms ease;
 }
 
 .dice-value.aced {
-  background: rgba(245, 158, 11, 0.15);
+  background: rgba(245, 158, 11, 0.18);
   border-color: #f59e0b;
   color: #f59e0b;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.2);
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
+  transform: scale(1.08);
 }
 
 .dice-roll-total {
@@ -1970,6 +2146,108 @@ button:disabled {
 .btn-reset-story:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Confirmação inline de reset */
+.sidebar-confirm-reset {
+  animation: fadeInUp 180ms ease;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.07);
+}
+
+.sidebar-confirm-text {
+  font-size: var(--font-xs);
+  color: #fca5a5;
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+.sidebar-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-confirm-cancel {
+  flex: 1;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.btn-confirm-cancel:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--text-primary);
+}
+
+.btn-confirm-danger {
+  flex: 1;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.btn-confirm-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.28);
+  border-color: #ef4444;
+}
+
+.btn-confirm-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Confirmação inline de descartar item */
+.inv-item-confirm {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.inv-confirm-yes {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.inv-confirm-yes:hover { background: rgba(239, 68, 68, 0.25); }
+
+.inv-confirm-no {
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.inv-confirm-no:hover { color: var(--text-primary); }
+
+.inv-confirm-text {
+  font-size: var(--font-xs);
+  color: #fca5a5;
+  margin: 4px 0 2px;
+  font-style: italic;
 }
 
 /* ─── Sidebar Responsive ─── */

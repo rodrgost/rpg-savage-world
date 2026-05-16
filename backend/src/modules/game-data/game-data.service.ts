@@ -37,9 +37,10 @@ function buildUniverseImagePrompt(params: { name: string; visualDescription?: st
     'Create a cinematic illustrated key art.',
     `Setting anchor: world name "${worldName || 'Unnamed world'}".`,
     ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
-    'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, mood and visual storytelling driven by the setting itself.',
-    'Cover art reference: if the world name evokes a well-known film, TV series, game, comic, or book franchise, evoke the visual style, color palette, and composition of its official cover art or poster — without reproducing protected characters, real actors, recognizable faces, logos, titles, or trademarks.',
-    'Restrictions: no text, no title, no logos, no watermarks, no UI, no typography, no close-up faces, no characters as the main subject.'
+    'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, mood and visual storytelling — the ENTIRE image must be driven by the theme and aesthetic of this setting.',
+    'Cover art reference: if the world name evokes a well-known film, TV series, game, comic, or book franchise, base the ENTIRE image — palette, atmosphere, lighting, composition, and visual style — on the aesthetic of its official cover art or poster. The thematic reference defines everything: color grading, environmental design, mood, and art direction.',
+    `Title integration: render ONLY the exact name "${worldName}" — no subtitles, no taglines, no extra words. Style it as a book cover or movie poster title: typography, placement, size, and decorative elements must match the setting's visual identity and theme. Keep ALL title text strictly within the central 80% of the image (safe zone), never touching or crossing any edge.`,
+    'Restrictions: no logos, no watermarks, no UI, no close-up faces, no characters as the main subject, no external trademarks or copyright marks.'
   ].join('\n')
 }
 

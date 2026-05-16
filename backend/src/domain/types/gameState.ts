@@ -61,6 +61,8 @@ export interface GameState {
     worldId?: string
     turn: number
     chapter: number
+    narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+    simpleVocabulary?: boolean
   }
 
   player: {

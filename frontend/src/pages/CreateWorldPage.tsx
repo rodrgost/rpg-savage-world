@@ -176,11 +176,12 @@ export function CreateWorldPage({ uid }: Props) {
 
         {(!isEditMode || isOwner) && (
           <button
+            className="btn-ai-gen"
             disabled={imageLoading || loreLoading || loading || !name.trim()}
             onClick={handleGenerateImage}
             type="button"
           >
-            {imageLoading ? 'Gerando imagem...' : 'Gerar imagem do universo'}
+            {imageLoading ? <><span className="btn-ai-spinner" /> Gerando imagem…</> : '🎨 Gerar imagem do universo'}
           </button>
         )}
 
@@ -236,8 +237,8 @@ export function CreateWorldPage({ uid }: Props) {
           )}
 
           {isOwner && (
-            <button disabled={loreLoading || imageLoading || loading} onClick={handleGenerateLore} type="button">
-              {loreLoading ? 'Gerando lore com IA...' : loading && !isEditMode ? 'Salvando e gerando lore...' : '✨ Gerar / expandir lore com IA'}
+            <button className="btn-ai-gen" disabled={loreLoading || imageLoading || loading} onClick={handleGenerateLore} type="button">
+              {loreLoading ? <><span className="btn-ai-spinner" /> Gerando lore…</> : '✨ Gerar / expandir lore com IA'}
             </button>
           )}
         </div>

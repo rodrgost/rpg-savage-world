@@ -10,6 +10,7 @@ type NormalizeOptions = {
   height: number
   quality?: number
   maxBase64Chars?: number
+  fit?: 'cover' | 'contain' | 'fill' | 'inside' | 'outside'
 }
 
 function isProbablyBase64(value: string): boolean {
@@ -30,7 +31,7 @@ export async function normalizeToWebp(input: StoredImage, options: NormalizeOpti
   const attempts: number[] = [options.quality ?? 70, 60, 50]
   for (const quality of attempts) {
     const buffer = await sharp(source)
-      .resize(targetWidth, targetHeight, { fit: 'cover' })
+      .resize(targetWidth, targetHeight, { fit: options.fit ?? 'cover' })
       .webp({ quality })
       .toBuffer()
 

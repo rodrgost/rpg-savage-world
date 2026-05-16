@@ -762,7 +762,7 @@ export class SessionService {
     return legacyCandidate.sessionId
   }
 
-  async createSession(params: { ownerId: string; campaignId: string; characterId: string }) {
+  async createSession(params: { ownerId: string; campaignId: string; characterId: string; narrativeStyle?: 'concise' | 'balanced' | 'theatrical'; simpleVocabulary?: boolean }) {
     const campaign = await this.campaigns.get(params.campaignId)
     if (!campaign) throw new NotFoundException('Campanha não encontrada')
     if (campaign.ownerId !== params.ownerId && campaign.visibility !== 'public') {
@@ -799,6 +799,8 @@ export class SessionService {
         characterId: params.characterId,
         worldId: campaign.worldId,
         resumeKey,
+        ...(params.narrativeStyle ? { narrativeStyle: params.narrativeStyle } : {}),
+        ...(params.simpleVocabulary !== undefined ? { simpleVocabulary: params.simpleVocabulary } : {}),
         createdAt: FieldValue.serverTimestamp()
       })
 
@@ -835,6 +837,8 @@ export class SessionService {
       sessionId,
       campaignId: params.campaignId,
       worldId: campaign.worldId,
+      narrativeStyle: params.narrativeStyle,
+      simpleVocabulary: params.simpleVocabulary,
       character: {
         characterId: params.characterId,
         name: character.name ?? '',
@@ -866,7 +870,9 @@ export class SessionService {
           description: character.description,
           edges,
           hindrances: hindrances.map((h) => ({ name: h.name, severity: h.severity }))
-        }
+        },
+        narrativeStyle: params.narrativeStyle,
+        simpleVocabulary: params.simpleVocabulary
       }),
       state,
       mode: 'start'
@@ -956,6 +962,8 @@ export class SessionService {
     const worldId = sessionData.worldId as string | undefined
     const campaignId = sessionData.campaignId as string
     const characterId = sessionData.characterId as string
+    const narrativeStyle = sessionData.narrativeStyle as 'concise' | 'balanced' | 'theatrical' | undefined
+    const simpleVocabulary = typeof sessionData.simpleVocabulary === 'boolean' ? sessionData.simpleVocabulary : undefined
 
     // ── Apagar subcollections ──
     const subcollections = ['messages', 'snapshots', 'events', '_meta']
@@ -1005,6 +1013,8 @@ export class SessionService {
       sessionId: params.sessionId,
       campaignId: campaignId ?? '',
       worldId: worldId,
+      narrativeStyle,
+      simpleVocabulary,
       character: {
         characterId,
         name: character.name ?? '',
@@ -1038,7 +1048,9 @@ export class SessionService {
           description: character.description,
           edges,
           hindrances: hindrances.map((h) => ({ name: h.name, severity: h.severity }))
-        }
+        },
+        narrativeStyle,
+        simpleVocabulary
       }),
       state,
       mode: 'start'
@@ -1248,7 +1260,9 @@ export class SessionService {
           playerSkills: context.stateBrief.playerSkills,
           rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors)
         },
-        recentMessages: context.recentMessages
+        recentMessages: context.recentMessages,
+        narrativeStyle: result.nextState.meta.narrativeStyle,
+        simpleVocabulary: result.nextState.meta.simpleVocabulary
       }),
       state: result.nextState,
       mode: 'turn',

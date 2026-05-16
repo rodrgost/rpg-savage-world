@@ -65,16 +65,31 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
 
   return (
     <section className="panel page-character">
-      <h2>Personagens</h2>
-
-      <div className="row">
-        <button onClick={() => navigate('/characters/new')} type="button">
-          Criar personagem novo
+      <div className="page-list-header">
+        <span className="page-list-icon">🧙</span>
+        <div>
+          <h2>Personagens</h2>
+          <p className="page-list-subtitle muted">Fichas, atributos e a porta de entrada para a sessão.</p>
+        </div>
+        <button onClick={() => navigate('/characters/new')} type="button" className="page-list-cta">
+          + Criar personagem
         </button>
       </div>
 
-      {!loading && !characters.length && <p className="muted">Nenhum personagem cadastrado ainda.</p>}
-      {loading && <p className="muted">Carregando personagens...</p>}
+      {loading && (
+        <div className="list-skeleton">
+          {[1,2,3].map(i => <div key={i} className="skeleton-card skeleton-card--tall" />)}
+        </div>
+      )}
+
+      {!loading && !characters.length && (
+        <div className="list-empty-state">
+          <span className="list-empty-icon">🧙</span>
+          <p className="list-empty-title">Nenhum personagem ainda</p>
+          <p className="list-empty-sub">Crie um personagem vinculado a uma campanha para começar a jogar.</p>
+          <button type="button" onClick={() => navigate('/characters/new')}>+ Criar primeiro personagem</button>
+        </div>
+      )}
 
       <div className="character-card-grid">
         {characters.map((character) => {
@@ -202,7 +217,11 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                       handlePlay(character)
                     }}
                   >
-                    {startingId === character.id ? 'Abrindo…' : '▶ Jogar'}
+                    {startingId === character.id ? (
+                      <><span className="btn-play-spinner" />Abrindo…</>
+                    ) : (
+                      <>▶ Jogar</>
+                    )}
                   </button>
                 ) : (
                   <span className="badge badge--muted">Somente leitura</span>

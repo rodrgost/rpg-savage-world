@@ -29,16 +29,31 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
 
   return (
     <section className="panel page-worlds">
-      <h2>Universos</h2>
-
-      <div className="row">
-        <button onClick={() => navigate('/worlds/new')} type="button">
-          Criar novo universo
+      <div className="page-list-header">
+        <span className="page-list-icon">🌍</span>
+        <div>
+          <h2>Universos</h2>
+          <p className="page-list-subtitle muted">Cenários, lore e imagens-base para suas campanhas.</p>
+        </div>
+        <button onClick={() => navigate('/worlds/new')} type="button" className="page-list-cta">
+          + Criar universo
         </button>
       </div>
 
-      {!loading && !worlds.length && <p className="muted">Nenhum universo visível ainda.</p>}
-      {loading && <p className="muted">Carregando universos...</p>}
+      {loading && (
+        <div className="list-skeleton">
+          {[1,2,3].map(i => <div key={i} className="skeleton-card" />)}
+        </div>
+      )}
+
+      {!loading && !worlds.length && (
+        <div className="list-empty-state">
+          <span className="list-empty-icon">🌍</span>
+          <p className="list-empty-title">Nenhum universo ainda</p>
+          <p className="list-empty-sub">Crie seu primeiro cenário para depois montar campanhas e personagens.</p>
+          <button type="button" onClick={() => navigate('/worlds/new')}>+ Criar primeiro universo</button>
+        </div>
+      )}
 
       <div className="world-card-grid">
         {worlds.map((world) => {

@@ -6,7 +6,9 @@ import { CurrentUser } from '../../auth/current-user.decorator.js'
 
 const StartSessionBody = z.object({
   campaignId: z.string().min(1),
-  characterId: z.string().min(1)
+  characterId: z.string().min(1),
+  narrativeStyle: z.enum(['concise', 'balanced', 'theatrical']).optional(),
+  simpleVocabulary: z.boolean().optional()
 })
 
 const ActionSchema = z.discriminatedUnion('type', [
@@ -51,7 +53,9 @@ export class SessionController {
     return await this.sessions.createSession({
       ownerId: userId,
       campaignId: parsed.campaignId,
-      characterId: parsed.characterId
+      characterId: parsed.characterId,
+      narrativeStyle: parsed.narrativeStyle,
+      simpleVocabulary: parsed.simpleVocabulary
     })
   }
 

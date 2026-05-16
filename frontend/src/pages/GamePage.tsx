@@ -440,7 +440,7 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
 
   return (
     <div className="msg narrator">
-      <strong>Narrador</strong>
+      <strong>📖 Narrador</strong>
       <div className="narrative-text">
         {splitNarrativeParagraphs(displayedText).map((paragraph, i) => (
           <p key={i}>{paragraph}</p>
@@ -505,17 +505,23 @@ function ActionOptions({
 }) {
   if (!options.length) return null
 
+  const gridClass =
+    options.length === 1 ? 'options-grid--single' :
+    options.length === 2 ? 'options-grid--double' :
+    'options-grid--quad'
+
   return (
     <div className="action-options">
-      <h4>O que deseja fazer?</h4>
-      <div className="options-grid">
-        {options.map((option) => {
+      <p className="action-options-title">O que farás?</p>
+      <div className={`options-grid ${gridClass}`}>
+        {options.map((option, idx) => {
           const dc = option.diceCheck
           const hasDice = dc?.required === true
           const trait = resolveDiceCheckTrait(dc, option.actionPayload)
           return (
             <button
               key={option.id}
+              style={{ animationDelay: `${idx * 55}ms` }}
               className={`option-btn ${!option.feasible ? 'infeasible' : ''} ${hasDice ? 'has-dice-check' : ''}`}
               onClick={() => onChoose(option.id)}
               disabled={disabled || !option.feasible}
@@ -1040,6 +1046,7 @@ function CharacterSidebar({
   onRemoveItem?: (itemId: string) => void
 }) {
   const [tab, setTab] = useState<SidebarTab>('status')
+  const [confirmReset, setConfirmReset] = useState(false)
 
   if (!open) return null
   const p = state?.player
@@ -1087,18 +1094,37 @@ function CharacterSidebar({
 
         {/* Botão de reiniciar história */}
         <div className="sidebar-footer">
-          <button
-            type="button"
-            className="btn-reset-story"
-            disabled={resetting}
-            onClick={() => {
-              if (window.confirm('Tem certeza? Todo o progresso da história será perdido e uma nova aventura começará.')) {
-                onReset()
-              }
-            }}
-          >
-            {resetting ? '↻ Reiniciando...' : '🔄 Reiniciar História'}
-          </button>
+          {confirmReset ? (
+            <div className="sidebar-confirm-reset">
+              <p className="sidebar-confirm-text">Todo o progresso será perdido. Tem certeza?</p>
+              <div className="sidebar-confirm-actions">
+                <button
+                  type="button"
+                  className="btn-confirm-cancel"
+                  onClick={() => setConfirmReset(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn-confirm-danger"
+                  disabled={resetting}
+                  onClick={() => { setConfirmReset(false); onReset() }}
+                >
+                  {resetting ? '↻ Reiniciando...' : 'Sim, reiniciar'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn-reset-story"
+              disabled={resetting}
+              onClick={() => setConfirmReset(true)}
+            >
+              {resetting ? '↻ Reiniciando...' : '🔄 Reiniciar História'}
+            </button>
+          )}
         </div>
       </aside>
     </>
@@ -1196,6 +1222,7 @@ function SidebarSkills({ player: p }: { player: GameState['player'] }) {
 }
 
 function SidebarInventory({ items, onRemove }: { items: InventoryItem[]; onRemove?: (itemId: string) => void }) {
+  const [confirmId, setConfirmId] = useState<string | null>(null)
   if (!items.length) return <p className="muted">Mochila vazia</p>
 
   return (
@@ -1207,19 +1234,20 @@ function SidebarInventory({ items, onRemove }: { items: InventoryItem[]; onRemov
             <span className="inv-item-header-right">
               {item.quantity > 1 && <span className="inv-item-qty">x{item.quantity}</span>}
               {onRemove && (
-                <button
-                  type="button"
-                  className="inv-item-remove"
-                  title="Descartar item"
-                  onClick={() => {
-                    if (window.confirm(`Descartar "${item.name}"?`)) onRemove(item.id)
-                  }}
-                >
-                  🗑️
-                </button>
+                confirmId === item.id ? (
+                  <span className="inv-item-confirm">
+                    <button type="button" className="inv-confirm-yes" onClick={() => { setConfirmId(null); onRemove(item.id) }}>Descartar</button>
+                    <button type="button" className="inv-confirm-no" onClick={() => setConfirmId(null)}>✕</button>
+                  </span>
+                ) : (
+                  <button type="button" className="inv-item-remove" title="Descartar item" onClick={() => setConfirmId(item.id)}>🗑️</button>
+                )
               )}
             </span>
           </div>
+          {confirmId === item.id && (
+            <p className="inv-confirm-text">Descartar "{item.name}"?</p>
+          )}
           {item.description && <p className="inv-item-desc">{item.description}</p>}
           {item.tags && item.tags.length > 0 && (
             <div className="inv-item-tags">
@@ -1872,13 +1900,32 @@ export function GamePage() {
       {/* ── Chat Narrativo ── */}
       <div className="chat-panel">
         <div className="chat-log">
-          {displayMessages.map((msg, i) => (
-            <NarrativeBubble key={msg.messageId ?? `msg-${i}`} message={msg} isNew={msg.messageId === latestNarratorId} charsPerTick={typewriterSpeed} playerName={playerName ?? state?.player.name} playerImage={playerImage} />
-          ))}
+          {displayMessages.length === 0 && !loading && (
+            <div className="chat-empty">
+              <span className="chat-empty-icon">🎲</span>
+              <p className="chat-empty-text">A história ainda não começou. Escolha uma ação ou descreva o que seu personagem faz.</p>
+            </div>
+          )}
+          {displayMessages.map((msg, i) => {
+            const prev = displayMessages[i - 1]
+            const showSeparator = prev && msg.turn > 0 && prev.turn > 0 && msg.turn !== prev.turn
+            return (
+              <div key={msg.messageId ?? `msg-${i}`}>
+                {showSeparator && (
+                  <div className="turn-separator">
+                    <span className="turn-separator-label">Turno {msg.turn} · Cap. {state?.meta.chapter ?? 1}</span>
+                  </div>
+                )}
+                <NarrativeBubble message={msg} isNew={msg.messageId === latestNarratorId} charsPerTick={typewriterSpeed} playerName={playerName ?? state?.player.name} playerImage={playerImage} />
+              </div>
+            )
+          })}
           {loading && (
             <div className="msg narrator loading">
-              <strong>Narrador</strong>
-              <p className="typing-indicator">Narrando...</p>
+              <strong>📖 Narrador</strong>
+              <div className="typing-dots">
+                <span /><span /><span />
+              </div>
             </div>
           )}
           <div ref={chatEndRef} />

@@ -1599,8 +1599,8 @@ export class GeminiAdapter implements Narrator {
     if (req.entityType === 'world') {
       prompt = [
         `Título do universo: ${req.title}.`,
-        'Se esse título remeter a um filme, série, game, HQ ou livro famoso, descreva a imagem inspirada na arte de capa ou pôster oficial: paleta, composição e atmosfera marcantes dessa obra, sem copiar personagens ou logotipos.',
-        'Caso contrário, descreva uma imagem ampla e épica do cenário com identidade visual forte e escala imponente.'
+        'Se esse título remeter a um filme, série, game, HQ ou livro famoso, baseie TODA a descrição na estética visual característica dessa obra: paleta de cores, composição, atmosfera, iluminação e estilo visual — sem copiar personagens protegidos, atores reais, logotipos ou marcas. O tema da referência deve guiar cada elemento visual da imagem.',
+        'Caso contrário, descreva uma cena épica e original com identidade visual forte e coerente com o nome e o tema do universo, capturando a essência temática de modo que toda a imagem reflita esse universo.',
       ].join('\n')
     } else if (req.entityType === 'campaign') {
       prompt = [
@@ -1756,8 +1756,10 @@ export class GeminiAdapter implements Narrator {
     summaryText?: string
     playerSkills?: Record<string, string>
     mode?: NarratorPromptMode
+    narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+    simpleVocabulary?: boolean
   } = {}): string {
-    const { world, campaign, rulesDigest, summaryText, playerSkills, mode = 'turn' } = opts
+    const { world, campaign, rulesDigest, summaryText, playerSkills, mode = 'turn', narrativeStyle, simpleVocabulary } = opts
     const lines = [
       'Você é o Narrador de um RPG Savage Worlds. Responda em português do Brasil, sempre em segunda pessoa do singular ("Você entra...", "Você vê...").',
       '',
@@ -1912,13 +1914,74 @@ export class GeminiAdapter implements Narrator {
       '- Não repita a mesma narrativa. Evolua a história a cada turno.',
       '- IMPORTANTE: Mantenha o JSON compacto. A narrativa deve ter no máximo 2-3 parágrafos curtos.',
       '- Textos de opções devem ter no máximo 1 frase curta cada.',
-      '- Não adicione campos extras além dos especificados acima.',
+      '- Não adicione campos extras além dos especificados acima.'
+    ]
+
+    // ─── ESTILO DE NARRATIVA ───
+    if (narrativeStyle === 'concise') {
+      lines.push(
+        '',
+        '━━━ ESTILO DE NARRATIVA: CONCISO ━━━',
+        'O campo "narrative" deve ter NO MÁXIMO 1 a 3 frases CURTAS.',
+        'Seja direto e objetivo. Zero floreios ou descrições desnecessárias.',
+        'Foque exclusivamente na AÇÃO e na CONSEQUÊNCIA IMEDIATA.',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+      )
+    } else if (narrativeStyle === 'balanced') {
+      lines.push(
+        '',
+        '━━━ ESTILO DE NARRATIVA: EQUILIBRADO ━━━',
+        'O campo "narrative" deve ter 3 a 5 frases.',
+        'Balance descrição e ação. Inclua alguns detalhes atmosféricos, mas mantenha o foco.',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+      )
+    } else if (narrativeStyle === 'theatrical') {
+      lines.push(
+        '',
+        '━━━ ESTILO DE NARRATIVA: TEATRAL ━━━',
+        'O campo "narrative" deve ter 5 a 8 frases.',
+        'Narração rica, atmosférica e imersiva. Use descrições profundas de cenas, emoções e sensações.',
+        'Vocabulário evocativo e literário é encorajado.',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+      )
+    }
+
+    // ─── VOCABULÁRIO SIMPLES ───
+    if (simpleVocabulary === true) {
+      lines.push(
+        '',
+        '━━━ VOCABULÁRIO SIMPLES (ATIVO) ━━━',
+        'Use APENAS palavras simples e comuns. Evite termos arcaicos, poéticos ou complexos.',
+        'Prefira: "rosto" em vez de "semblante"; "antigo" em vez de "outrora"; "medo" em vez de "pavor visceral".',
+        'Frases CURTAS e DIRETAS. Clareza sobre estilo literário.',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+      )
+    }
+
+    // ─── REGRA: INVENTÁRIO NA NARRATIVA ───
+    lines.push(
+      '',
+      '⚠️ ITENS NA NARRATIVA: NUNCA mencione na narrativa (campo "narrative") itens, objetos, armas ou ferramentas que o jogador NÃO possua no INVENTÁRIO listado no contexto do turno.',
+      'Se o jogador tentar usar um item que não possui, narre que ele procura pelo objeto mas não o encontra.',
+      'Esta regra se aplica APENAS ao texto narrativo — não afeta os campos JSON de mecânica.'
+    )
+
+    // ─── REGRA: NARRAÇÃO DE INCAPACITAÇÃO ───
+    lines.push(
+      '',
+      '🔴 INCAPACITAÇÃO: Se o personagem estiver Incapacitado (wounds >= maxWounds, ou seja, 4+ ferimentos),',
+      'a narrativa DEVE refletir isso explicitamente: descreva o colapso, a escuridão, a luta pela consciência.',
+      'As opções devem ser condizentes com a condição (ex: "Lutar pela sobrevivência", "Perder a consciência", "Pedir ajuda").',
+      'NÃO ofereça ações normais de combate, exploração ou diálogo quando o personagem está incapacitado.'
+    )
+
+    lines.push(
       '',
       'CHECKLIST FINAL antes de enviar a resposta:',
       '1. O campo "narrative" tem 2-3 parágrafos? ✓',
       '2. O campo "options" tem EXATAMENTE 4 objetos? ✓',
       '3. Cada opção tem id, text, actionType, actionPayload, feasible e diceCheck? ✓'
-    ]
+    )
 
     // Injetar contexto do universo (lore macro — fixo durante toda a sessão)
     if (world && (world.description || world.lore)) {
@@ -2336,6 +2399,8 @@ export class GeminiAdapter implements Narrator {
       summaryText?: string
       playerSkills?: Record<string, string>
       mode?: NarratorPromptMode
+      narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+      simpleVocabulary?: boolean
     } = {}
   ): Promise<NarratorTurnResponse> {
     const narratorMode = systemPromptOpts.mode ?? 'turn'
@@ -2666,7 +2731,9 @@ export class GeminiAdapter implements Narrator {
       return await this.generateNarratorResponse(userPrompt, this.narrateStartMaxTokens, {
         world: req.world,
         campaign: req.campaign,
-        mode: 'start'
+        mode: 'start',
+        narrativeStyle: req.narrativeStyle,
+        simpleVocabulary: req.simpleVocabulary
       })
     } catch (error) {
       logLlmError('narrateStart', error)
@@ -2792,7 +2859,9 @@ export class GeminiAdapter implements Narrator {
           rulesDigest: req.context.rulesDigest,
           summaryText: req.context.summaryText,
           playerSkills: req.context.playerSkills,
-          mode: 'turn'
+          mode: 'turn',
+          narrativeStyle: req.narrativeStyle,
+          simpleVocabulary: req.simpleVocabulary
         }
       )
     } catch (error) {

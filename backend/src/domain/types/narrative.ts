@@ -200,6 +200,8 @@ export type NarrateStartRequest = {
     edges: string[]
     hindrances: Array<{ name: string; severity: string }>
   }
+  narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+  simpleVocabulary?: boolean
 }
 
 export type NarrateTurnRequest = {
@@ -250,4 +252,6 @@ export type NarrateTurnRequest = {
     rulesDigest?: string
   }
   recentMessages: Array<{ role: string; narrative?: string; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+  narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+  simpleVocabulary?: boolean
 }

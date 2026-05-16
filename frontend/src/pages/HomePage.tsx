@@ -6,24 +6,28 @@ type Props = {
 
 const actions = [
   {
+    icon: '🌍',
     title: 'Universos',
     description: 'Crie cenários, lore e imagens-base para sustentar novas campanhas.',
     to: '/worlds',
     action: 'Abrir universos'
   },
   {
+    icon: '⚔️',
     title: 'Campanhas',
     description: 'Organize a temática de cada aventura e conecte o mundo certo ao seu arco.',
     to: '/campaigns',
     action: 'Ver campanhas'
   },
   {
+    icon: '🧙',
     title: 'Personagens',
     description: 'Monte a ficha, revise vantagens e entre direto na sessão ativa.',
     to: '/characters',
     action: 'Gerenciar personagens'
   },
   {
+    icon: '📜',
     title: 'Regras',
     description: 'Consulte Savage Worlds e os atalhos da sua implementação antes de jogar.',
     to: '/rules',
@@ -31,39 +35,49 @@ const actions = [
   }
 ]
 
+const flowSteps = [
+  { num: '01', icon: '🌍', label: 'Universo',    text: 'Crie um universo com imagem e lore para definir o cenário base.' },
+  { num: '02', icon: '⚔️', label: 'Campanha',    text: 'Abra uma campanha dentro desse universo e refine a temática.' },
+  { num: '03', icon: '🧙', label: 'Personagem',  text: 'Monte a ficha vinculada à campanha e ajuste atributos e perícias.' },
+  { num: '04', icon: '🎲', label: 'Sessão',       text: 'Inicie a sessão e interaja pelo chat com o estado persistido por turno.' },
+]
+
 export function HomePage({ accountLabel }: Props) {
   return (
     <section className="page-home">
       <div className="panel home-hero">
         <div className="home-hero-copy">
-          <span className="home-eyebrow">Painel do mestre e dos jogadores</span>
-          <h2>A Mesa Infinita agora abre apenas com sessão autenticada.</h2>
+          <span className="home-eyebrow">🎲 Mesa Infinita · Savage Worlds</span>
+          <h2>Monte sua mesa. Comece sua história.</h2>
           <p>
-            Sua conta ativa é <strong>{accountLabel}</strong>. A partir daqui, o fluxo recomendado é montar o universo,
-            definir a campanha, revisar os personagens e então abrir a mesa em tempo real.
+            Bem-vindo, <strong>{accountLabel}</strong>. Crie o universo, defina a campanha, monte seu personagem e abra
+            a mesa — o narrador de IA cuida do resto.
           </p>
 
           <div className="home-hero-actions">
             <Link className="home-primary-link" to="/worlds">
-              Criar ou revisar universos
+              🌍 Criar ou revisar universos
             </Link>
             <Link className="home-secondary-link" to="/characters">
-              Entrar pelos personagens
+              🧙 Entrar pelos personagens
             </Link>
           </div>
         </div>
 
         <div className="home-hero-side">
           <div className="home-stat-card">
-            <span className="home-stat-label">Ritmo sugerido</span>
-            <strong>1. Universo</strong>
-            <strong>2. Campanha</strong>
-            <strong>3. Personagem</strong>
-            <strong>4. Sessão</strong>
+            <span className="home-stat-label">Fluxo recomendado</span>
+            {flowSteps.map((s) => (
+              <div key={s.num} className="home-stat-step">
+                <span className="home-stat-step-num">{s.num}</span>
+                <span className="home-stat-step-icon">{s.icon}</span>
+                <strong>{s.label}</strong>
+              </div>
+            ))}
           </div>
           <div className="home-stat-card home-stat-card--accent">
-            <span className="home-stat-label">Acesso protegido</span>
-            <p>As páginas da aplicação ficam fechadas até o login. Isso protege dados, ownership e sessões em andamento.</p>
+            <span className="home-stat-label">🔐 Sessão autenticada</span>
+            <p>Seus mundos, campanhas e personagens ficam protegidos. Cada sessão é persistida por turno.</p>
           </div>
         </div>
       </div>
@@ -72,9 +86,10 @@ export function HomePage({ accountLabel }: Props) {
         {actions.map((item) => (
           <Link key={item.to} className="home-card-link" to={item.to}>
             <article className="home-card">
+              <span className="home-card-icon">{item.icon}</span>
               <h3>{item.title}</h3>
               <p>{item.description}</p>
-              <span>{item.action}</span>
+              <span className="home-card-action">{item.action} →</span>
             </article>
           </Link>
         ))}
@@ -82,27 +97,22 @@ export function HomePage({ accountLabel }: Props) {
 
       <div className="panel home-flow-panel">
         <div>
-          <span className="home-eyebrow">Fluxo recomendado</span>
-          <h3>Como iniciar uma mesa nova sem se perder</h3>
+          <span className="home-eyebrow">Passo a passo</span>
+          <h3>Como iniciar uma mesa nova</h3>
         </div>
 
         <div className="home-flow-grid">
-          <div className="home-flow-step">
-            <strong>01</strong>
-            <p>Crie um universo com imagem e lore para definir o cenário base.</p>
-          </div>
-          <div className="home-flow-step">
-            <strong>02</strong>
-            <p>Abra uma campanha dentro desse universo e refine a temática com o texto gerado.</p>
-          </div>
-          <div className="home-flow-step">
-            <strong>03</strong>
-            <p>Monte os personagens vinculados à campanha e ajuste atributos, perícias e complicações.</p>
-          </div>
-          <div className="home-flow-step">
-            <strong>04</strong>
-            <p>Inicie a sessão e interaja pelo chat com o estado persistido por turno.</p>
-          </div>
+          {flowSteps.map((s, i) => (
+            <div key={s.num} className="home-flow-step">
+              <div className="home-flow-step-header">
+                <span className="home-flow-num">{s.num}</span>
+                {i < flowSteps.length - 1 && <span className="home-flow-connector" aria-hidden="true" />}
+              </div>
+              <span className="home-flow-icon">{s.icon}</span>
+              <strong>{s.label}</strong>
+              <p>{s.text}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>

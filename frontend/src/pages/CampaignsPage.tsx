@@ -54,14 +54,20 @@ export function CampaignsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
 
   return (
     <section className="panel page-worlds">
-      <h2>Campanhas</h2>
+      <div className="page-list-header">
+        <span className="page-list-icon">⚔️</span>
+        <div>
+          <h2>Campanhas</h2>
+          <p className="page-list-subtitle muted">Organize arcos narrativos e conecte universos aos aventureiros.</p>
+        </div>
+      </div>
 
       {/* ── Filtro por Universo ── */}
-      <div className="row" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+      <div className="page-list-toolbar">
         <select
+          className="list-filter-select"
           value={selectedWorldId}
           onChange={(e) => handleWorldFilter(e.target.value)}
-          style={{ flex: '1 1 200px', maxWidth: 360 }}
         >
           <option value="">Todos os universos</option>
           {worlds.map((w) => (
@@ -78,30 +84,37 @@ export function CampaignsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
             } else if (worlds.length === 1) {
               navigate(`/worlds/${worlds[0].id}/campaigns/new`)
             } else {
-              // No world selected and multiple worlds — ask to pick one first
               setError('Selecione um universo antes de criar uma campanha.')
             }
           }}
           type="button"
           disabled={!worlds.length}
+          className="page-list-cta"
         >
-          Criar nova campanha
+          + Criar campanha
         </button>
       </div>
 
       {!worlds.length && !loading && (
-        <p className="muted">
-          Crie um <a onClick={() => navigate('/worlds/new')} style={{ cursor: 'pointer', textDecoration: 'underline' }}>universo</a> primeiro para depois criar campanhas.
-        </p>
+        <div className="list-empty-state">
+          <span className="list-empty-icon">🌍</span>
+          <p className="list-empty-title">Nenhum universo encontrado</p>
+          <p className="list-empty-sub">Crie um <button type="button" className="link-btn" onClick={() => navigate('/worlds/new')}>universo</button> primeiro para depois criar campanhas.</p>
+        </div>
       )}
 
-      {loading && <p className="muted">Carregando campanhas...</p>}
+      {loading && (
+        <div className="list-skeleton">
+          {[1,2,3].map(i => <div key={i} className="skeleton-card" />)}
+        </div>
+      )}
+
       {!loading && worlds.length > 0 && !campaigns.length && (
-        <p className="muted">
-          {selectedWorldId
-            ? `Nenhuma campanha cadastrada no universo "${selectedWorld?.name ?? ''}".`
-            : 'Nenhuma campanha cadastrada ainda.'}
-        </p>
+        <div className="list-empty-state">
+          <span className="list-empty-icon">⚔️</span>
+          <p className="list-empty-title">Nenhuma campanha{selectedWorldId ? ` em "${selectedWorld?.name}"` : ''}</p>
+          <p className="list-empty-sub">Selecione um universo e crie a primeira campanha para começar.</p>
+        </div>
       )}
 
       <div className="world-card-grid">
