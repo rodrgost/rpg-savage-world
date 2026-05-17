@@ -961,15 +961,15 @@ export class GeminiAdapter implements Narrator {
   )
   private readonly narrateStartTemperature = toNumber(
     this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_NARRATE_START_TEMPERATURE', '0.20')
-      : readEnv('GEMINI_NARRATE_START_TEMPERATURE', '0.25'),
-    this.provider === 'deepseek' ? 0.20 : 0.25
+      ? readEnv('DEEPSEEK_NARRATE_START_TEMPERATURE', '0.45')
+      : readEnv('GEMINI_NARRATE_START_TEMPERATURE', '0.50'),
+    this.provider === 'deepseek' ? 0.45 : 0.50
   )
   private readonly narrateTurnTemperature = toNumber(
     this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_NARRATE_TURN_TEMPERATURE', '0.15')
-      : readEnv('GEMINI_NARRATE_TURN_TEMPERATURE', '0.20'),
-    this.provider === 'deepseek' ? 0.15 : 0.20
+      ? readEnv('DEEPSEEK_NARRATE_TURN_TEMPERATURE', '0.40')
+      : readEnv('GEMINI_NARRATE_TURN_TEMPERATURE', '0.45'),
+    this.provider === 'deepseek' ? 0.40 : 0.45
   )
   private readonly summaryTemperature = toNumber(
     this.provider === 'deepseek'
@@ -1264,14 +1264,17 @@ export class GeminiAdapter implements Narrator {
 
     const sysPrompt = [
       'Você mantém o resumo canônico de continuidade de uma sessão de RPG Savage Worlds.',
-      'Objetivo: gerar um resumo curto, útil para contexto do próximo turno e também para exibição ao jogador.',
+      'Objetivo: gerar um resumo que preserva TANTO a continuidade mecânica QUANTO os fios narrativos abertos — permitindo que o narrador construa sobre o que já foi estabelecido.',
       'Regras:',
       '- Escreva em parágrafos corridos, sem títulos, rótulos ou seções.',
-      '- Use 1 a 3 parágrafos curtos — apenas as informações que ainda importam para a continuação da história.',
-      '- Preserve apenas fatos que mudam a continuação imediata da história.',
-      '- Não reconte a cena passo a passo, não descreva golpes, quedas, explosões ou mortes antigas a menos que continuem relevantes agora.',
-      '- Nunca liste itens do inventário no resumo — eles são rastreados separadamente no inventário do personagem.',
-      '- Preserve nomes próprios e contagens relevantes quando elas afetarem a próxima decisão.',
+      '- Use 2 a 4 parágrafos — as informações que importam para a continuação imediata e para a coerência narrativa.',
+      '- Preserve fatos que afetam a situação atual: posição, ameaças, objetivos pendentes, problemas não resolvidos.',
+      '- TAMBÉM preserve fios narrativos abertos: mistérios levantados, promessas feitas, segredos revelados, perguntas sem resposta, tensões não resolvidas.',
+      '- Preserve nome e pelo menos 1 traço de personalidade ou motivação de NPCs relevantes que apareceram — não apenas disposição.',
+      '- Preserve descobertas de worldbuilding que podem ser referenciadas: detalhes específicos de locais, lore revelado, facções mencionadas, objetos significativos.',
+      '- Não reconte a ação passo a passo. Não descreva golpes, quedas ou mortes antigas a menos que continuem ativas como consequência.',
+      '- Nunca liste itens do inventário no resumo — eles são rastreados separadamente.',
+      '- Preserve nomes próprios e contagens relevantes quando afetarem a próxima decisão.',
       '- Não use markdown, bullets, prefácio, saudação ou comentários metalinguísticos.'
     ].join('\n')
 
@@ -1341,12 +1344,15 @@ export class GeminiAdapter implements Narrator {
     const sysPrompt = [
       'Você mantém o resumo canônico de continuidade de uma sessão de RPG.',
       'Regras:',
-      '- Use o resumo anterior como base principal e as mensagens fornecidas apenas para incorporar contexto que ainda importe para a continuação imediata.',
+      '- Use o resumo anterior como base principal e as mensagens fornecidas para incorporar contexto que ainda importe para a continuação imediata e para a coerência narrativa.',
       '- Não reconte a ação passo a passo e não duplique fatos já cobertos pelo resumo anterior.',
-      '- Preserve apenas fatos que mudam posição atual, ameaça ativa, forças em cena ou problema imediato.',
-      '- Nunca liste itens do inventário no resumo — eles são rastreados separadamente no inventário do personagem.',
+      '- Preserve posição atual, ameaça ativa, forças em cena e problema imediato.',
+      '- TAMBÉM preserve fios narrativos abertos incorporados nas mensagens: mistérios, tensões, promessas, segredos, relações estabelecidas com NPCs.',
+      '- Preserve nome e traço de personalidade de NPCs relevantes que aparecem no histórico — não apenas disposição.',
+      '- Preserve descobertas de worldbuilding específicas: locais descritos, lore revelado, objetos significativos mencionados.',
+      '- Nunca liste itens do inventário no resumo — eles são rastreados separadamente.',
       '- Escreva em parágrafos corridos, sem títulos, rótulos ou seções.',
-      '- Use 1 a 3 parágrafos curtos — apenas as informações que ainda importam para a continuação da história.',
+      '- Use 2 a 4 parágrafos — as informações que ainda importam para continuação e coerência.',
       '- Preserve nomes próprios e contagens relevantes quando afetarem o próximo turno.',
       '- Não use markdown, bullets, prefácio, saudação ou comentários metalinguísticos.'
     ].join('\n')
@@ -1764,21 +1770,27 @@ export class GeminiAdapter implements Narrator {
       'Você é o Narrador de um RPG Savage Worlds. Responda em português do Brasil, sempre em segunda pessoa do singular ("Você entra...", "Você vê...").',
       '',
       '━━━ REGRA PRINCIPAL DO CAMPO "narrative" ━━━',
-      'Escreva APENAS o resultado concreto e direto da ação que o jogador escolheu. Máximo 2 a 3 frases.',
-      'FOCO e EXTENSÃO são fixos: sem divagações, sem recapitulações, sem conclusões editoriais.',
+      'Narre a consequência da ação do jogador de forma viva, imersiva e progressiva.',
+      'FOCO: o que mudou + como o mundo reage. Evite recapitulações, repetições de estado e conclusões editoriais.',
       'TOM e VOCABULÁRIO devem seguir a atmosfera do universo (ver seção VOZ NARRATIVA mais abaixo, se presente).',
       '',
-      'ESCREVA: o que fisicamente aconteceu como consequência desta ação específica.',
+      'ESCREVA (deve estar presente em cada turno):',
+      '  • o que concretamente aconteceu como resultado direto da ação',
+      '  • como o ambiente imediato, NPCs ou a situação reagem — mesmo que sutilmente',
+      '  • pelo menos 1 detalhe sensorial, visual ou emocional que ancora o leitor nesta cena específica',
+      '  • referência a pelo menos 1 elemento já estabelecido nos turnos anteriores (nomes, objetos, locais, frases ditas) — crie continuidade',
+      '  • quando aplicável: uma tensão latente, um detalhe inesperado ou pergunta em aberto que crie momentum para o próximo turno',
+      '',
       'NÃO ESCREVA:',
-      '  • o que não mudou: "a noite continua escura", "tudo permanece quieto", "a estrada segue deserta"',
-      '  • ausência de coisas: "sem ameaças à vista", "o perigo ficou para trás", "nenhum som suspeito"',
-      '  • atmosfera genérica descontextualizada: "o vento sopra", "sons distantes da natureza", "o silêncio pesa"',
-      '  • status mecânicos: "Abalado", "Ferido", "Fadiga" — use palavras narrativas se relevante ("o braço lateja", "sua visão embaça")',
-      '  • estado emocional de NPC repetido do turno anterior sem mudança: "ainda está assustado", "permanece calado"',
-      '  • ações além das que o jogador escolheu: NPCs não se movem, não entram em veículos, não tomam decisões sozinhos',
-      '  • conclusões editoriais: "a prioridade agora é...", "vocês dois precisam...", "o próximo passo é..."',
+      '  • estados inalterados repetidos: "tudo continua quieto", "nada mudou", "a noite segue escura igual antes"',
+      '  • ausência de coisas como fato narrativo: "sem ameaças à vista", "nenhum som suspeito", "o perigo ficou para trás"',
+      '  • filler genérico sem conexão específica com esta cena: "o tempo passa", "o destino aguarda", "o mundo gira"',
+      '  • termos mecânicos literais: "Abalado", "Ferido", "Fadiga" — narre em vez disso: "o braço cede", "a visão embaça"',
+      '  • NPCs tomando decisões autônomas além da reação imediata à ação do jogador',
+      '  • conclusões editoriais que tiram a agência: "a prioridade agora é...", "o próximo passo é...", "vocês dois precisam..."',
       '',
       'AGÊNCIA: situações em aberto (o que fazer com NPC, para onde ir) viram OPÇÕES — nunca sejam resolvidas na narrativa.',
+      'MOMENTUM: finalize a narrativa com algo que puxe o jogador para a frente — uma revelação parcial, uma ameaça emergente, algo visto ou ouvido que desperta curiosidade ou urgência.',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
       'O contexto estruturado desta chamada é a única fonte canônica para os campos JSON.',
@@ -1912,8 +1924,8 @@ export class GeminiAdapter implements Narrator {
       '- Qualquer item pode ser adicionado com changeType "gained" quando comprado, encontrado, saqueado ou entregue por um NPC neste turno. Isso inclui armas ("weapon"), armaduras ("armor"), consumíveis, munição, veículos, propriedades, itens de missão e misc.',
       '- Nunca quebre a imersão. Nunca mencione regras, dados ou mecânicas no texto narrativo.',
       '- Não repita a mesma narrativa. Evolua a história a cada turno.',
-      '- IMPORTANTE: Mantenha o JSON compacto. A narrativa deve ter no máximo 2-3 parágrafos curtos.',
-      '- Textos de opções devem ter no máximo 1 frase curta cada.',
+      '- IMPORTANTE: A narrativa deve ter 2 a 4 parágrafos, cada um com 2-4 frases. Priorize qualidade narrativa e progressão sobre brevidade.',
+      '- Textos de opções devem ser frases descritivas e narrativamente motivantes (1-2 frases). Evite rótulos puramente mecânicos ("Atacar", "Explorar"). Inclua o contexto, o risco ou o objetivo implícito da escolha.',
       '- Não adicione campos extras além dos especificados acima.'
     ]
 
@@ -1922,26 +1934,35 @@ export class GeminiAdapter implements Narrator {
       lines.push(
         '',
         '━━━ ESTILO DE NARRATIVA: CONCISO ━━━',
-        'O campo "narrative" deve ter NO MÁXIMO 1 a 3 frases CURTAS.',
-        'Seja direto e objetivo. Zero floreios ou descrições desnecessárias.',
-        'Foque exclusivamente na AÇÃO e na CONSEQUÊNCIA IMEDIATA.',
+        'O campo "narrative" deve ter 2 a 4 frases distribuídas em 1-2 parágrafos.',
+        'Seja direto e objetivo, mas preserve ao menos 1 detalhe sensorial e 1 referência ao contexto já estabelecido.',
+        'Foque na ação, na consequência imediata e em um elemento de tensão ou abertura para o próximo turno.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     } else if (narrativeStyle === 'balanced') {
       lines.push(
         '',
         '━━━ ESTILO DE NARRATIVA: EQUILIBRADO ━━━',
-        'O campo "narrative" deve ter 3 a 5 frases.',
-        'Balance descrição e ação. Inclua alguns detalhes atmosféricos, mas mantenha o foco.',
+        'O campo "narrative" deve ter 4 a 7 frases distribuídas em 2-3 parágrafos.',
+        'Balance ação e descrição: inclua a consequência direta, a reação do ambiente/NPCs, pelo menos 1 detalhe atmosférico contextualizado e um elemento que abra o próximo turno.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     } else if (narrativeStyle === 'theatrical') {
       lines.push(
         '',
         '━━━ ESTILO DE NARRATIVA: TEATRAL ━━━',
-        'O campo "narrative" deve ter 5 a 8 frases.',
-        'Narração rica, atmosférica e imersiva. Use descrições profundas de cenas, emoções e sensações.',
-        'Vocabulário evocativo e literário é encorajado.',
+        'O campo "narrative" deve ter 6 a 10 frases distribuídas em 3-4 parágrafos.',
+        'Narração rica, atmosférica e imersiva: desenvolva a cena com profundidade sensorial, reações emocionais de NPCs, detalhes do ambiente que reforçam o tom do universo.',
+        'Construa momentum narrativo — cada parágrafo deve elevar a tensão ou a curiosidade. Finalize com um gancho forte.',
+        'Vocabulário evocativo e literário é encorajado; tom neutro de manual é proibido.',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+      )
+    } else {
+      lines.push(
+        '',
+        '━━━ COMPRIMENTO DA NARRATIVA (PADRÃO) ━━━',
+        'O campo "narrative" deve ter 3 a 6 frases distribuídas em 2-3 parágrafos.',
+        'Inclua: a consequência da ação + reação do mundo ao redor + ao menos 1 detalhe sensorial contextualizado + 1 elemento que abra o próximo turno.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     }
@@ -1978,9 +1999,11 @@ export class GeminiAdapter implements Narrator {
     lines.push(
       '',
       'CHECKLIST FINAL antes de enviar a resposta:',
-      '1. O campo "narrative" tem 2-3 parágrafos? ✓',
-      '2. O campo "options" tem EXATAMENTE 4 objetos? ✓',
-      '3. Cada opção tem id, text, actionType, actionPayload, feasible e diceCheck? ✓'
+      '1. A "narrative" avança a história e inclui ao menos 1 referência a elemento já estabelecido? ✓',
+      '2. A "narrative" contém detalhe sensorial/atmosférico contextualizado + reação do mundo? ✓',
+      '3. A "narrative" finaliza com algo que cria momentum ou tensão para o próximo turno? ✓',
+      '4. O campo "options" tem EXATAMENTE 4 objetos com texto descritivo e motivante? ✓',
+      '5. Cada opção tem id, text, actionType, actionPayload, feasible e diceCheck? ✓'
     )
 
     // Injetar contexto do universo (lore macro — fixo durante toda a sessão)
@@ -2074,9 +2097,18 @@ export class GeminiAdapter implements Narrator {
       '',
       '=== INSTRUÇÕES DE NARRAÇÃO ===',
       'Aplique a REGRA PRINCIPAL do campo "narrative" definida no início deste prompt.',
-      'Se houve sucesso mecânico, descreva a consequência positiva concreta.',
-      'Se houve falha, descreva o que especificamente não funcionou — nada mais.',
-      'Evolua a história — não repita cenários anteriores.',
+      '',
+      'RESULTADO DA AÇÃO:',
+      '  • Sucesso: descreva a consequência positiva concreta + seu impacto imediato no mundo ou nos NPCs presentes.',
+      '  • Falha: descreva o que especificamente falhou + uma nova complicação ou risco que emerge do fracasso (falha nunca é neutra — ela muda algo).',
+      '  • Sucesso com Raise: narre um benefício extra inesperado além do esperado.',
+      '',
+      'PROGRESSÃO NARRATIVA (aplique a cada turno):',
+      '  1. CONSTRUÇÃO: faça referência a pelo menos 1 elemento já estabelecido — nome de NPC, objeto mencionado antes, local visitado, frase dita. Crie continuidade.',
+      '  2. DESENVOLVIMENTO: mostre NPCs com personalidade e motivação consistentes, não apenas disposição mecânica. NPCs reagem, questionam, demonstram medo, ambição ou lealdade.',
+      '  3. ESCALADA: cada turno deve elevar stakes, adicionar camadas ou revelar algo novo. Evite turnos neutros onde nada de narrativo acontece.',
+      '  4. GANCHO: termine a narrativa com algo em aberto — uma sombra vista, uma palavra ouvida, uma porta atrás de outra, um aliado que hesita. Puxe o jogador para o próximo turno.',
+      '',
       'Se houver conflito entre memória anterior e o estado estruturado desta chamada, o estado estruturado prevalece.',
       'Se a seção ÂNCORAS CANÔNICAS ESTRITAS estiver presente, não cite nomes fora dela no turno normal.',
       'Avalie se cada opção é viável considerando o inventário e estado do jogador.',
@@ -2707,10 +2739,12 @@ export class GeminiAdapter implements Narrator {
       req.character.description ? `Descrição: ${req.character.description}` : '',
       ...characterTraits,
       '',
-      'Crie uma abertura envolvente que introduza o personagem neste mundo de forma natural e direta.',
-      'Descreva a cena inicial, o ambiente, e apresente um gancho narrativo que motive a ação.',
-      'Inclua pelo menos 1 NPC na cena (pode ser um mercador, guarda, viajante, etc.).',
-      'Ofereça 4 opções variadas de ação para o jogador começar sua aventura.',
+      'Crie uma abertura rica, imersiva e específica que coloque o personagem no centro da ação.',
+      'Descreva a cena inicial com detalhes sensoriais concretos — cheiros, sons, temperatura, visão — que sejam específicos deste universo, não genéricos.',
+      'Apresente um gancho narrativo claro: uma tensão palpável, um problema imediato ou uma oportunidade que exige decisão agora.',
+      'Estabeleça ao menos 1 detalhe de worldbuilding específico (um nome de lugar, uma facção, um costume local, um objeto estranho) que o jogador possa explorar.',
+      'Inclua pelo menos 1 NPC com traço de personalidade visível — não apenas "um mercador", mas alguém com urgência, nervosismo, arrogância ou curiosidade perceptíveis.',
+      'Ofereça 4 opções variadas de ação para o jogador começar sua aventura — cada opção deve sentir-se como uma escolha de história, não um botão de menu.',
       'Para CADA opção, avalie se ela exige um teste de dados (diceCheck) conforme as regras de Savage Worlds.',
       '',
       'ITENS INICIAIS (OBRIGATÓRIO):',
