@@ -1155,7 +1155,9 @@ export class SessionService {
     params: { ownerId: string; sessionId: string; action: PlayerAction; displayText?: string },
     onEngineComplete?: (data: { state: import('../../domain/types/gameState.js').GameState; messages: ChatMessageRow[]; diceEvents: Array<{ type: string; payload: unknown }> }) => void
   ) {
-    await this.requireOwnedSession(params.sessionId, params.ownerId)
+    const sessionData = await this.requireOwnedSession(params.sessionId, params.ownerId)
+    const sessionNarrativeStyle = sessionData.narrativeStyle as 'concise' | 'balanced' | 'theatrical' | undefined
+    const sessionSimpleVocabulary = typeof sessionData.simpleVocabulary === 'boolean' ? sessionData.simpleVocabulary : undefined
     const current = await this.snapshots.getLatestState(params.sessionId)
     if (!current) throw new NotFoundException('Sessão não encontrada')
     const recentMessagesBeforeTurn = await this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT)
@@ -1261,8 +1263,8 @@ export class SessionService {
           rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors)
         },
         recentMessages: context.recentMessages,
-        narrativeStyle: result.nextState.meta.narrativeStyle,
-        simpleVocabulary: result.nextState.meta.simpleVocabulary
+        narrativeStyle: sessionNarrativeStyle ?? result.nextState.meta.narrativeStyle,
+        simpleVocabulary: sessionSimpleVocabulary ?? result.nextState.meta.simpleVocabulary
       }),
       state: result.nextState,
       mode: 'turn',

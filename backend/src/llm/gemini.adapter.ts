@@ -1924,45 +1924,44 @@ export class GeminiAdapter implements Narrator {
       '- Qualquer item pode ser adicionado com changeType "gained" quando comprado, encontrado, saqueado ou entregue por um NPC neste turno. Isso inclui armas ("weapon"), armaduras ("armor"), consumíveis, munição, veículos, propriedades, itens de missão e misc.',
       '- Nunca quebre a imersão. Nunca mencione regras, dados ou mecânicas no texto narrativo.',
       '- Não repita a mesma narrativa. Evolua a história a cada turno.',
-      '- IMPORTANTE: A narrativa deve ter 2 a 4 parágrafos, cada um com 2-4 frases. Priorize qualidade narrativa e progressão sobre brevidade.',
       '- Textos de opções devem ser frases descritivas e narrativamente motivantes (1-2 frases). Evite rótulos puramente mecânicos ("Atacar", "Explorar"). Inclua o contexto, o risco ou o objetivo implícito da escolha.',
       '- Não adicione campos extras além dos especificados acima.'
     ]
 
-    // ─── ESTILO DE NARRATIVA ───
+    // ─── ESTILO DE NARRATIVA (definido aqui, antes do contexto, para ter peso máximo) ───
+    lines.push('')
     if (narrativeStyle === 'concise') {
       lines.push(
-        '',
-        '━━━ ESTILO DE NARRATIVA: CONCISO ━━━',
-        'O campo "narrative" deve ter 2 a 4 frases distribuídas em 1-2 parágrafos.',
-        'Seja direto e objetivo, mas preserve ao menos 1 detalhe sensorial e 1 referência ao contexto já estabelecido.',
-        'Foque na ação, na consequência imediata e em um elemento de tensão ou abertura para o próximo turno.',
+        '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative": CONCISO ━━━',
+        'MÁXIMO 3 frases. 1 parágrafo único.',
+        'Narre apenas a consequência direta da ação. Inclua 1 detalhe sensorial concreto e 1 gancho final.',
+        'Qualquer resposta com mais de 3 frases viola esta instrução.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     } else if (narrativeStyle === 'balanced') {
       lines.push(
-        '',
-        '━━━ ESTILO DE NARRATIVA: EQUILIBRADO ━━━',
-        'O campo "narrative" deve ter 4 a 7 frases distribuídas em 2-3 parágrafos.',
-        'Balance ação e descrição: inclua a consequência direta, a reação do ambiente/NPCs, pelo menos 1 detalhe atmosférico contextualizado e um elemento que abra o próximo turno.',
+        '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative": EQUILIBRADO ━━━',
+        'ENTRE 4 e 6 frases distribuídas em 2 parágrafos.',
+        'Parágrafo 1: consequência concreta da ação + reação do ambiente ou NPC.',
+        'Parágrafo 2: detalhe atmosférico específico do universo + gancho ou tensão para o próximo turno.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     } else if (narrativeStyle === 'theatrical') {
       lines.push(
-        '',
-        '━━━ ESTILO DE NARRATIVA: TEATRAL ━━━',
-        'O campo "narrative" deve ter 6 a 10 frases distribuídas em 3-4 parágrafos.',
-        'Narração rica, atmosférica e imersiva: desenvolva a cena com profundidade sensorial, reações emocionais de NPCs, detalhes do ambiente que reforçam o tom do universo.',
-        'Construa momentum narrativo — cada parágrafo deve elevar a tensão ou a curiosidade. Finalize com um gancho forte.',
-        'Vocabulário evocativo e literário é encorajado; tom neutro de manual é proibido.',
+        '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative": TEATRAL ━━━',
+        'MÍNIMO 9 frases distribuídas em 3 a 4 parágrafos. Narração cinematográfica e literária.',
+        'Parágrafo 1 (abertura sensorial): comece com imagem, som, cheiro ou toque específico da cena — não com a ação em si.',
+        'Parágrafo 2 (ação + impacto): descreva a consequência concreta com detalhe visual e dinâmica. Mostre, não conte.',
+        'Parágrafo 3 (reação do mundo): como NPCs, ambiente ou atmosfera respondem — com personalidade, não apenas estado mecânico.',
+        'Parágrafo 4 (gancho): termine com um detalhe inesperado, uma pergunta em aberto ou uma tensão que prenda o jogador.',
+        'Qualquer resposta com menos de 9 frases viola esta instrução.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     } else {
       lines.push(
-        '',
-        '━━━ COMPRIMENTO DA NARRATIVA (PADRÃO) ━━━',
-        'O campo "narrative" deve ter 3 a 6 frases distribuídas em 2-3 parágrafos.',
-        'Inclua: a consequência da ação + reação do mundo ao redor + ao menos 1 detalhe sensorial contextualizado + 1 elemento que abra o próximo turno.',
+        '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative" (PADRÃO) ━━━',
+        'ENTRE 5 e 7 frases distribuídas em 2 a 3 parágrafos.',
+        'Inclua: consequência direta + reação do mundo + 1 detalhe sensorial contextualizado + gancho final.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     }
@@ -1996,12 +1995,19 @@ export class GeminiAdapter implements Narrator {
       'NÃO ofereça ações normais de combate, exploração ou diálogo quando o personagem está incapacitado.'
     )
 
+    const styleCheck = narrativeStyle === 'concise'
+      ? 'A "narrative" tem NO MÁXIMO 3 frases (1 parágrafo)?'
+      : narrativeStyle === 'balanced'
+        ? 'A "narrative" tem ENTRE 4 e 6 frases (2 parágrafos)?'
+        : narrativeStyle === 'theatrical'
+          ? 'A "narrative" tem MÍNIMO 9 frases (3-4 parágrafos com abertura sensorial, ação, reação do mundo e gancho)?'
+          : 'A "narrative" tem ENTRE 5 e 7 frases (2-3 parágrafos)?'
     lines.push(
       '',
       'CHECKLIST FINAL antes de enviar a resposta:',
-      '1. A "narrative" avança a história e inclui ao menos 1 referência a elemento já estabelecido? ✓',
-      '2. A "narrative" contém detalhe sensorial/atmosférico contextualizado + reação do mundo? ✓',
-      '3. A "narrative" finaliza com algo que cria momentum ou tensão para o próximo turno? ✓',
+      `1. ${styleCheck} ✓`,
+      '2. A "narrative" inclui ao menos 1 referência a elemento já estabelecido (callback)? ✓',
+      '3. A "narrative" finaliza com gancho, tensão ou detalhe inesperado? ✓',
       '4. O campo "options" tem EXATAMENTE 4 objetos com texto descritivo e motivante? ✓',
       '5. Cada opção tem id, text, actionType, actionPayload, feasible e diceCheck? ✓'
     )
