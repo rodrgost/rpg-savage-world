@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, Param, Post, Res } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Res } from '@nestjs/common'
 import type { Response } from 'express'
 import { z } from 'zod'
 import { SessionService } from './session.service.js'
@@ -179,6 +179,19 @@ export class SessionController {
     } finally {
       clearInterval(heartbeat)
     }
+  }
+
+  @Patch('/:sessionId/settings')
+  async updateSettings(
+    @CurrentUser('uid') userId: string,
+    @Param('sessionId') sessionId: string,
+    @Body() body: unknown
+  ) {
+    const parsed = z.object({
+      narrativeStyle: z.enum(['concise', 'balanced', 'theatrical']).optional(),
+      simpleVocabulary: z.boolean().optional()
+    }).parse(body)
+    return await this.sessions.updateSessionSettings({ ownerId: userId, sessionId, ...parsed })
   }
 
   @Delete('/:sessionId/inventory/:itemId')

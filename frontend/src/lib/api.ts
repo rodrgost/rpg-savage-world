@@ -856,6 +856,16 @@ export async function chooseOption(
   })
 }
 
+export async function updateSessionSettings(
+  sessionId: string,
+  settings: { narrativeStyle?: 'concise' | 'balanced' | 'theatrical'; simpleVocabulary?: boolean }
+): Promise<{ ok: boolean }> {
+  return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(settings)
+  })
+}
+
 export async function resetSession(sessionId: string): Promise<SessionPayload> {
   return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/reset', {
     method: 'POST'

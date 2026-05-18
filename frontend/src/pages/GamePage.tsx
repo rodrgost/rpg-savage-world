@@ -13,12 +13,13 @@ import {
   chooseOption,
   resetSession,
   removeInventoryItem,
+  updateSessionSettings,
   getWorld,
   getCampaign,
   getCharacter
 } from '../lib/api'
 import type { EnginePhaseData } from '../lib/api'
-import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, NarratorTurnResponse, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
+import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, NarratorTurnResponse, NarrativeStyle, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
 import { ATTRIBUTES, SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
 import { YouTubeAmbient } from '../components/YouTubeAmbient'
 
@@ -1019,7 +1020,7 @@ function DiceResultCard({ event }: { event: SessionEvent }) {
 
 // ─── Character Sidebar ───
 
-type SidebarTab = 'status' | 'attributes' | 'skills' | 'inventory' | 'edges' | 'effects'
+type SidebarTab = 'status' | 'attributes' | 'skills' | 'inventory' | 'edges' | 'effects' | 'narration'
 
 const SIDEBAR_TABS: { key: SidebarTab; label: string; icon: string }[] = [
   { key: 'status', label: 'Status', icon: '❤️' },
@@ -1028,6 +1029,7 @@ const SIDEBAR_TABS: { key: SidebarTab; label: string; icon: string }[] = [
   { key: 'inventory', label: 'Mochila', icon: '🎒' },
   { key: 'edges', label: 'Vantagens', icon: '⭐' },
   { key: 'effects', label: 'Efeitos', icon: '✨' },
+  { key: 'narration', label: 'Narração', icon: '🎭' },
 ]
 
 function CharacterSidebar({
@@ -1037,6 +1039,11 @@ function CharacterSidebar({
   onReset,
   resetting,
   onRemoveItem,
+  narrativeStyle,
+  simpleVocabulary,
+  onNarrativeStyleChange,
+  onSimpleVocabularyChange,
+  savingNarration,
 }: {
   state: GameState | null
   open: boolean
@@ -1044,6 +1051,11 @@ function CharacterSidebar({
   onReset: () => void
   resetting: boolean
   onRemoveItem?: (itemId: string) => void
+  narrativeStyle?: NarrativeStyle
+  simpleVocabulary?: boolean
+  onNarrativeStyleChange: (style: NarrativeStyle) => void
+  onSimpleVocabularyChange: (simple: boolean) => void
+  savingNarration: boolean
 }) {
   const [tab, setTab] = useState<SidebarTab>('status')
   const [confirmReset, setConfirmReset] = useState(false)
@@ -1078,7 +1090,15 @@ function CharacterSidebar({
 
         {/* Conteúdo da aba */}
         <div className="sidebar-content">
-          {!p ? (
+          {tab === 'narration' ? (
+            <SidebarNarration
+              narrativeStyle={narrativeStyle}
+              simpleVocabulary={simpleVocabulary}
+              onStyleChange={onNarrativeStyleChange}
+              onVocabChange={onSimpleVocabularyChange}
+              saving={savingNarration}
+            />
+          ) : !p ? (
             <p className="muted">Carregando...</p>
           ) : (
             <>
@@ -1128,6 +1148,67 @@ function CharacterSidebar({
         </div>
       </aside>
     </>
+  )
+}
+
+const NARRATIVE_STYLES: { key: NarrativeStyle; label: string; icon: string; desc: string }[] = [
+  { key: 'concise', label: 'Conciso', icon: '⚡', desc: '2–4 frases. Direto ao ponto, sem floreios.' },
+  { key: 'balanced', label: 'Equilibrado', icon: '⚖️', desc: '4–7 frases. Ação e atmosfera balanceadas.' },
+  { key: 'theatrical', label: 'Teatral', icon: '🎭', desc: '6–10 frases. Narração cinematográfica e imersiva.' },
+]
+
+function SidebarNarration({
+  narrativeStyle,
+  simpleVocabulary,
+  onStyleChange,
+  onVocabChange,
+  saving,
+}: {
+  narrativeStyle: NarrativeStyle | undefined
+  simpleVocabulary: boolean | undefined
+  onStyleChange: (style: NarrativeStyle) => void
+  onVocabChange: (simple: boolean) => void
+  saving: boolean
+}) {
+  const current = narrativeStyle ?? 'balanced'
+  return (
+    <div className="sidebar-narration">
+      <p className="narration-hint">Define o estilo e ritmo das narrações do mestre. A mudança vale a partir do próximo turno.</p>
+
+      <div className="narration-style-list">
+        {NARRATIVE_STYLES.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            className={`narration-style-card${current === s.key ? ' active' : ''}`}
+            onClick={() => onStyleChange(s.key)}
+            disabled={saving}
+          >
+            <span className="narration-style-icon">{s.icon}</span>
+            <div className="narration-style-text">
+              <span className="narration-style-label">{s.label}</span>
+              <span className="narration-style-desc">{s.desc}</span>
+            </div>
+            {current === s.key && <span className="narration-style-check">✓</span>}
+          </button>
+        ))}
+      </div>
+
+      <label className="narration-vocab-toggle">
+        <input
+          type="checkbox"
+          checked={simpleVocabulary ?? false}
+          onChange={(e) => onVocabChange(e.target.checked)}
+          disabled={saving}
+        />
+        <span className="narration-vocab-text">
+          <strong>Vocabulário simples</strong>
+          <span className="narration-vocab-hint">Palavras comuns, frases curtas e diretas.</span>
+        </span>
+      </label>
+
+      {saving && <p className="narration-saving">Salvando...</p>}
+    </div>
   )
 }
 
@@ -1346,6 +1427,9 @@ export function GamePage() {
   const [playerImage, setPlayerImage] = useState<{ mimeType: string; base64: string } | null>(null)
   const [playerName, setPlayerName] = useState<string | null>(null)
   const [typewriterSpeed, setTypewriterSpeed] = useState<number>(3)
+  const [narrativeStyle, setNarrativeStyle] = useState<NarrativeStyle | undefined>(undefined)
+  const [simpleVocabulary, setSimpleVocabulary] = useState<boolean | undefined>(undefined)
+  const [savingNarration, setSavingNarration] = useState(false)
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
@@ -1429,6 +1513,8 @@ export function GamePage() {
       .then((payload) => {
         setState(payload.state)
         setSummary(payload.summary ?? null)
+        setNarrativeStyle(payload.state?.meta?.narrativeStyle)
+        setSimpleVocabulary(payload.state?.meta?.simpleVocabulary)
         pendingEngineMessagesRef.current.clear()
         // Fetch character image for avatar
         const characterId = payload.state?.player?.characterId
@@ -1806,6 +1892,33 @@ export function GamePage() {
     }
   }
 
+  async function handleNarrativeStyleChange(style: NarrativeStyle) {
+    if (!sessionId || savingNarration) return
+    setNarrativeStyle(style)
+    setSavingNarration(true)
+    try {
+      await updateSessionSettings(sessionId, { narrativeStyle: style })
+    } catch {
+      // revert on failure
+      setNarrativeStyle(narrativeStyle)
+    } finally {
+      setSavingNarration(false)
+    }
+  }
+
+  async function handleSimpleVocabularyChange(simple: boolean) {
+    if (!sessionId || savingNarration) return
+    setSimpleVocabulary(simple)
+    setSavingNarration(true)
+    try {
+      await updateSessionSettings(sessionId, { simpleVocabulary: simple })
+    } catch {
+      setSimpleVocabulary(simpleVocabulary)
+    } finally {
+      setSavingNarration(false)
+    }
+  }
+
   const bennies = state?.player.bennies ?? 0
   const isShaken = state?.player.isShaken ?? false
   const inventory = state?.player.inventory ?? []
@@ -1895,6 +2008,11 @@ export function GamePage() {
         onReset={handleReset}
         resetting={resetting}
         onRemoveItem={handleRemoveItem}
+        narrativeStyle={narrativeStyle}
+        simpleVocabulary={simpleVocabulary}
+        onNarrativeStyleChange={handleNarrativeStyleChange}
+        onSimpleVocabularyChange={handleSimpleVocabularyChange}
+        savingNarration={savingNarration}
       />
 
       {/* ── Chat Narrativo ── */}
