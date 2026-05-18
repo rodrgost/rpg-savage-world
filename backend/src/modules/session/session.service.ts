@@ -1547,6 +1547,22 @@ export class SessionService {
    * Remove (ou decrementa) um item do inventário do jogador.
    * Salva o snapshot atualizado.
    */
+  async updateSessionSettings(params: {
+    ownerId: string
+    sessionId: string
+    narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+    simpleVocabulary?: boolean
+  }): Promise<{ ok: boolean }> {
+    await this.requireOwnedSession(params.sessionId, params.ownerId)
+    const update: Record<string, unknown> = {}
+    if (params.narrativeStyle !== undefined) update.narrativeStyle = params.narrativeStyle
+    if (params.simpleVocabulary !== undefined) update.simpleVocabulary = params.simpleVocabulary
+    if (Object.keys(update).length > 0) {
+      await firestore.collection('sessions').doc(params.sessionId).set(update, { merge: true })
+    }
+    return { ok: true }
+  }
+
   async removeInventoryItem(params: { ownerId: string; sessionId: string; itemId: string; quantity?: number }): Promise<GameState> {
     await this.requireOwnedSession(params.sessionId, params.ownerId)
     const state = await this.snapshots.getLatestState(params.sessionId)

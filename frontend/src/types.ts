@@ -185,6 +185,8 @@ export type ChatMessage = {
 
 // ─── Game State ───
 
+export type NarrativeStyle = 'concise' | 'balanced' | 'theatrical'
+
 export type GameState = {
   meta: {
     sessionId: string
@@ -192,6 +194,8 @@ export type GameState = {
     worldId?: string
     turn: number
     chapter: number
+    narrativeStyle?: NarrativeStyle
+    simpleVocabulary?: boolean
   }
   player: {
     characterId: string
