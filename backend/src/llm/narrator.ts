@@ -94,7 +94,6 @@ export type GenerateImageDescriptionRequest =
 export interface Narrator {
   summarize(req: SummarizeRequest): Promise<string>
   summarizeHistory(req: SummarizeHistoryRequest): Promise<string>
-  expandWorld(req: ExpandWorldRequest): Promise<string>
   expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult>
   expandWorldLore(req: ExpandWorldLoreRequest): Promise<string>
   generateImageDescription(req: GenerateImageDescriptionRequest): Promise<string>
