@@ -1417,36 +1417,6 @@ export class GeminiAdapter implements Narrator {
     throw lastError ?? new Error('Não foi possível gerar um resumo histórico confiável')
   }
 
-  async expandWorld(req: ExpandWorldRequest): Promise<string> {
-    const sysPrompt = [
-      'Você é um worldbuilder de RPG. Escreva em português do Brasil.',
-      'Objetivo: expandir a história de um mundo de campanha com texto criativo e prático para jogo.',
-      'Saída esperada: 3-6 parágrafos curtos com contexto, conflitos, facções, locais e 2-4 ganchos de aventura.',
-      'Restrições de saída: entregue apenas o conteúdo do mundo; não inclua comentários sobre o pedido, elogios, prefácio, saudação, explicações do processo ou separadores como ***.',
-      'Comece diretamente no conteúdo narrativo do mundo.'
-    ].join('\n')
-
-    const prompt = [
-      `Nome da campanha: ${req.campaignName}.`,
-      `Temática do mundo: ${req.thematic ?? 'não informada'}.`,
-      `Descrição atual (se existir): ${req.currentDescription?.trim() || 'nenhuma'}.`,
-      'Mantenha consistência com a temática e evolua a história sem repetir literalmente a descrição atual.'
-    ].join('\n')
-
-    try {
-      const generated = await this.generateText(prompt, {
-        maxOutputTokens: this.worldMaxOutputTokens,
-        timeoutMs: this.timeoutMs,
-        systemInstruction: sysPrompt
-      })
-      return sanitizeNarrativeOutput(generated)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'erro desconhecido'
-      throw new Error(`Falha ao gerar história com ${this.providerLabel}: ${message}`)
-    }
-  }
-
-  /** Alias — usado para expandir a história de uma Adventure */
   async expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult> {
     const sysPrompt = [
       'Você é um worldbuilder de RPG. Escreva em português do Brasil.',
@@ -1521,11 +1491,10 @@ export class GeminiAdapter implements Narrator {
     const sysPrompt = [
       'Você é um worldbuilder sênior especializado em RPG de mesa. Escreva exclusivamente em português do Brasil.',
       '',
-      'O narrador nunca se identifica explicitamente — sua presença é sentida,',
-      'não declarada. A escrita deve ser densa, atmosférica e literária.',
-      '',
-      'Crie coerência interna: nomes próprios, locais e facções mencionados em uma seção',
-      'devem reaparecer e se reforçar nas demais.'
+      'Escreva com clareza e precisão — o texto serve tanto para quem nunca ouviu falar deste universo quanto para quem vai jogar nele.',
+      'Ao introduzir pela primeira vez qualquer nome próprio, facção, tecnologia ou conceito exclusivo do universo, explique-o brevemente em linha — uma frase é suficiente.',
+      'Crie coerência interna: nomes próprios, locais e facções mencionados em uma seção devem reaparecer e se reforçar nas demais.',
+      'A escrita pode ser atmosférica e literária, mas nunca pressuponha que o leitor já conhece o cenário.'
     ].join('\n')
 
     const tema = [
@@ -1537,8 +1506,15 @@ export class GeminiAdapter implements Narrator {
     const prompt = [
       `Tema: ${tema}`,
       '',
-      'Construa o lore completo deste universo de RPG. Use OBRIGATORIAMENTE os cabeçalhos abaixo, nesta ordem e sem alterar o texto dos cabeçalhos.',
+      'Construa o lore completo deste universo de RPG. Use OBRIGATORIAMENTE os 7 cabeçalhos abaixo, nesta ordem e sem alterar o texto dos cabeçalhos.',
       'Seções marcadas com (se aplicável) devem ser incluídas apenas se forem relevantes ao tema fornecido.',
+      '',
+      '## Em Poucas Palavras',
+      'Explique este universo para alguém que nunca ouviu falar dele. Use linguagem direta, sem jargão.',
+      'Responda em 3 a 5 frases:',
+      '  • O que é este mundo? (uma frase-âncora: "É um mundo onde...", "Imagine X, mas Y")',
+      '  • O que o distingue de outros universos do mesmo gênero? (o diferencial real, não o óbvio)',
+      '  • O que qualquer jogador vê, ouve e sente no primeiro dia neste mundo? (realidade cotidiana concreta)',
       '',
       '## Atmosfera e Tom',
       'Descreva a estética visual dominante, o humor emocional do universo e a paleta sensorial (sons, cheiros, luz, temperatura).',
@@ -1602,7 +1578,7 @@ export class GeminiAdapter implements Narrator {
       '- **Pontos de virada pessoal:** que eventos podem mudar permanentemente um personagem — exposição a doença, contato com invasores, manifestação de poder, revelação histórica?',
       '2 parágrafos densos.',
       '',
-      'Restrições absolutas: nenhum comentário fora do lore, nenhuma saudação, elogio, prefácio ou separador (***). Omita seções marcadas como (se aplicável) se não forem pertinentes ao tema. Comece imediatamente com ## Atmosfera e Tom.'
+      'Restrições absolutas: nenhum comentário fora do lore, nenhuma saudação, elogio, prefácio ou separador (***). Omita seções marcadas como (se aplicável) se não forem pertinentes ao tema. Comece imediatamente com ## Em Poucas Palavras.'
     ].join('\n')
 
     try {
