@@ -1924,7 +1924,7 @@ export class GeminiAdapter implements Narrator {
       '- Qualquer item pode ser adicionado com changeType "gained" quando comprado, encontrado, saqueado ou entregue por um NPC neste turno. Isso inclui armas ("weapon"), armaduras ("armor"), consumíveis, munição, veículos, propriedades, itens de missão e misc.',
       '- Nunca quebre a imersão. Nunca mencione regras, dados ou mecânicas no texto narrativo.',
       '- Não repita a mesma narrativa. Evolua a história a cada turno.',
-      '- Textos de opções devem ser frases descritivas e narrativamente motivantes (1-2 frases). Evite rótulos puramente mecânicos ("Atacar", "Explorar"). Inclua o contexto, o risco ou o objetivo implícito da escolha.',
+      '- Textos de opções devem ter no máximo 1 frase curta cada.',
       '- Não adicione campos extras além dos especificados acima.'
     ]
 
