@@ -1800,7 +1800,6 @@ export class GeminiAdapter implements Narrator {
       'ELEMENTOS DISPONÍVEIS (use os que forem naturais para a cena e o estilo ativo):',
       '  • o que concretamente aconteceu como resultado direto da ação',
       '  • como o ambiente imediato, NPCs ou a situação reagem',
-      '  • detalhe sensorial ou visual que ancora o leitor na cena',
       '  • referência a elemento já estabelecido (nomes, objetos, locais) — cria continuidade',
       '',
       'NÃO ESCREVA:',
@@ -1956,9 +1955,10 @@ export class GeminiAdapter implements Narrator {
         '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative": CONCISO ━━━',
         'MÁXIMO 3 frases CURTAS. 1 parágrafo único.',
         'Narre apenas: (1) o que aconteceu, (2) o estado imediato resultante.',
-        'NÃO OBRIGATÓRIO neste estilo — omitir se não essencial:',
+        'NÃO ESCREVA neste estilo:',
+        '  • detalhes sensoriais, atmosfera ou ambientação',
         '  • callbacks a eventos anteriores',
-        '  • tension-building ou ganchos finais',
+        '  • tension-building, ganchos ou suspense',
         'Frases devem ser CURTAS e DIRETAS — sem cláusulas encadeadas com vírgula.',
         'Qualquer resposta com mais de 3 frases viola esta instrução.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
@@ -1986,7 +1986,7 @@ export class GeminiAdapter implements Narrator {
       lines.push(
         '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative" (PADRÃO) ━━━',
         'ENTRE 5 e 7 frases distribuídas em 2 a 3 parágrafos.',
-        'Inclua: consequência direta + reação do mundo + 1 detalhe sensorial contextualizado + gancho final.',
+        'Inclua: consequência direta + reação do mundo + gancho final.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     }
@@ -2031,10 +2031,15 @@ export class GeminiAdapter implements Narrator {
       '',
       'CHECKLIST FINAL antes de enviar a resposta:',
       `1. ${styleCheck} ✓`,
-      '2. A "narrative" inclui ao menos 1 referência a elemento já estabelecido (callback)? ✓',
-      '3. A "narrative" finaliza com gancho, tensão ou detalhe inesperado? ✓',
-      '4. O campo "options" tem EXATAMENTE 4 objetos com texto descritivo e motivante? ✓',
-      '5. Cada opção tem id, text, actionType, actionPayload, feasible e diceCheck? ✓'
+      ...(narrativeStyle !== 'concise' ? [
+        '2. A "narrative" inclui ao menos 1 referência a elemento já estabelecido (callback)? ✓',
+        '3. A "narrative" finaliza com gancho, tensão ou detalhe inesperado? ✓',
+        '4. O campo "options" tem EXATAMENTE 4 objetos com texto descritivo e motivante? ✓',
+        '5. Cada opção tem id, text, actionType, actionPayload, feasible e diceCheck? ✓',
+      ] : [
+        '2. O campo "options" tem EXATAMENTE 4 objetos com texto descritivo e motivante? ✓',
+        '3. Cada opção tem id, text, actionType, actionPayload, feasible e diceCheck? ✓',
+      ])
     )
 
     // Injetar contexto do universo (lore macro — fixo durante toda a sessão)
