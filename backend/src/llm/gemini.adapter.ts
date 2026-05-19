@@ -626,7 +626,9 @@ function diversifySuggestedCharacter(input: SuggestedCharacter): SuggestedCharac
     const appearance = pickRandom(APPEARANCE_BY_CATEGORY[category], 'olhos firmes e postura determinada')
     const clothing = pickRandom(CLOTHING_BY_CATEGORY[category], 'usa roupas práticas de viagem')
     const personality = pickRandom(PERSONALITY_POOL, 'determinado a encontrar seu lugar no mundo')
-    output.description = `${output.name} é ${output.profession.toLowerCase()} de perfil ${output.characterClass.toLowerCase()}, com ${appearance}. ${clothing.charAt(0).toUpperCase() + clothing.slice(1)}. ${personality.charAt(0).toUpperCase() + personality.slice(1)}.`
+    const capClothing = clothing.charAt(0).toUpperCase() + clothing.slice(1)
+    const capPersonality = personality.charAt(0).toUpperCase() + personality.slice(1)
+    output.description = `${output.name} tem ${appearance}. ${capClothing}. ${capPersonality}.`
   }
 
   return output
@@ -849,7 +851,7 @@ function parseCharacterFromLooseText(text: string): Record<string, unknown> | nu
   const stopAtNextLabel = (value: string): string =>
     value
       .replace(
-        /(\s+)?(?:nome|name|sexo|gender|ra[cç]a|race|esp[eé]cie|classe|class|arqu[eê]tipo|profiss[aã]o|profession|occupation|of[ií]cio|descri[cç][aã]o|description|bio|background)\s*[:=\-].*$/i,
+        /(\s+)?(?:nome|name|sexo|gender|ra[cç]a|race|esp[eé]cie|classe|class|arqu[eê]tipo|profiss[aã]o|profession|occupation|of[ií]cio|descri[cç][aã]o|description|bio|background|papel|campanha|campaign|role|missao|miss[aã]o)\s*[:=\-].*$/i,
         ''
       )
       .trim()
@@ -898,6 +900,9 @@ function parseCharacterFromLooseText(text: string): Record<string, unknown> | nu
     /(?:^|\b)(?:descri[cç][aã]o|description|bio|background)\s*[:=\-]\s*([^\n]+)/i,
     /(?:^|\b)(?:resumo|conceito)\s*[:=\-]\s*([^\n]+)/i
   ]
+  const campaignRolePatterns = [
+    /(?:^|\b)(?:papel|PAPEL|papelenacampanha|campanha|campaign|role|miss[aã]o)\s*[:=\-]\s*([^\n]+)/i
+  ]
 
   const name = findInLines(namePatterns) ?? extractFromText(flattened, namePatterns)
   const gender = findInLines(genderPatterns) ?? extractFromText(flattened, genderPatterns)
@@ -905,6 +910,7 @@ function parseCharacterFromLooseText(text: string): Record<string, unknown> | nu
   const characterClass = findInLines(classPatterns) ?? extractFromText(flattened, classPatterns)
   const profession = findInLines(professionPatterns) ?? extractFromText(flattened, professionPatterns)
   const description = findInLines(descriptionPatterns) ?? extractFromText(flattened, descriptionPatterns)
+  const campaignRole = findInLines(campaignRolePatterns) ?? extractFromText(flattened, campaignRolePatterns)
 
   if (!name && !characterClass && !profession && !description) return null
 
@@ -914,7 +920,8 @@ function parseCharacterFromLooseText(text: string): Record<string, unknown> | nu
     ...(race ? { race } : {}),
     ...(characterClass ? { characterClass } : {}),
     ...(profession ? { profession } : {}),
-    ...(description ? { description } : {})
+    ...(description ? { description } : {}),
+    ...(campaignRole ? { campaignRole } : {})
   }
 }
 
@@ -1707,19 +1714,17 @@ export class GeminiAdapter implements Narrator {
       '  - Comércio, contrabando, recursos → Negociante, Contrabandista, Atravessador',
       '  - Guerra, ocupação, resistência → Soldado, Guerrilheiro, Estrategista, Mensageiro',
       'Responda SOMENTE em JSON válido, sem markdown e sem comentários.',
-      'Formato obrigatório (TODOS os 7 campos são OBRIGATÓRIOS):',
-      '{',
-      '  "name": "<nome criativo em português>",',
-      '  "gender": "<Masculino, Feminino ou Outro>",',
-      '  "race": "<raça/espécie coerente com a temática — varie entre humanos e outras espécies>",',
-      '  "characterClass": "<classe derivada do enredo>",',
-      '  "profession": "<profissão ou ofício derivado do enredo>",',
-      '  "description": "<2-3 frases: (1) traço visual marcante — cabelo, olhos, compleição ou cicatriz; (2) vestimenta/equipamento coerente com a classe; (3) traço de personalidade + motivação>",',
-      '  "campaignRole": "<papel específico nesta aventura — como este personagem se conecta diretamente ao enredo fornecido>"',
-      '}',
-      'description DEVE ter detalhes visuais concretos e personalidade clara. Nunca deixe vazio ou genérico.',
-      'campaignRole DEVE ser específico ao enredo — evite frases genéricas como "busca aventura" ou "quer ser herói".',
-      'Máx 100 chars por campo, exceto description (até 280) e campaignRole (até 200). Português do Brasil.'
+      'Todos os 7 campos são OBRIGATÓRIOS e não podem estar vazios:',
+      '{"name":"...","gender":"...","race":"...","characterClass":"...","profession":"...","description":"...","campaignRole":"..."}',
+      '',
+      'Instruções por campo:',
+      '  name: nome criativo em português, sem clichês (ex: Mirela, Thoran, Seris)',
+      '  gender: exatamente Masculino, Feminino ou Outro',
+      '  race: espécie coerente com a temática; não use sempre Humano',
+      '  characterClass: classe derivada do enredo (veja exemplos acima); máx 60 chars',
+      '  profession: ofício derivado do enredo, diferente da classe; máx 60 chars',
+      '  description: 2-3 frases descrevendo aparência física (cabelo, olhos, compleição ou cicatriz marcante), vestimenta ou equipamento coerente com a classe, e traço de personalidade com motivação. Mín 80 chars, máx 280 chars.',
+      '  campaignRole: o que este personagem está fazendo nesta aventura específica, qual sua missão ou como se conecta ao enredo. Seja concreto, não genérico. Máx 200 chars.',
     ].join('\n')
 
     const prompt = [
@@ -1733,7 +1738,7 @@ export class GeminiAdapter implements Narrator {
 
     try {
       const generated = await this.generateText(prompt, {
-        maxOutputTokens: 1024,
+        maxOutputTokens: 1536,
         timeoutMs: this.timeoutMs,
         responseMimeType: 'application/json',
         temperature: this.characterSuggestionTemperature,
@@ -1748,6 +1753,25 @@ export class GeminiAdapter implements Narrator {
       if (parsed) {
         const firstTry = buildSuggestedCharacterFromRecord(parsed)
         log('suggestCharacterFromWorld', 'Built character:', JSON.stringify(firstTry))
+
+        // If description came back empty, retry with a focused call
+        if (!firstTry.description.trim()) {
+          log('suggestCharacterFromWorld', 'description vazio — fazendo retry focado')
+          try {
+            const descSysPrompt = 'Descreva o personagem RPG abaixo em 2-3 frases vívidas. Inclua: (1) aparência física marcante — cabelo, olhos, compleição ou cicatriz; (2) vestimenta ou equipamento coerente com a classe; (3) traço de personalidade e motivação. Responda APENAS com a descrição, sem introdução, sem JSON, sem aspas.'
+            const descPrompt = `Nome: ${firstTry.name}. Classe: ${firstTry.characterClass}. Profissão: ${firstTry.profession}. Papel na aventura: ${firstTry.campaignRole || 'não definido'}.`
+            const descGenerated = await this.generateText(descPrompt, {
+              maxOutputTokens: 300,
+              timeoutMs: this.timeoutMs,
+              temperature: 0.9,
+              systemInstruction: descSysPrompt
+            })
+            const cleaned = descGenerated.trim().replace(/^["'"']+|["'"']+$/g, '').trim()
+            if (cleaned.length >= 30) firstTry.description = cleaned
+          } catch {
+            // fallback to pool below
+          }
+        }
 
         if (
           firstTry.name !== 'Aventureiro' ||
