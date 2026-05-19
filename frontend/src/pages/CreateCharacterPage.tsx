@@ -441,7 +441,7 @@ export function CreateCharacterPage({ uid }: Props) {
                 <option value="">Selecione uma campanha</option>
                 {campaigns.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.thematic}
+                    {c.name || c.thematic}
                   </option>
                 ))}
               </select>
