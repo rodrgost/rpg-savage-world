@@ -1420,7 +1420,7 @@ export function GamePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null)
-  const [worldInfo, setWorldInfo] = useState<{ campaignName: string; thematic: string } | null>(null)
+  const [worldInfo, setWorldInfo] = useState<{ campaignName: string; worldName: string } | null>(null)
   const [pendingDiceOption, setPendingDiceOption] = useState<ActionOption | null>(null)
   const [pendingValidation, setPendingValidation] = useState<{ input: string; validation: ValidateActionResponse } | null>(null)
   const [validating, setValidating] = useState(false)
@@ -1544,13 +1544,13 @@ export function GamePage() {
               if (campaign.worldId) {
                 getWorld(campaign.worldId)
                   .then((world) => {
-                    setWorldInfo({ campaignName: world.name, thematic: campaign.thematic ?? '' })
+                    setWorldInfo({ campaignName: campaign.name || campaign.thematic, worldName: world.name })
                   })
                   .catch(() => {
-                    setWorldInfo({ campaignName: '', thematic: campaign.thematic ?? '' })
+                    setWorldInfo({ campaignName: campaign.name || campaign.thematic, worldName: '' })
                   })
               } else {
-                setWorldInfo({ campaignName: '', thematic: campaign.thematic ?? '' })
+                setWorldInfo({ campaignName: campaign.name || campaign.thematic, worldName: '' })
               }
             })
             .catch(() => { /* ignore */ })
@@ -1941,7 +1941,7 @@ export function GamePage() {
         </button>
         <span className="hud-divider" />
         <span className="game-hud-title">
-          {worldInfo ? `${worldInfo.thematic} — ${worldInfo.campaignName}` : 'Carregando...'}
+          {worldInfo ? (worldInfo.worldName ? `${worldInfo.campaignName} — ${worldInfo.worldName}` : worldInfo.campaignName) : 'Carregando...'}
         </span>
 
         {state && (
