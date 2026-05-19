@@ -60,6 +60,7 @@ export type SuggestCharacterFromWorldRequest = {
     characterClass?: string
     profession?: string
     description?: string
+    campaignRole?: string
   }
 }
 export type SuggestedCharacter = {
@@ -69,6 +70,7 @@ export type SuggestedCharacter = {
   characterClass: string
   profession: string
   description: string
+  campaignRole: string
 }
 
 export type GenerateImageDescriptionRequest =

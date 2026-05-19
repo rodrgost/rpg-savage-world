@@ -106,6 +106,7 @@ const CreateCharacterBody = z.object({
   characterClass: z.string().min(1),
   profession: z.string().min(1),
   description: z.string().optional(),
+  campaignRole: z.string().optional(),
   visibility: VisibilityBody.optional(),
   attributes: z.record(z.string(), z.number()).default({}),
   skills: z.record(z.string(), z.number()).default({}),
@@ -123,6 +124,7 @@ const UpdateCharacterBody = z.object({
   characterClass: z.string().min(1),
   profession: z.string().min(1),
   description: z.string().optional(),
+  campaignRole: z.string().optional(),
   visibility: VisibilityBody.optional(),
   attributes: z.record(z.string(), z.number()).default({}),
   skills: z.record(z.string(), z.number()).default({}),
@@ -154,6 +156,7 @@ const CharacterSuggestionBody = z
       characterClass: z.string().optional(),
       profession: z.string().optional(),
       description: z.string().optional(),
+      campaignRole: z.string().optional(),
     }).optional()
   })
   .strict()

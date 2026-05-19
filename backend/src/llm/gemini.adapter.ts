@@ -782,6 +782,18 @@ function buildSuggestedCharacterFromRecord(source: Record<string, unknown>): Sug
     'bio',
     'background'
   ])
+  const campaignRoleValue = extractFieldFromRecord(source, [
+    'campaignRole',
+    'papel',
+    'PAPEL',
+    'papelNaCampanha',
+    'role',
+    'missao',
+    'missão',
+    'objetivo',
+    'funcao',
+    'função'
+  ])
 
   const suggested: SuggestedCharacter = {
     name: sanitizeCharacterField(nameValue, 'Aventureiro'),
@@ -789,7 +801,8 @@ function buildSuggestedCharacterFromRecord(source: Record<string, unknown>): Sug
     race: sanitizeCharacterField(raceValue, 'Humano'),
     characterClass: sanitizeCharacterField(classValue, 'Aventureiro'),
     profession: sanitizeCharacterField(professionValue, 'Mercenário'),
-    description: sanitizeCharacterField(descriptionValue, '')
+    description: sanitizeCharacterField(descriptionValue, ''),
+    campaignRole: sanitizeCharacterField(campaignRoleValue, '')
   }
 
   if (suggested.characterClass.localeCompare(suggested.profession, 'pt-BR', { sensitivity: 'base' }) === 0) {
@@ -1658,26 +1671,40 @@ export class GeminiAdapter implements Narrator {
       if (existing.characterClass) existingLines.push(`  characterClass: "${existing.characterClass}"`)
       if (existing.profession) existingLines.push(`  profession: "${existing.profession}"`)
       if (existing.description) existingLines.push(`  description: "${existing.description}"`)
+      if (existing.campaignRole) existingLines.push(`  campaignRole: "${existing.campaignRole}"`)
     }
+
+    // Random seed to push LLM toward variety across calls
+    const archetypeSeeds = [
+      'Prefira um arquétipo incomum desta vez: ex. Curandeiro, Bardo, Xamã, Estrategista.',
+      'Prefira um arquétipo incomum desta vez: ex. Ladino, Explorador, Alquimista, Druida.',
+      'Prefira um arquétipo incomum desta vez: ex. Paladino, Necromante, Engenheiro, Arauto.',
+      'Prefira um arquétipo incomum desta vez: ex. Monge, Oráculo, Ferreiro, Caçador de Recompensas.',
+      'Prefira uma raça incomum desta vez: evite Humano como primeira escolha.',
+      'Varie o gênero nesta chamada: considere Feminino ou Outro se ainda não foi definido.',
+    ]
+    const archetypeSeed = archetypeSeeds[Math.floor(Math.random() * archetypeSeeds.length)]
 
     const sysPrompt = [
       'Você é um designer de personagens para RPG.',
       'Com base na história de um mundo, sugira um personagem plausível para iniciar uma campanha.',
       'Evite nomes muito usados/clichês e NÃO use os nomes: Kael, Khael, Kaell, Cael.',
-      'Procure variar classe e profissão entre chamadas diferentes.',
+      archetypeSeed,
       'Responda SOMENTE em JSON válido, sem markdown e sem comentários.',
-      'Formato obrigatório do JSON (TODOS os 6 campos são OBRIGATÓRIOS e não podem ser vazios):',
+      'Formato obrigatório do JSON (TODOS os 7 campos são OBRIGATÓRIOS e não podem ser vazios):',
       '{',
       '  "name": "<nome criativo em português>",',
       '  "gender": "<Masculino, Feminino ou Outro>",',
       '  "race": "<raça/espécie coerente com a temática>",',
       '  "characterClass": "<classe do personagem>",',
       '  "profession": "<profissão ou ofício>",',
-      '  "description": "<OBRIGATÓRIO: 2 a 3 frases cobrindo: (1) um traço visual marcante — ex: cor/estilo do cabelo, olhos, compleição, cicatriz ou detalhe físico; (2) vestimenta ou equipamento típico; (3) um traço de personalidade dominante e a motivação central do personagem>"',
+      '  "description": "<OBRIGATÓRIO: 2 a 3 frases cobrindo: (1) um traço visual marcante — ex: cor/estilo do cabelo, olhos, compleição, cicatriz ou detalhe físico; (2) vestimenta ou equipamento típico; (3) um traço de personalidade dominante e a motivação central do personagem>",',
+      '  "campaignRole": "<papel do personagem nesta campanha — o que ele é neste mundo, o que está buscando ou fazendo, e como se conecta ao enredo da aventura>"',
       '}',
       'IMPORTANTE: o campo "description" é OBRIGATÓRIO. Nunca retorne description vazio ou genérico.',
       'A description DEVE incluir detalhes visuais concretos (aparência física + roupa/equipamento coerentes com a classe) E um traço de personalidade claro.',
-      'Cada campo deve ter no máximo 100 caracteres, exceto description que pode ter até 280 caracteres.',
+      'O campo "campaignRole" DEVE ser específico para a aventura descrita — não use frases genéricas como "busca aventura". Conecte o papel ao enredo.',
+      'Cada campo deve ter no máximo 100 caracteres, exceto description (até 280 chars) e campaignRole (até 200 chars).',
       'Todos os campos devem ser strings em português do Brasil.'
     ].join('\n')
 
@@ -1716,14 +1743,15 @@ export class GeminiAdapter implements Narrator {
       }
 
       const retrySysPrompt = [
-        'Retorne exatamente 6 linhas em português do Brasil, sem texto adicional:',
+        'Retorne exatamente 7 linhas em português do Brasil, sem texto adicional:',
         'NOME: <nome criativo>',
         'SEXO: <Masculino, Feminino ou Outro>',
         'RACA: <raça ou espécie>',
         'CLASSE: <classe do personagem>',
         'PROFISSAO: <profissão ou ofício>',
         'DESCRICAO: <OBRIGATÓRIO: 2-3 frases com: traço visual marcante (cabelo/olhos/compleição/cicatriz), vestimenta ou equipamento típico COERENTE com a classe (guerreiro = armadura, arcanista = vestes/mantos, ladino = roupas discretas), e traço de personalidade + motivação>',
-        'IMPORTANTE: DESCRICAO é obrigatória, NÃO pode ficar vazia e DEVE ser coerente com a CLASSE e a PROFISSÃO informadas.',
+        'PAPEL: <papel do personagem na aventura — o que ele é neste mundo, o que busca e como se conecta ao enredo>',
+        'IMPORTANTE: DESCRICAO e PAPEL são obrigatórios, NÃO podem ficar vazios.',
         'NÃO use os nomes Kael, Khael, Kaell, Cael.'
       ].join('\n')
 

@@ -65,6 +65,7 @@ export type Character = {
   characterClass?: string
   profession?: string
   description?: string
+  campaignRole?: string
   attributes: Record<string, number>
   skills?: Record<string, number>
   edges?: string[]

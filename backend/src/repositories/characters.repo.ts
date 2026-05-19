@@ -13,6 +13,7 @@ export type CharacterDoc = {
   characterClass?: string
   profession?: string
   description?: string
+  campaignRole?: string
   image?: {
     mimeType: string
     base64: string
@@ -58,6 +59,7 @@ export class CharactersRepo {
     characterClass: string
     profession: string
     description: string
+    campaignRole?: string
     attributes: Record<string, number>
     skills: Record<string, number>
     edges: string[]
@@ -82,6 +84,7 @@ export class CharactersRepo {
         characterClass: params.characterClass,
         profession: params.profession,
         description: params.description,
+        ...(params.campaignRole !== undefined ? { campaignRole: params.campaignRole } : {}),
         ...(image ? { image } : {}),
         attributes: params.attributes,
         skills: params.skills,
@@ -154,6 +157,7 @@ export class CharactersRepo {
     characterClass: string
     profession: string
     description: string
+    campaignRole?: string
     visibility?: Visibility
     attributes: Record<string, number>
     skills: Record<string, number>
@@ -172,6 +176,7 @@ export class CharactersRepo {
         characterClass: params.characterClass,
         profession: params.profession,
         description: params.description,
+        campaignRole: params.campaignRole ?? '',
         ...(params.visibility !== undefined ? { visibility: params.visibility } : {}),
         attributes: params.attributes,
         skills: params.skills,
