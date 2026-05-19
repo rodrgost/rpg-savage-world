@@ -244,6 +244,7 @@ function mapCharacterRecord(item: {
   characterClass?: string
   profession?: string
   description?: string
+  campaignRole?: string
   attributes: Record<string, number>
   skills?: Record<string, number>
   edges?: string[]
@@ -267,6 +268,7 @@ function mapCharacterRecord(item: {
     characterClass: item.characterClass,
     profession: item.profession,
     description: item.description,
+    campaignRole: item.campaignRole,
     attributes: item.attributes ?? {},
     skills: item.skills,
     edges: item.edges,
@@ -493,6 +495,7 @@ export async function createCharacter(params: {
   characterClass: string
   profession: string
   description?: string
+  campaignRole?: string
   visibility?: Visibility
   attributes: Record<string, number>
   skills?: Record<string, number>
@@ -518,6 +521,7 @@ export async function generateCharacterFromWorldStory(params: {
     characterClass?: string
     profession?: string
     description?: string
+    campaignRole?: string
   }
 }): Promise<{
   name: string
@@ -526,6 +530,7 @@ export async function generateCharacterFromWorldStory(params: {
   characterClass: string
   profession: string
   description: string
+  campaignRole: string
 }> {
   return await apiRequest('/characters/suggest-from-world', {
     method: 'POST',
@@ -564,6 +569,7 @@ export async function listCharacters(campaignId?: string): Promise<Character[]> 
     characterClass?: string
     profession?: string
     description?: string
+    campaignRole?: string
     attributes: Record<string, number>
     skills?: Record<string, number>
     edges?: string[]
@@ -590,6 +596,7 @@ export async function getCharacter(characterId: string): Promise<Character> {
     characterClass?: string
     profession?: string
     description?: string
+    campaignRole?: string
     attributes: Record<string, number>
     skills?: Record<string, number>
     edges?: string[]
@@ -617,6 +624,7 @@ export async function updateCharacter(
     characterClass: string
     profession: string
     description?: string
+    campaignRole?: string
     visibility?: Visibility
     attributes: Record<string, number>
     skills?: Record<string, number>

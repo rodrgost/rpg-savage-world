@@ -700,6 +700,7 @@ export class GameDataService {
     characterClass: string
     profession: string
     description?: string
+    campaignRole?: string
     visibility?: Visibility
     attributes: Record<string, number>
     skills?: Record<string, number>
@@ -748,6 +749,7 @@ export class GameDataService {
       characterClass: params.characterClass,
       profession: params.profession,
       description: params.description?.trim() ?? '',
+      campaignRole: params.campaignRole?.trim() ?? '',
       attributes: normalizedAttributes,
       skills: normalizedSkills,
       edges: normalizedEdges,
@@ -843,6 +845,7 @@ export class GameDataService {
       characterClass?: string
       profession?: string
       description?: string
+      campaignRole?: string
     }
   }) {
     const campaign = await this.campaigns.get(params.campaignId)
@@ -876,6 +879,7 @@ export class GameDataService {
       const characterClass = suggestion.characterClass.trim()
       const profession = suggestion.profession.trim()
       const description = suggestion.description.trim()
+      const campaignRole = suggestion.campaignRole?.trim() || ''
 
       if (!name || !characterClass || !profession || !description) {
         throw new Error('O provedor de IA retornou uma sugestão incompleta.')
@@ -887,7 +891,8 @@ export class GameDataService {
         race,
         characterClass,
         profession,
-        description
+        description,
+        campaignRole
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
@@ -914,6 +919,7 @@ export class GameDataService {
     characterClass: string
     profession: string
     description?: string
+    campaignRole?: string
     visibility?: Visibility
     attributes: Record<string, number>
     skills?: Record<string, number>
@@ -957,6 +963,7 @@ export class GameDataService {
       characterClass: params.characterClass,
       profession: params.profession,
       description: params.description?.trim() ?? '',
+      campaignRole: params.campaignRole?.trim() ?? '',
       visibility: params.visibility ? normalizeVisibility(params.visibility) : undefined,
       attributes: normalizedAttributes,
       skills: normalizedSkills,

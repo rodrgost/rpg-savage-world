@@ -113,6 +113,7 @@ export function CreateCharacterPage({ uid }: Props) {
   const [characterClass, setCharacterClass] = useState('')
   const [profession, setProfession] = useState('')
   const [description, setDescription] = useState('')
+  const [campaignRole, setCampaignRole] = useState('')
   const [attributes, setAttributes] = useState<Record<string, DieType>>(defaultAttributes)
   const [skills, setSkills] = useState<Record<string, DieType>>({})
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
@@ -204,6 +205,7 @@ export function CreateCharacterPage({ uid }: Props) {
         setCharacterClass(c.characterClass ?? '')
         setProfession(c.profession ?? '')
         setDescription(c.description ?? '')
+        setCampaignRole(c.campaignRole ?? '')
         if (c.attributes) setAttributes(c.attributes as Record<string, DieType>)
         if (c.skills) setSkills(c.skills as Record<string, DieType>)
         if (c.edges) setSelectedEdges(c.edges)
@@ -279,6 +281,7 @@ export function CreateCharacterPage({ uid }: Props) {
       if (race.trim()) existing.race = race.trim()
       if (characterClass.trim()) existing.characterClass = characterClass.trim()
       if (profession.trim()) existing.profession = profession.trim()
+      if (campaignRole.trim()) existing.campaignRole = campaignRole.trim()
       //if (description.trim()) existing.description = description.trim()
 
       const suggestion = await generateCharacterFromWorldStory({
@@ -293,6 +296,7 @@ export function CreateCharacterPage({ uid }: Props) {
       if (!characterClass.trim()) setCharacterClass(suggestion.characterClass)
       if (!profession.trim()) setProfession(suggestion.profession)
       if (!description.trim()) setDescription(suggestion.description)
+      if (!campaignRole.trim()) setCampaignRole(suggestion.campaignRole)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao gerar sugestão por IA para este personagem')
     } finally {
@@ -361,7 +365,7 @@ export function CreateCharacterPage({ uid }: Props) {
     try {
       if (isEditMode && characterId) {
         await updateCharacter(characterId, {
-          name, gender, race, characterClass, profession, description,
+          name, gender, race, characterClass, profession, description, campaignRole,
           visibility,
           attributes, skills, edges: selectedEdges, hindrances: selectedHindrances,
           hindranceAllocation, image
@@ -369,7 +373,7 @@ export function CreateCharacterPage({ uid }: Props) {
       } else {
         await createCharacter({
           campaignId: selectedCampaignId,
-          name, gender, race, characterClass, profession, description,
+          name, gender, race, characterClass, profession, description, campaignRole,
           visibility,
           attributes, skills, edges: selectedEdges, hindrances: selectedHindrances,
           hindranceAllocation, image
@@ -453,14 +457,14 @@ export function CreateCharacterPage({ uid }: Props) {
                 >
                   {suggestLoading ? <><span className="btn-ai-spinner" /> Gerando sugestão…</> : '✨ Sugerir pela IA'}
                 </button>
-                {(name || gender || race || characterClass || profession || description) && (
+                {(name || gender || race || characterClass || profession || description || campaignRole) && (
                   <button
                     className="button-danger-outline"
                     type="button"
                     onClick={() => {
                       setName(''); setGender(''); setRace('')
                       setCharacterClass(''); setProfession(''); setDescription('')
-                      setImage(undefined)
+                      setCampaignRole(''); setImage(undefined)
                     }}
                   >
                     🗑️ Limpar campos
@@ -499,6 +503,10 @@ export function CreateCharacterPage({ uid }: Props) {
             <label>
               Descrição
               <textarea onChange={(e) => setDescription(e.target.value)} rows={3} value={description} placeholder="Aparência, personalidade, história..." />
+            </label>
+            <label>
+              Papel na Campanha
+              <textarea onChange={(e) => setCampaignRole(e.target.value)} rows={2} value={campaignRole} placeholder="O que este personagem é neste mundo, o que está fazendo ou sua missão atual..." />
             </label>
           </div>
         </div>
