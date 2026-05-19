@@ -477,8 +477,14 @@ const NAME_FALLBACK_POOL = [
   'Talissa',
   'Vitor'
 ]
-const CLASS_FALLBACK_POOL = ['Guerreiro', 'Arcanista', 'Patrulheiro', 'Ladino', 'Bardo', 'Clérigo']
-const PROFESSION_FALLBACK_POOL = ['Batedor', 'Cartógrafa', 'Mercenário', 'Erudita', 'Mensageiro', 'Caçadora']
+const CLASS_FALLBACK_POOL = [
+  'Arcanista', 'Patrulheiro', 'Ladino', 'Bardo', 'Clérigo',
+  'Explorador', 'Curandeiro', 'Espião', 'Estrategista', 'Druida'
+]
+const PROFESSION_FALLBACK_POOL = [
+  'Batedor', 'Cartógrafa', 'Erudita', 'Mensageiro', 'Caçadora',
+  'Negociante', 'Herborista', 'Arauto', 'Guia', 'Escriba'
+]
 
 type CharacterCategory = 'fighter' | 'arcane' | 'rogue' | 'support'
 
@@ -580,6 +586,23 @@ function isDisallowedName(name: string): boolean {
   return DISALLOWED_CHARACTER_NAMES.has(normalized.replace(/[^a-z]/g, ''))
 }
 
+const DEFAULT_CLASS_NAMES = new Set(
+  ['aventureiro', 'guerreiro', 'fighter', 'warrior'].map(s => s.normalize('NFD').replace(/[̀-ͯ]/g, ''))
+)
+const DEFAULT_PROFESSION_NAMES = new Set(
+  ['mercenario', 'mercenária', 'mercenario', 'hired sword'].map(s => s.normalize('NFD').replace(/[̀-ͯ]/g, ''))
+)
+
+function isDefaultClass(value: string): boolean {
+  const key = value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '')
+  return DEFAULT_CLASS_NAMES.has(key)
+}
+
+function isDefaultProfession(value: string): boolean {
+  const key = value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '')
+  return DEFAULT_PROFESSION_NAMES.has(key)
+}
+
 function diversifySuggestedCharacter(input: SuggestedCharacter): SuggestedCharacter {
   const output: SuggestedCharacter = { ...input }
 
@@ -587,18 +610,15 @@ function diversifySuggestedCharacter(input: SuggestedCharacter): SuggestedCharac
     output.name = pickRandom(NAME_FALLBACK_POOL, 'Darian')
   }
 
-  const classIsDefault = output.characterClass.localeCompare('Aventureiro', 'pt-BR', { sensitivity: 'base' }) === 0
-  const professionIsDefault = output.profession.localeCompare('Mercenário', 'pt-BR', { sensitivity: 'base' }) === 0
-
-  if (classIsDefault) {
-    output.characterClass = pickRandom(CLASS_FALLBACK_POOL, 'Guerreiro')
+  if (isDefaultClass(output.characterClass)) {
+    output.characterClass = pickRandom(CLASS_FALLBACK_POOL, 'Explorador')
   }
 
-  if (professionIsDefault || output.profession.localeCompare(output.characterClass, 'pt-BR', { sensitivity: 'base' }) === 0) {
+  if (isDefaultProfession(output.profession) || output.profession.localeCompare(output.characterClass, 'pt-BR', { sensitivity: 'base' }) === 0) {
     const alternatives = PROFESSION_FALLBACK_POOL.filter(
       (item) => item.localeCompare(output.characterClass, 'pt-BR', { sensitivity: 'base' }) !== 0
     )
-    output.profession = pickRandom(alternatives, 'Mercenário')
+    output.profession = pickRandom(alternatives, 'Batedor')
   }
 
   if (!output.description.trim()) {
@@ -1674,45 +1694,41 @@ export class GeminiAdapter implements Narrator {
       if (existing.campaignRole) existingLines.push(`  campaignRole: "${existing.campaignRole}"`)
     }
 
-    // Random seed to push LLM toward variety across calls
-    const archetypeSeeds = [
-      'Prefira um arquétipo incomum desta vez: ex. Curandeiro, Bardo, Xamã, Estrategista.',
-      'Prefira um arquétipo incomum desta vez: ex. Ladino, Explorador, Alquimista, Druida.',
-      'Prefira um arquétipo incomum desta vez: ex. Paladino, Necromante, Engenheiro, Arauto.',
-      'Prefira um arquétipo incomum desta vez: ex. Monge, Oráculo, Ferreiro, Caçador de Recompensas.',
-      'Prefira uma raça incomum desta vez: evite Humano como primeira escolha.',
-      'Varie o gênero nesta chamada: considere Feminino ou Outro se ainda não foi definido.',
-    ]
-    const archetypeSeed = archetypeSeeds[Math.floor(Math.random() * archetypeSeeds.length)]
-
     const sysPrompt = [
       'Você é um designer de personagens para RPG.',
-      'Com base na história de um mundo, sugira um personagem plausível para iniciar uma campanha.',
-      'Evite nomes muito usados/clichês e NÃO use os nomes: Kael, Khael, Kaell, Cael.',
-      archetypeSeed,
+      'Leia o enredo fornecido e crie um personagem cujo papel e classe emergem NATURALMENTE da história — não escolha o arquétipo mais genérico.',
+      'NÃO use os nomes: Kael, Khael, Kaell, Cael.',
+      'NÃO use Guerreiro + Humano + Mercenário como combinação padrão — só os escolha se o enredo pedir diretamente.',
+      'Exemplos de como derivar classe do enredo:',
+      '  - Segredos, intrigas, poder → Espião, Arauto, Ladino, Diplomata',
+      '  - Magia proibida, mistérios arcanos → Arcanista, Oráculo, Bruxo, Estudioso',
+      '  - Conflito religioso, doenças, morte → Curandeiro, Clérigo, Sacerdote, Herético',
+      '  - Exploração, territórios desconhecidos → Explorador, Batedor, Cartógrafa, Guia',
+      '  - Comércio, contrabando, recursos → Negociante, Contrabandista, Atravessador',
+      '  - Guerra, ocupação, resistência → Soldado, Guerrilheiro, Estrategista, Mensageiro',
       'Responda SOMENTE em JSON válido, sem markdown e sem comentários.',
-      'Formato obrigatório do JSON (TODOS os 7 campos são OBRIGATÓRIOS e não podem ser vazios):',
+      'Formato obrigatório (TODOS os 7 campos são OBRIGATÓRIOS):',
       '{',
       '  "name": "<nome criativo em português>",',
       '  "gender": "<Masculino, Feminino ou Outro>",',
-      '  "race": "<raça/espécie coerente com a temática>",',
-      '  "characterClass": "<classe do personagem>",',
-      '  "profession": "<profissão ou ofício>",',
-      '  "description": "<OBRIGATÓRIO: 2 a 3 frases cobrindo: (1) um traço visual marcante — ex: cor/estilo do cabelo, olhos, compleição, cicatriz ou detalhe físico; (2) vestimenta ou equipamento típico; (3) um traço de personalidade dominante e a motivação central do personagem>",',
-      '  "campaignRole": "<papel do personagem nesta campanha — o que ele é neste mundo, o que está buscando ou fazendo, e como se conecta ao enredo da aventura>"',
+      '  "race": "<raça/espécie coerente com a temática — varie entre humanos e outras espécies>",',
+      '  "characterClass": "<classe derivada do enredo>",',
+      '  "profession": "<profissão ou ofício derivado do enredo>",',
+      '  "description": "<2-3 frases: (1) traço visual marcante — cabelo, olhos, compleição ou cicatriz; (2) vestimenta/equipamento coerente com a classe; (3) traço de personalidade + motivação>",',
+      '  "campaignRole": "<papel específico nesta aventura — como este personagem se conecta diretamente ao enredo fornecido>"',
       '}',
-      'IMPORTANTE: o campo "description" é OBRIGATÓRIO. Nunca retorne description vazio ou genérico.',
-      'A description DEVE incluir detalhes visuais concretos (aparência física + roupa/equipamento coerentes com a classe) E um traço de personalidade claro.',
-      'O campo "campaignRole" DEVE ser específico para a aventura descrita — não use frases genéricas como "busca aventura". Conecte o papel ao enredo.',
-      'Cada campo deve ter no máximo 100 caracteres, exceto description (até 280 chars) e campaignRole (até 200 chars).',
-      'Todos os campos devem ser strings em português do Brasil.'
+      'description DEVE ter detalhes visuais concretos e personalidade clara. Nunca deixe vazio ou genérico.',
+      'campaignRole DEVE ser específico ao enredo — evite frases genéricas como "busca aventura" ou "quer ser herói".',
+      'Máx 100 chars por campo, exceto description (até 280) e campaignRole (até 200). Português do Brasil.'
     ].join('\n')
 
     const prompt = [
       ...(existingLines.length > 0 ? [...existingLines, ''] : []),
       ...(req.worldLore ? [`Lore do universo: ${req.worldLore}.`, ''] : []),
       `Temática da aventura: ${req.thematic || 'não informada'}.`,
-      `História da aventura: ${req.storyDescription || 'não informada'}.`
+      `História da aventura: ${req.storyDescription || 'não informada'}.`,
+      '',
+      'Derive a classe e profissão diretamente desta história — qual arquétipo o ENREDO pede, não o mais comum de RPG.'
     ].join('\n')
 
     try {
