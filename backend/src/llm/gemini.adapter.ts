@@ -477,15 +477,6 @@ const NAME_FALLBACK_POOL = [
   'Talissa',
   'Vitor'
 ]
-const CLASS_FALLBACK_POOL = [
-  'Arcanista', 'Patrulheiro', 'Ladino', 'Bardo', 'Clérigo',
-  'Explorador', 'Curandeiro', 'Espião', 'Estrategista', 'Druida'
-]
-const PROFESSION_FALLBACK_POOL = [
-  'Batedor', 'Cartógrafa', 'Erudita', 'Mensageiro', 'Caçadora',
-  'Negociante', 'Herborista', 'Arauto', 'Guia', 'Escriba'
-]
-
 type CharacterCategory = 'fighter' | 'arcane' | 'rogue' | 'support'
 
 const APPEARANCE_BY_CATEGORY: Record<CharacterCategory, string[]> = {
@@ -586,39 +577,11 @@ function isDisallowedName(name: string): boolean {
   return DISALLOWED_CHARACTER_NAMES.has(normalized.replace(/[^a-z]/g, ''))
 }
 
-const DEFAULT_CLASS_NAMES = new Set(
-  ['aventureiro', 'guerreiro', 'fighter', 'warrior'].map(s => s.normalize('NFD').replace(/[̀-ͯ]/g, ''))
-)
-const DEFAULT_PROFESSION_NAMES = new Set(
-  ['mercenario', 'mercenária', 'mercenario', 'hired sword'].map(s => s.normalize('NFD').replace(/[̀-ͯ]/g, ''))
-)
-
-function isDefaultClass(value: string): boolean {
-  const key = value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '')
-  return DEFAULT_CLASS_NAMES.has(key)
-}
-
-function isDefaultProfession(value: string): boolean {
-  const key = value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '')
-  return DEFAULT_PROFESSION_NAMES.has(key)
-}
-
-function diversifySuggestedCharacter(input: SuggestedCharacter): SuggestedCharacter {
+function sanitizeCharacterResult(input: SuggestedCharacter): SuggestedCharacter {
   const output: SuggestedCharacter = { ...input }
 
   if (isDisallowedName(output.name)) {
     output.name = pickRandom(NAME_FALLBACK_POOL, 'Darian')
-  }
-
-  if (isDefaultClass(output.characterClass)) {
-    output.characterClass = pickRandom(CLASS_FALLBACK_POOL, 'Explorador')
-  }
-
-  if (isDefaultProfession(output.profession) || output.profession.localeCompare(output.characterClass, 'pt-BR', { sensitivity: 'base' }) === 0) {
-    const alternatives = PROFESSION_FALLBACK_POOL.filter(
-      (item) => item.localeCompare(output.characterClass, 'pt-BR', { sensitivity: 'base' }) !== 0
-    )
-    output.profession = pickRandom(alternatives, 'Batedor')
   }
 
   if (!output.description.trim()) {
@@ -817,21 +780,15 @@ function buildSuggestedCharacterFromRecord(source: Record<string, unknown>): Sug
     'função'
   ])
 
-  const suggested: SuggestedCharacter = {
+  return {
     name: sanitizeCharacterField(nameValue, 'Aventureiro'),
     gender: sanitizeCharacterField(genderValue, ''),
     race: sanitizeCharacterField(raceValue, 'Humano'),
     characterClass: sanitizeCharacterField(classValue, 'Aventureiro'),
-    profession: sanitizeCharacterField(professionValue, 'Mercenário'),
+    profession: sanitizeCharacterField(professionValue, ''),
     description: sanitizeCharacterField(descriptionValue, ''),
     campaignRole: sanitizeCharacterField(campaignRoleValue, '')
   }
-
-  if (suggested.characterClass.localeCompare(suggested.profession, 'pt-BR', { sensitivity: 'base' }) === 0) {
-    suggested.profession = 'Mercenário'
-  }
-
-  return suggested
 }
 
 function parseCharacterFromLooseText(text: string): Record<string, unknown> | null {
@@ -1754,45 +1711,41 @@ export class GeminiAdapter implements Narrator {
         const firstTry = buildSuggestedCharacterFromRecord(parsed)
         log('suggestCharacterFromWorld', 'Built character:', JSON.stringify(firstTry))
 
-        // If description came back empty, retry with a focused call
-        if (!firstTry.description.trim()) {
-          log('suggestCharacterFromWorld', 'description vazio — fazendo retry focado')
-          try {
-            const descSysPrompt = 'Descreva o personagem RPG abaixo em 2-3 frases vívidas. Inclua: (1) aparência física marcante — cabelo, olhos, compleição ou cicatriz; (2) vestimenta ou equipamento coerente com a classe; (3) traço de personalidade e motivação. Responda APENAS com a descrição, sem introdução, sem JSON, sem aspas.'
-            const descPrompt = `Nome: ${firstTry.name}. Classe: ${firstTry.characterClass}. Profissão: ${firstTry.profession}. Papel na aventura: ${firstTry.campaignRole || 'não definido'}.`
-            const descGenerated = await this.generateText(descPrompt, {
-              maxOutputTokens: 300,
-              timeoutMs: this.timeoutMs,
-              temperature: 0.9,
-              systemInstruction: descSysPrompt
-            })
-            const cleaned = descGenerated.trim().replace(/^["'"']+|["'"']+$/g, '').trim()
-            if (cleaned.length >= 30) firstTry.description = cleaned
-          } catch {
-            // fallback to pool below
+        const isCompletelyEmpty = firstTry.name === 'Aventureiro' && firstTry.characterClass === 'Aventureiro' && !firstTry.profession.trim()
+        if (!isCompletelyEmpty) {
+          // If description came back empty, retry with a focused call before returning
+          if (!firstTry.description.trim()) {
+            log('suggestCharacterFromWorld', 'description vazio — fazendo retry focado')
+            try {
+              const descSysPrompt = 'Descreva o personagem RPG abaixo em 2-3 frases vívidas. Inclua: aparência física marcante (cabelo, olhos, compleição ou cicatriz), vestimenta ou equipamento coerente com a classe, e traço de personalidade com motivação. Responda APENAS com a descrição, sem introdução, sem JSON, sem aspas.'
+              const descPrompt = `Nome: ${firstTry.name}. Classe: ${firstTry.characterClass}. Profissão: ${firstTry.profession}. Papel na aventura: ${firstTry.campaignRole || 'não definido'}.`
+              const descGenerated = await this.generateText(descPrompt, {
+                maxOutputTokens: 300,
+                timeoutMs: this.timeoutMs,
+                temperature: 0.9,
+                systemInstruction: descSysPrompt
+              })
+              const cleaned = descGenerated.trim().replace(/^["'"']+|["'"']+$/g, '').trim()
+              if (cleaned.length >= 30) firstTry.description = cleaned
+            } catch {
+              // pool fallback handled in sanitizeCharacterResult
+            }
           }
-        }
-
-        if (
-          firstTry.name !== 'Aventureiro' ||
-          firstTry.characterClass !== 'Aventureiro' ||
-          firstTry.profession !== 'Mercenário'
-        ) {
-          return diversifySuggestedCharacter(firstTry)
+          return sanitizeCharacterResult(firstTry)
         }
       }
 
+      // Retry with plain line-by-line format (no JSON mode) when first pass returned empty/defaults
       const retrySysPrompt = [
-        'Retorne exatamente 7 linhas em português do Brasil, sem texto adicional:',
-        'NOME: <nome criativo>',
-        'SEXO: <Masculino, Feminino ou Outro>',
-        'RACA: <raça ou espécie>',
-        'CLASSE: <classe do personagem>',
-        'PROFISSAO: <profissão ou ofício>',
-        'DESCRICAO: <OBRIGATÓRIO: 2-3 frases com: traço visual marcante (cabelo/olhos/compleição/cicatriz), vestimenta ou equipamento típico COERENTE com a classe (guerreiro = armadura, arcanista = vestes/mantos, ladino = roupas discretas), e traço de personalidade + motivação>',
-        'PAPEL: <papel do personagem na aventura — o que ele é neste mundo, o que busca e como se conecta ao enredo>',
-        'IMPORTANTE: DESCRICAO e PAPEL são obrigatórios, NÃO podem ficar vazios.',
-        'NÃO use os nomes Kael, Khael, Kaell, Cael.'
+        'Crie um personagem de RPG baseado no enredo abaixo. Responda em exatamente 7 linhas, sem texto adicional:',
+        'NOME: nome criativo do personagem',
+        'SEXO: Masculino, Feminino ou Outro',
+        'RACA: raça ou espécie',
+        'CLASSE: classe derivada do enredo',
+        'PROFISSAO: profissão ou ofício',
+        'DESCRICAO: 2-3 frases — aparência física marcante, vestimenta coerente com a classe, personalidade e motivação',
+        'PAPEL: o que o personagem faz nesta aventura e como se conecta ao enredo',
+        'Não use os nomes: Kael, Khael, Kaell, Cael.'
       ].join('\n')
 
       const retryPrompt = [
@@ -1800,18 +1753,18 @@ export class GeminiAdapter implements Narrator {
         `História: ${req.storyDescription || 'não informada'}.`
       ].join('\n')
 
-      log('suggestCharacterFromWorld', 'Primeira tentativa insuficiente, fazendo retry...')
+      log('suggestCharacterFromWorld', 'Primeira tentativa retornou vazia — fazendo retry...')
       const retryGenerated = await this.generateText(retryPrompt, {
-        maxOutputTokens: 512,
+        maxOutputTokens: 600,
         timeoutMs: this.timeoutMs,
-        temperature: 0.8,
+        temperature: 0.9,
         systemInstruction: retrySysPrompt
       }, 2)
 
       const retryParsed = parseCharacterFromLooseText(retryGenerated)
       if (!retryParsed) throw new Error('Resposta não veio em formato legível')
 
-      return diversifySuggestedCharacter(buildSuggestedCharacterFromRecord(retryParsed))
+      return sanitizeCharacterResult(buildSuggestedCharacterFromRecord(retryParsed))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
       throw new Error(`Falha ao sugerir personagem com ${this.providerLabel}: ${message}`)
