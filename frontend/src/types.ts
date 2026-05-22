@@ -62,7 +62,6 @@ export type Character = {
   name: string
   gender?: string
   race?: string
-  characterClass?: string
   profession?: string
   description?: string
   campaignRole?: string

@@ -10,7 +10,6 @@ export type CharacterDoc = {
   name: string
   gender?: string
   race?: string
-  characterClass?: string
   profession?: string
   description?: string
   campaignRole?: string
@@ -56,7 +55,6 @@ export class CharactersRepo {
     name: string
     gender: string
     race: string
-    characterClass: string
     profession: string
     description: string
     campaignRole?: string
@@ -81,7 +79,6 @@ export class CharactersRepo {
         name: params.name,
         gender: params.gender,
         race: params.race,
-        characterClass: params.characterClass,
         profession: params.profession,
         description: params.description,
         ...(params.campaignRole !== undefined ? { campaignRole: params.campaignRole } : {}),
@@ -154,7 +151,6 @@ export class CharactersRepo {
     name: string
     gender: string
     race: string
-    characterClass: string
     profession: string
     description: string
     campaignRole?: string
@@ -173,7 +169,6 @@ export class CharactersRepo {
         name: params.name,
         gender: params.gender,
         race: params.race,
-        characterClass: params.characterClass,
         profession: params.profession,
         description: params.description,
         campaignRole: params.campaignRole ?? '',

@@ -140,9 +140,9 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                 </div>
 
                 <p className="char-subtitle muted">
-                  {[character.characterClass, character.profession, character.race]
+                  {[character.profession, character.race]
                     .filter(Boolean)
-                    .join(' • ') || 'Sem classe'}
+                    .join(' • ') || 'Sem profissão'}
                 </p>
 
                 {/* Atributos */}

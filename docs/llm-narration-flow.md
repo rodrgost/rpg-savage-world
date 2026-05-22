@@ -93,7 +93,7 @@ NarratorTurnResponse → session.service.ts → frontend
 
 Chamado uma única vez ao criar/retomar sessão:
 
-1. Monta `userPrompt` com dados do personagem (nome, raça, classe, profissão, vantagens, complicações)
+1. Monta `userPrompt` com dados do personagem (nome, raça, profissão, vantagens, complicações)
 2. Instrui o LLM a criar cena de abertura + NPC inicial + **3 a 6 itens iniciais** (`changeType: "gained"`)
 3. Usa `mode: 'start'` no system prompt — relaxa restrições de itens (`weapon` e `armor` são permitidos)
 4. Delega para `generateNarratorResponse()` com `narrateStartMaxTokens`
@@ -161,7 +161,6 @@ INÍCIO DE SESSÃO — Narre a abertura desta aventura de RPG.
 PERSONAGEM: <nome>
 Raça: <raça>
 Gênero: <gênero>
-Classe: <classe>
 Profissão: <profissão>
 Descrição: <desc>
 Vantagens: <edge1>, <edge2>
@@ -246,18 +245,16 @@ Atualize o resumo canônico sem repetir fatos antigos que já estejam cobertos.
 **System prompt:**
 ```
 Você é um designer de personagens para RPG.
-Com base na história de um mundo, sugira um personagem plausível para iniciar uma campanha.
-Evite nomes muito usados/clichês e NÃO use os nomes: Kael, Khael, Kaell, Cael.
-Procure variar classe e profissão entre chamadas diferentes.
+Leia o enredo fornecido e crie um personagem cujo papel e profissão emergem naturalmente da história.
 Responda SOMENTE em JSON válido, sem markdown e sem comentários.
-Formato obrigatório do JSON (TODOS os 6 campos são OBRIGATÓRIOS e não podem ser vazios):
+Formato obrigatório do JSON: todas as 6 chaves devem existir; `gender` e `race` podem ser string vazia quando o contexto não sustentar uma inferência.
 {
-  "name": "<nome criativo em português>",
-  "gender": "<Masculino, Feminino ou Outro>",
-  "race": "<raça/espécie coerente com a temática>",
-  "characterClass": "<classe do personagem>",
-  "profession": "<profissão ou ofício>",
-  "description": "<OBRIGATÓRIO: 1 ou 2 frases descrevendo aparência, motivação e papel do personagem no contexto do mundo>"
+  "name": "<nome coerente com o contexto>",
+  "gender": "<Masculino, Feminino, Outro ou vazio se não houver pista contextual>",
+  "race": "<raça/espécie ou vazio se não houver pista contextual>",
+  "profession": "<profissão ou ofício derivado do enredo>",
+  "description": "<2 ou 3 frases descrevendo aparência, equipamento e motivação>",
+  "campaignRole": "<missão ou conexão concreta com a aventura>"
 }
 ```
 

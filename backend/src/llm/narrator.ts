@@ -49,7 +49,7 @@ export type ExpandWorldLoreRequest = {
 }
 
 export type SuggestCharacterFromWorldRequest = {
-  thematic: string
+  worldName: string
   storyDescription: string
   worldLore?: string
   /** Campos já preenchidos pelo usuário — a IA não deve substituí-los */
@@ -57,7 +57,6 @@ export type SuggestCharacterFromWorldRequest = {
     name?: string
     gender?: string
     race?: string
-    characterClass?: string
     profession?: string
     description?: string
     campaignRole?: string
@@ -67,7 +66,6 @@ export type SuggestedCharacter = {
   name: string
   gender: string
   race: string
-  characterClass: string
   profession: string
   description: string
   campaignRole: string
@@ -89,7 +87,6 @@ export type GenerateImageDescriptionRequest =
       gender?: string
       race?: string
       profession: string
-      characterClass: string
       additionalDescription?: string
     }
 

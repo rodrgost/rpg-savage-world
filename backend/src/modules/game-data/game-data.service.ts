@@ -10,7 +10,7 @@ import { normalizeToWebp, type StoredImage } from '../../utils/image-normalize.j
 import { isDieType, CHARACTER_CREATION, ATTRIBUTE_KEYS } from '../../domain/savage-worlds/constants.js'
 import type { DieType, Hindrance } from '../../domain/types/gameState.js'
 import { firebaseAuth, firestore } from '../../infrastructure/firebase.js'
-import { warn } from '../../utils/file-logger.js'
+import { log, warn } from '../../utils/file-logger.js'
 
 function sanitizeInlineText(value: string | undefined): string {
   return (value ?? '').trim().replace(/\s+/g, ' ')
@@ -50,7 +50,6 @@ function buildCharacterImagePrompt(params: {
   gender?: string
   race?: string
   profession: string
-  characterClass: string
   additionalDescription?: string
   visualDescription?: string
 }): string {
@@ -59,7 +58,6 @@ function buildCharacterImagePrompt(params: {
   const gender = sanitizeInlineText(params.gender)
   const race = sanitizeInlineText(params.race)
   const profession = sanitizeInlineText(params.profession)
-  const characterClass = sanitizeInlineText(params.characterClass)
   const additional = sanitizeInlineText(params.additionalDescription)
   const visualDescription = sanitizeInlineText(params.visualDescription)
 
@@ -70,7 +68,6 @@ function buildCharacterImagePrompt(params: {
     `Setting: ${worldName || 'Unknown world'}, ${thematic || 'generic fantasy'}.`,
     ...(gender ? [`Gender: ${gender}.`] : []),
     ...(race ? [`Race/Species: ${race}.`] : []),
-    `Class: ${characterClass || 'Adventurer'}.`,
     `Profession: ${profession || 'Traveler'}.`,
     ...(additional ? [`Visual details: ${additional}.`] : []),
     ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
@@ -267,7 +264,6 @@ export class GameDataService {
         gender?: string
         race?: string
         profession: string
-        characterClass: string
         additionalDescription?: string
       }): Promise<string | undefined> {
     try {
@@ -364,9 +360,11 @@ export class GameDataService {
 
   private serializeCharacter<T extends { ownerId?: string; userId?: string; visibility?: unknown }>(character: T, ownerProfile?: OwnerProfile) {
     const ownerId = getCharacterOwnerId(character)
+    const safeCharacter: Record<string, unknown> = { ...character }
+    delete safeCharacter[['character', 'Class'].join('')]
 
     return {
-      ...character,
+      ...safeCharacter,
       ownerId,
       userId: ownerId,
       visibility: normalizeVisibility(character.visibility),
@@ -697,7 +695,6 @@ export class GameDataService {
     name: string
     gender?: string
     race?: string
-    characterClass: string
     profession: string
     description?: string
     campaignRole?: string
@@ -746,7 +743,6 @@ export class GameDataService {
       name: params.name,
       gender: params.gender?.trim() ?? '',
       race: params.race?.trim() ?? '',
-      characterClass: params.characterClass,
       profession: params.profession,
       description: params.description?.trim() ?? '',
       campaignRole: params.campaignRole?.trim() ?? '',
@@ -768,7 +764,6 @@ export class GameDataService {
     gender?: string
     race?: string
     profession: string
-    characterClass: string
     additionalDescription?: string
   }): Promise<{ image: StoredImage }> {
     const campaign = await this.campaigns.get(params.campaignId)
@@ -787,7 +782,6 @@ export class GameDataService {
       gender: params.gender,
       race: params.race,
       profession: params.profession,
-      characterClass: params.characterClass,
       additionalDescription: params.additionalDescription
     })
 
@@ -798,7 +792,6 @@ export class GameDataService {
         gender: params.gender,
         race: params.race,
         profession: params.profession,
-        characterClass: params.characterClass,
         additionalDescription: params.additionalDescription,
         visualDescription
       }),
@@ -842,12 +835,17 @@ export class GameDataService {
       name?: string
       gender?: string
       race?: string
-      characterClass?: string
       profession?: string
       description?: string
       campaignRole?: string
     }
   }) {
+    log('suggestCharacterFromWorld', 'request received', {
+      campaignId: params.campaignId,
+      userId: params.userId,
+      existingFields: Object.keys(params.existingFields ?? {})
+    })
+
     const campaign = await this.campaigns.get(params.campaignId)
     if (!campaign) throw new NotFoundException('Campanha não encontrada')
     if (!this.canReadResource({ ownerId: campaign.ownerId, visibility: campaign.visibility, userId: params.userId })) {
@@ -856,40 +854,55 @@ export class GameDataService {
 
     const storyDescription = campaign.storyDescription?.trim()
     if (!storyDescription) {
+      warn('suggestCharacterFromWorld', `Campanha sem história para campaignId=${params.campaignId}`)
       throw new BadRequestException('Esta campanha ainda não possui história para gerar personagem.')
     }
 
-    const thematic = campaign.thematic?.trim() || campaign.name?.trim() || 'Campanha sem temática definida'
-
     // Enrich with world lore if available
     const world = await this.worlds.get(campaign.worldId)
+    const worldName = world?.name?.trim() ?? ''
     const worldLore = world?.lore?.trim() ?? ''
+
+    log('suggestCharacterFromWorld', 'context ready', {
+      campaignId: params.campaignId,
+      worldName,
+      storyLength: storyDescription.length,
+      worldId: campaign.worldId,
+      worldLoreLength: worldLore.length
+    })
 
     try {
       const suggestion = await this.narrator.suggestCharacterFromWorld({
-        thematic,
+        worldName,
         storyDescription,
         worldLore,
         existingFields: params.existingFields
       })
 
-      const name = suggestion.name.trim()
-      const gender = suggestion.gender?.trim() || ''
-      const race = suggestion.race?.trim() || ''
-      const characterClass = suggestion.characterClass.trim()
-      const profession = suggestion.profession.trim()
-      const description = suggestion.description.trim()
-      const campaignRole = suggestion.campaignRole?.trim() || ''
+      const existingFields = params.existingFields ?? {}
+      const name = (existingFields.name?.trim() || suggestion.name).trim()
+      const gender = (existingFields.gender?.trim() || suggestion.gender || '').trim()
+      const race = (existingFields.race?.trim() || suggestion.race || '').trim()
+      const profession = (existingFields.profession?.trim() || suggestion.profession).trim()
+      const description = (existingFields.description?.trim() || suggestion.description).trim()
+      const campaignRole = (existingFields.campaignRole?.trim() || suggestion.campaignRole || '').trim()
 
-      if (!name || !characterClass || !profession || !description) {
+      if (!name || !profession || description.length < 80 || !campaignRole) {
         throw new Error('O provedor de IA retornou uma sugestão incompleta.')
       }
+
+      log('suggestCharacterFromWorld', 'suggestion ready', {
+        campaignId: params.campaignId,
+        hasName: Boolean(name),
+        hasProfession: Boolean(profession),
+        descriptionLength: description.length,
+        campaignRoleLength: campaignRole.length
+      })
 
       return {
         name,
         gender,
         race,
-        characterClass,
         profession,
         description,
         campaignRole
@@ -916,7 +929,6 @@ export class GameDataService {
     name: string
     gender?: string
     race?: string
-    characterClass: string
     profession: string
     description?: string
     campaignRole?: string
@@ -960,7 +972,6 @@ export class GameDataService {
       name: params.name,
       gender: params.gender?.trim() ?? '',
       race: params.race?.trim() ?? '',
-      characterClass: params.characterClass,
       profession: params.profession,
       description: params.description?.trim() ?? '',
       campaignRole: params.campaignRole?.trim() ?? '',

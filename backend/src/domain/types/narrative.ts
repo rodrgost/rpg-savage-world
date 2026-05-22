@@ -192,7 +192,6 @@ export type NarrateStartRequest = {
   }
   character: {
     name: string
-    characterClass?: string
     profession?: string
     race?: string
     gender?: string

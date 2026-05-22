@@ -457,144 +457,127 @@ function sanitizeCharacterField(value: unknown, fallback: string): string {
   return cleaned || fallback
 }
 
-const DISALLOWED_CHARACTER_NAMES = new Set(['kael', 'khael', 'kaell', 'cael'])
-const GENERIC_NAME_TOKENS = new Set(['aventureiro', 'aventureira', 'heroi', 'heroina', 'protagonista', 'personagem'])
-const NAME_FALLBACK_POOL = [
-  'Darian',
-  'Liora',
-  'Thoran',
-  'Mirela',
-  'Aedan',
-  'Seris',
-  'Breno',
-  'Ysolda',
-  'Ravena',
-  'Caio',
-  'Selene',
-  'Tiber',
-  'Nayra',
-  'Orin',
-  'Talissa',
-  'Vitor'
-]
-type CharacterCategory = 'fighter' | 'arcane' | 'rogue' | 'support'
-
-const APPEARANCE_BY_CATEGORY: Record<CharacterCategory, string[]> = {
-  fighter: [
-    'compleição robusta, cicatriz diagonal no queixo e olhar firme',
-    'ombros largos e mãos calejadas pelas batalhas, cabelos raspados nas laterais',
-    'estatura imponente, tatuagem tribal no antebraço esquerdo',
-    'cabelos curtos e escuros, nariz quebrado e expressão resoluta'
-  ],
-  arcane: [
-    'traços finos e olhos que parecem calcular tudo ao redor',
-    'cabelos longos antes do tempo grisalhos, dedos manchados de tinta arcana',
-    'estatura esguia, olhar distante e contemplativo, marcas de runa no pescoço',
-    'pele pálida, olhos escuros e expressão sempre analítica'
-  ],
-  rogue: [
-    'estatura baixa e ágil, olhar calculista e movimentos quase silenciosos',
-    'cabelos escuros e curtos, cicatriz fina no supercílio esquerdo',
-    'compleição magra e nervosa, sempre atento ao que acontece ao redor',
-    'rosto comum que facilmente se perde na multidão, olhos atentos'
-  ],
-  support: [
-    'cabelos longos e ruivos, rosto anguloso e gestos expressivos',
-    'pele bronzeada, porte elegante e mãos ágeis sempre com algo para anotar',
-    'olhos claros e penetrantes, postura ereta e ar de quem sabe mais do que diz',
-    'estatura mediana, traços marcantes e sorriso que nunca entrega os planos'
-  ]
+type RecentSuggestedCharacter = {
+  name: string
+  profession: string
+  description: string
+  campaignRole: string
 }
 
-const CLOTHING_BY_CATEGORY: Record<CharacterCategory, string[]> = {
-  fighter: [
-    'veste armadura de couro remendada com placas de metal nos ombros',
-    'usa cota de malha surrada sob um capote de viagem com remendos de batalha',
-    'porta proteções de couro reforçadas, sempre com a arma principal à mão',
-    'veste uniforme militar fora de uso, ainda conservado com disciplina'
-  ],
-  arcane: [
-    'usa robes de tecido escuro com bordados sutis nas mangas',
-    'veste túnica simples sobre calças práticas, carregando uma bolsa cheia de pergaminhos',
-    'porta manto de viagem com bolsos internos repletos de componentes e anotações',
-    'veste roupas comuns propositalmente modestas para não atrair atenção'
-  ],
-  rogue: [
-    'trajes escuros e práticos, cheios de bolsos ocultos e correias ajustáveis',
-    'usa roupas de viajante comum que escondem armadura leve sob o casaco',
-    'veste couro flexível escuro, silencioso ao menor movimento',
-    'roupas de tecido grosso com capuz sempre pronto para cobrir o rosto'
-  ],
-  support: [
-    'porta bolsa de couro repleta de mapas, instrumentos e anotações de campo',
-    'veste robes de estudioso com remendos nos cotovelos e manchas de tinta',
-    'usa vestes práticas para longas jornadas, com espaço para livros e ferramentas',
-    'carrega um cajado de viagem e veste roupas resistentes mas sem ostentação'
-  ]
-}
+const RECENT_CHARACTER_SUGGESTIONS_LIMIT = 8
+const RECENT_CHARACTER_CONTEXTS_LIMIT = 40
+const recentCharacterSuggestions = new Map<string, RecentSuggestedCharacter[]>()
 
-const PERSONALITY_POOL = [
-  'reservado, mas incondicionalmente leal a quem conquista sua confiança',
-  'impulsivo e movido pela adrenalina do momento',
-  'calculista — nunca age sem avaliar os riscos antes',
-  'curioso e determinado a desvendar segredos ocultos',
-  'sarcástico por fora, profundamente compassivo por dentro',
-  'pragmático e direto, sem paciência para rodeios',
-  'idealista que ainda acredita que o bem pode prevalecer',
-  'desconfiado com estranhos, mas honrado com aliados'
-]
-
-function resolveCharacterCategory(characterClass: string, profession: string): CharacterCategory {
-  const key = (characterClass + ' ' + profession)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-  if (/guerreir|patrulheir|ca[cç]ador|mercen|batalh|soldad|cavalei/.test(key)) return 'fighter'
-  if (/arcani|mago|brux|feiticei|bardo|cleric|curand|druida/.test(key)) return 'arcane'
-  if (/ladino|assassin|bateador|batedor|espi|mensageir|ladr/.test(key)) return 'rogue'
-  return 'support'
-}
-
-function pickRandom<T>(items: T[], fallback: T): T {
-  if (!items.length) return fallback
-  const index = Math.floor(Math.random() * items.length)
-  return items[index] ?? fallback
-}
-
-function normalizeNameForCheck(value: string): string {
+function normalizeSuggestionText(value: string): string {
   return value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
     .toLowerCase()
 }
 
-function isDisallowedName(name: string): boolean {
-  const normalized = normalizeNameForCheck(name)
-  if (!normalized) return true
-  if (GENERIC_NAME_TOKENS.has(normalized)) return true
-  if (DISALLOWED_CHARACTER_NAMES.has(normalized)) return true
-  return DISALLOWED_CHARACTER_NAMES.has(normalized.replace(/[^a-z]/g, ''))
+function buildCharacterSuggestionContextKey(req: SuggestCharacterFromWorldRequest): string {
+  const worldName = normalizeSuggestionText(req.worldName ?? '').slice(0, 80)
+  const lore = normalizeSuggestionText(req.worldLore ?? '').slice(0, 120)
+  const story = normalizeSuggestionText(req.storyDescription ?? '').slice(0, 180)
+  return `${worldName}|${lore}|${story}`
 }
 
-function sanitizeCharacterResult(input: SuggestedCharacter): SuggestedCharacter {
-  const output: SuggestedCharacter = { ...input }
+function uniqueSuggestionWords(value: string): Set<string> {
+  const ignored = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'o', 'a', 'os', 'as', 'um', 'uma', 'para', 'por', 'com', 'sem', 'em', 'na', 'no'])
+  return new Set(
+    normalizeSuggestionText(value)
+      .split(' ')
+      .filter(word => word.length > 2 && !ignored.has(word))
+  )
+}
 
-  if (isDisallowedName(output.name)) {
-    output.name = pickRandom(NAME_FALLBACK_POOL, 'Darian')
+function jaccardSimilarity(left: string, right: string): number {
+  const leftWords = uniqueSuggestionWords(left)
+  const rightWords = uniqueSuggestionWords(right)
+  if (leftWords.size === 0 || rightWords.size === 0) return 0
+
+  let intersection = 0
+  for (const word of leftWords) {
+    if (rightWords.has(word)) intersection++
   }
 
-  if (!output.description.trim()) {
-    const category = resolveCharacterCategory(output.characterClass, output.profession)
-    const appearance = pickRandom(APPEARANCE_BY_CATEGORY[category], 'olhos firmes e postura determinada')
-    const clothing = pickRandom(CLOTHING_BY_CATEGORY[category], 'usa roupas práticas de viagem')
-    const personality = pickRandom(PERSONALITY_POOL, 'determinado a encontrar seu lugar no mundo')
-    const capClothing = clothing.charAt(0).toUpperCase() + clothing.slice(1)
-    const capPersonality = personality.charAt(0).toUpperCase() + personality.slice(1)
-    output.description = `${output.name} tem ${appearance}. ${capClothing}. ${capPersonality}.`
+  const union = leftWords.size + rightWords.size - intersection
+  return union === 0 ? 0 : intersection / union
+}
+
+function getRecentCharacterSuggestions(contextKey: string): RecentSuggestedCharacter[] {
+  return recentCharacterSuggestions.get(contextKey) ?? []
+}
+
+function rememberCharacterSuggestion(contextKey: string, character: SuggestedCharacter): void {
+  const existing = getRecentCharacterSuggestions(contextKey)
+  const next = [
+    {
+      name: character.name,
+      profession: character.profession,
+      description: character.description,
+      campaignRole: character.campaignRole
+    },
+    ...existing
+  ].slice(0, RECENT_CHARACTER_SUGGESTIONS_LIMIT)
+
+  if (!recentCharacterSuggestions.has(contextKey) && recentCharacterSuggestions.size >= RECENT_CHARACTER_CONTEXTS_LIMIT) {
+    const oldestKey = recentCharacterSuggestions.keys().next().value
+    if (oldestKey) recentCharacterSuggestions.delete(oldestKey)
   }
 
-  return output
+  recentCharacterSuggestions.set(contextKey, next)
+}
+
+function getRecentSuggestionDiversityIssue(character: SuggestedCharacter, recent: RecentSuggestedCharacter[]): string | null {
+  const name = normalizeSuggestionText(character.name)
+  const profession = normalizeSuggestionText(character.profession)
+  const description = normalizeSuggestionText(character.description)
+  const campaignRole = normalizeSuggestionText(character.campaignRole)
+
+  for (const previous of recent) {
+    const previousName = normalizeSuggestionText(previous.name)
+    const previousProfession = normalizeSuggestionText(previous.profession)
+    const previousDescription = normalizeSuggestionText(previous.description)
+    const previousCampaignRole = normalizeSuggestionText(previous.campaignRole)
+
+    if (name && name === previousName) return `nome repetido (${character.name})`
+    if (profession && profession === previousProfession && jaccardSimilarity(campaignRole, previousCampaignRole) >= 0.28) {
+      return `profissao e papel muito parecidos (${character.profession})`
+    }
+    if (description && jaccardSimilarity(description, previousDescription) >= 0.55) {
+      return 'descricao muito parecida com sugestao recente'
+    }
+  }
+
+  return null
+}
+
+function buildRecentSuggestionAvoidanceLines(recent: RecentSuggestedCharacter[]): string[] {
+  if (!recent.length) return []
+
+  return [
+    'Evite repetir sugestões recentes para esta mesma aventura:',
+    ...recent.slice(0, 5).map((character) => `  - ${character.name} / ${character.profession}`),
+    'Crie uma combinação nova de nome, profissão, papel narrativo e motivação.'
+  ]
+}
+
+function getSuggestedCharacterIssues(character: SuggestedCharacter): string[] {
+  const issues: string[] = []
+  const description = character.description.trim()
+  const campaignRole = character.campaignRole?.trim() ?? ''
+
+  if (!character.name.trim()) issues.push('name vazio')
+  if (!character.profession.trim()) issues.push('profissao vazia')
+  if (description.length < 80) issues.push(`description curta (${description.length})`)
+  if (description && !endsWithSentenceBoundary(description)) issues.push('description sem fim de frase')
+  if (campaignRole.length < 30) issues.push(`campaignRole curto (${campaignRole.length})`)
+
+  return issues
 }
 
 function normalizeLookupKey(value: string): string {
@@ -738,14 +721,6 @@ function extractFieldFromRecord(source: Record<string, unknown>, aliases: string
 
 function buildSuggestedCharacterFromRecord(source: Record<string, unknown>): SuggestedCharacter {
   const nameValue = extractFieldFromRecord(source, ['name', 'nome', 'characterName', 'nomePersonagem'])
-  const classValue = extractFieldFromRecord(source, [
-    'characterClass',
-    'class',
-    'classe',
-    'classePersonagem',
-    'arquetipo',
-    'arquétipo'
-  ])
   const professionValue = extractFieldFromRecord(source, [
     'profession',
     'profissao',
@@ -781,104 +756,12 @@ function buildSuggestedCharacterFromRecord(source: Record<string, unknown>): Sug
   ])
 
   return {
-    name: sanitizeCharacterField(nameValue, 'Aventureiro'),
+    name: sanitizeCharacterField(nameValue, ''),
     gender: sanitizeCharacterField(genderValue, ''),
-    race: sanitizeCharacterField(raceValue, 'Humano'),
-    characterClass: sanitizeCharacterField(classValue, 'Aventureiro'),
+    race: sanitizeCharacterField(raceValue, ''),
     profession: sanitizeCharacterField(professionValue, ''),
     description: sanitizeCharacterField(descriptionValue, ''),
     campaignRole: sanitizeCharacterField(campaignRoleValue, '')
-  }
-}
-
-function parseCharacterFromLooseText(text: string): Record<string, unknown> | null {
-  const raw = stripMarkdownFence(text).replace(/\r\n?/g, '\n').trim()
-  if (!raw) return null
-
-  const flattened = raw
-    .replace(/\*\*/g, '')
-    .replace(/^[\-•]\s*/gm, '')
-    .replace(/\s+/g, ' ')
-
-  const lines = raw
-    .split('\n')
-    .map((line) => line.replace(/\*\*/g, '').replace(/^[\-•]\s*/, '').trim())
-    .filter(Boolean)
-
-  const stopAtNextLabel = (value: string): string =>
-    value
-      .replace(
-        /(\s+)?(?:nome|name|sexo|gender|ra[cç]a|race|esp[eé]cie|classe|class|arqu[eê]tipo|profiss[aã]o|profession|occupation|of[ií]cio|descri[cç][aã]o|description|bio|background|papel|campanha|campaign|role|missao|miss[aã]o)\s*[:=\-].*$/i,
-        ''
-      )
-      .trim()
-
-  const cleanValue = (value: string): string => {
-    const firstChunk = value.split(/[;|]/)[0] ?? value
-    return stopAtNextLabel(firstChunk).trim()
-  }
-
-  const extractFromText = (source: string, patterns: RegExp[]): string | undefined => {
-    for (const pattern of patterns) {
-      const match = source.match(pattern)
-      const value = match?.[1]?.trim()
-      if (value) return cleanValue(value)
-    }
-    return undefined
-  }
-
-  const findInLines = (patterns: RegExp[]): string | undefined => {
-    for (const line of lines) {
-      const extracted = extractFromText(line, patterns)
-      if (extracted) return extracted
-    }
-    return undefined
-  }
-
-  const namePatterns = [
-    /(?:^|\b)(?:nome|name)\s*[:=\-]\s*([^\n]+)/i,
-    /(?:^|\b)(?:personagem)\s*[:=\-]\s*([^\n]+)/i
-  ]
-  const genderPatterns = [
-    /(?:^|\b)(?:sexo|gender|g[eê]nero)\s*[:=\-]\s*([^\n]+)/i
-  ]
-  const racePatterns = [
-    /(?:^|\b)(?:ra[cç]a|race|esp[eé]cie|species)\s*[:=\-]\s*([^\n]+)/i
-  ]
-  const classPatterns = [
-    /(?:^|\b)(?:classe|class|arqu[eê]tipo)\s*[:=\-]\s*([^\n]+)/i,
-    /(?:^|\b)(?:tipo)\s*[:=\-]\s*([^\n]+)/i
-  ]
-  const professionPatterns = [
-    /(?:^|\b)(?:profiss[aã]o|profession|occupation|of[ií]cio)\s*[:=\-]\s*([^\n]+)/i,
-    /(?:^|\b)(?:papel|fun[cç][aã]o)\s*[:=\-]\s*([^\n]+)/i
-  ]
-  const descriptionPatterns = [
-    /(?:^|\b)(?:descri[cç][aã]o|description|bio|background)\s*[:=\-]\s*([^\n]+)/i,
-    /(?:^|\b)(?:resumo|conceito)\s*[:=\-]\s*([^\n]+)/i
-  ]
-  const campaignRolePatterns = [
-    /(?:^|\b)(?:papel|PAPEL|papelenacampanha|campanha|campaign|role|miss[aã]o)\s*[:=\-]\s*([^\n]+)/i
-  ]
-
-  const name = findInLines(namePatterns) ?? extractFromText(flattened, namePatterns)
-  const gender = findInLines(genderPatterns) ?? extractFromText(flattened, genderPatterns)
-  const race = findInLines(racePatterns) ?? extractFromText(flattened, racePatterns)
-  const characterClass = findInLines(classPatterns) ?? extractFromText(flattened, classPatterns)
-  const profession = findInLines(professionPatterns) ?? extractFromText(flattened, professionPatterns)
-  const description = findInLines(descriptionPatterns) ?? extractFromText(flattened, descriptionPatterns)
-  const campaignRole = findInLines(campaignRolePatterns) ?? extractFromText(flattened, campaignRolePatterns)
-
-  if (!name && !characterClass && !profession && !description) return null
-
-  return {
-    ...(name ? { name } : {}),
-    ...(gender ? { gender } : {}),
-    ...(race ? { race } : {}),
-    ...(characterClass ? { characterClass } : {}),
-    ...(profession ? { profession } : {}),
-    ...(description ? { description } : {}),
-    ...(campaignRole ? { campaignRole } : {})
   }
 }
 
@@ -1607,7 +1490,6 @@ export class GeminiAdapter implements Narrator {
         `Campanha: ${req.campaignTitle}.`,
         ...(req.gender?.trim() ? [`Gênero: ${req.gender}.`] : []),
         ...(req.race?.trim() ? [`Raça ou espécie: ${req.race}.`] : []),
-        `Classe: ${req.characterClass}.`,
         `Profissão: ${req.profession}.`,
         ...(req.additionalDescription?.trim() ? [`Detalhes fornecidos: ${req.additionalDescription}.`] : []),
         'Descreva um retrato de personagem coerente com esse contexto, destacando silhueta, vestimenta, expressão, postura e traços visuais marcantes.'
@@ -1631,7 +1513,11 @@ export class GeminiAdapter implements Narrator {
   async suggestCharacterFromWorld(req: SuggestCharacterFromWorldRequest): Promise<SuggestedCharacter> {
     const existing = req.existingFields ?? {}
     const hasExisting = Object.values(existing).some(v => v?.trim())
-
+    const worldName = req.worldName?.trim() ?? ''
+    const worldLore = req.worldLore?.trim() ?? ''
+    const storyDescription = req.storyDescription?.trim() ?? ''
+    const contextKey = buildCharacterSuggestionContextKey(req)
+    const creativeIdentityLocked = Boolean(existing.name?.trim() || existing.profession?.trim())
     const existingLines: string[] = []
     if (hasExisting) {
       existingLines.push(
@@ -1640,7 +1526,6 @@ export class GeminiAdapter implements Narrator {
       if (existing.name) existingLines.push(`  name: "${existing.name}"`)
       if (existing.gender) existingLines.push(`  gender: "${existing.gender}"`)
       if (existing.race) existingLines.push(`  race: "${existing.race}"`)
-      if (existing.characterClass) existingLines.push(`  characterClass: "${existing.characterClass}"`)
       if (existing.profession) existingLines.push(`  profession: "${existing.profession}"`)
       if (existing.description) existingLines.push(`  description: "${existing.description}"`)
       if (existing.campaignRole) existingLines.push(`  campaignRole: "${existing.campaignRole}"`)
@@ -1648,111 +1533,93 @@ export class GeminiAdapter implements Narrator {
 
     const sysPrompt = [
       'Você é um designer de personagens para RPG.',
-      'Leia o enredo fornecido e crie um personagem cujo papel e classe emergem NATURALMENTE da história — não escolha o arquétipo mais genérico.',
-      'NÃO use os nomes: Kael, Khael, Kaell, Cael.',
-      'NÃO use Guerreiro + Humano + Mercenário como combinação padrão — só os escolha se o enredo pedir diretamente.',
-      'Exemplos de como derivar classe do enredo:',
-      '  - Segredos, intrigas, poder → Espião, Arauto, Ladino, Diplomata',
-      '  - Magia proibida, mistérios arcanos → Arcanista, Oráculo, Bruxo, Estudioso',
-      '  - Conflito religioso, doenças, morte → Curandeiro, Clérigo, Sacerdote, Herético',
-      '  - Exploração, territórios desconhecidos → Explorador, Batedor, Cartógrafa, Guia',
-      '  - Comércio, contrabando, recursos → Negociante, Contrabandista, Atravessador',
-      '  - Guerra, ocupação, resistência → Soldado, Guerrilheiro, Estrategista, Mensageiro',
+      'Leia o nome do mundo, a lore do universo e a história da aventura. Crie um personagem cujo papel e profissão emergem NATURALMENTE desses dados, sem usar arquétipos pré-definidos pelo sistema.',
       'Responda SOMENTE em JSON válido, sem markdown e sem comentários.',
-      'Todos os 7 campos são OBRIGATÓRIOS e não podem estar vazios:',
-      '{"name":"...","gender":"...","race":"...","characterClass":"...","profession":"...","description":"...","campaignRole":"..."}',
+      'Retorne sempre as 6 chaves; gender e race podem ser string vazia quando o contexto não sustentar uma inferência.',
+      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"..."}',
       '',
       'Instruções por campo:',
-      '  name: nome criativo em português, sem clichês (ex: Mirela, Thoran, Seris)',
-      '  gender: exatamente Masculino, Feminino ou Outro',
-      '  race: espécie coerente com a temática; não use sempre Humano',
-      '  characterClass: classe derivada do enredo (veja exemplos acima); máx 60 chars',
-      '  profession: ofício derivado do enredo, diferente da classe; máx 60 chars',
-      '  description: 2-3 frases descrevendo aparência física (cabelo, olhos, compleição ou cicatriz marcante), vestimenta ou equipamento coerente com a classe, e traço de personalidade com motivação. Mín 80 chars, máx 280 chars.',
+      '  name: nome coerente com o contexto; se o enredo sugerir um padrão cultural, siga esse padrão',
+      '  gender: Masculino, Feminino ou Outro somente quando houver pista contextual; caso contrário, string vazia',
+      '  race: raça/espécie somente quando houver pista contextual; caso contrário, string vazia',
+      '  profession: ofício ou papel social derivado exclusivamente do nome do mundo, da lore e da história; máx 60 chars',
+      '  description: 2-3 frases descrevendo aparência física (cabelo, olhos, compleição ou cicatriz marcante), vestimenta ou equipamento coerente com a profissão, e traço de personalidade com motivação. Mín 80 chars, máx 280 chars.',
       '  campaignRole: o que este personagem está fazendo nesta aventura específica, qual sua missão ou como se conecta ao enredo. Seja concreto, não genérico. Máx 200 chars.',
+      'Em chamadas repetidas para o mesmo enredo, varie nome, profissão, função narrativa, motivação, aparência e ponto de entrada na aventura.',
     ].join('\n')
 
-    const prompt = [
-      ...(existingLines.length > 0 ? [...existingLines, ''] : []),
-      ...(req.worldLore ? [`Lore do universo: ${req.worldLore}.`, ''] : []),
-      `Temática da aventura: ${req.thematic || 'não informada'}.`,
-      `História da aventura: ${req.storyDescription || 'não informada'}.`,
-      '',
-      'Derive a classe e profissão diretamente desta história — qual arquétipo o ENREDO pede, não o mais comum de RPG.'
-    ].join('\n')
+    const buildPrompt = (attempt: number): string => {
+      const recent = creativeIdentityLocked ? [] : getRecentCharacterSuggestions(contextKey)
+      const avoidanceLines = buildRecentSuggestionAvoidanceLines(recent)
+      return [
+        ...(existingLines.length > 0 ? [...existingLines, ''] : []),
+        ...(avoidanceLines.length > 0 ? [...avoidanceLines, ''] : []),
+        `Tentativa de variação: ${attempt}.`,
+        '',
+        ...(worldName ? [`Nome do mundo/universo: ${worldName}.`] : []),
+        ...(worldLore ? [`Lore do universo: ${worldLore}.`, ''] : []),
+        `História da aventura: ${storyDescription || 'não informada'}.`,
+        '',
+        'Derive a profissão e o papel somente do mundo/universo, da lore e da história da aventura.'
+      ].join('\n')
+    }
 
     try {
-      const generated = await this.generateText(prompt, {
-        maxOutputTokens: 1536,
-        timeoutMs: this.timeoutMs,
-        responseMimeType: 'application/json',
-        temperature: this.characterSuggestionTemperature,
-        systemInstruction: sysPrompt
-      })
+      const maxAttempts = creativeIdentityLocked ? 1 : 3
+      let lastIssues: string[] = []
 
-      log('suggestCharacterFromWorld', 'LLM raw response:', generated)
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const firstResult = await this.generateTextDetailed(buildPrompt(attempt), {
+          maxOutputTokens: 1536,
+          timeoutMs: this.timeoutMs,
+          responseMimeType: 'application/json',
+          temperature: Math.max(this.characterSuggestionTemperature, attempt === 1 ? 0.95 : 1.15),
+          systemInstruction: sysPrompt,
+          thinkingBudget: 0
+        }, attempt)
+        const generated = firstResult.text
 
-      const parsed = parseJsonObject(generated) ?? parseCharacterFromLooseText(generated)
-      log('suggestCharacterFromWorld', 'Parsed object:', JSON.stringify(parsed))
+        log('suggestCharacterFromWorld', `LLM raw response (attempt=${attempt}):`, generated)
 
-      if (parsed) {
-        const firstTry = buildSuggestedCharacterFromRecord(parsed)
-        log('suggestCharacterFromWorld', 'Built character:', JSON.stringify(firstTry))
+        const parsedJson = parseJsonObjectDetailed(generated)
+        const parsed = parsedJson?.value ?? null
+        log('suggestCharacterFromWorld', `Parsed object (attempt=${attempt}, finish=${firstResult.finishReason ?? 'unknown'}, source=${parsedJson?.source ?? 'none'}):`, JSON.stringify(parsed))
 
-        const isCompletelyEmpty = firstTry.name === 'Aventureiro' && firstTry.characterClass === 'Aventureiro' && !firstTry.profession.trim()
-        if (!isCompletelyEmpty) {
-          // If description came back empty, retry with a focused call before returning
-          if (!firstTry.description.trim()) {
-            log('suggestCharacterFromWorld', 'description vazio — fazendo retry focado')
-            try {
-              const descSysPrompt = 'Descreva o personagem RPG abaixo em 2-3 frases vívidas. Inclua: aparência física marcante (cabelo, olhos, compleição ou cicatriz), vestimenta ou equipamento coerente com a classe, e traço de personalidade com motivação. Responda APENAS com a descrição, sem introdução, sem JSON, sem aspas.'
-              const descPrompt = `Nome: ${firstTry.name}. Classe: ${firstTry.characterClass}. Profissão: ${firstTry.profession}. Papel na aventura: ${firstTry.campaignRole || 'não definido'}.`
-              const descGenerated = await this.generateText(descPrompt, {
-                maxOutputTokens: 300,
-                timeoutMs: this.timeoutMs,
-                temperature: 0.9,
-                systemInstruction: descSysPrompt
-              })
-              const cleaned = descGenerated.trim().replace(/^["'"']+|["'"']+$/g, '').trim()
-              if (cleaned.length >= 30) firstTry.description = cleaned
-            } catch {
-              // pool fallback handled in sanitizeCharacterResult
-            }
+        if (parsed) {
+          const firstTry = buildSuggestedCharacterFromRecord(parsed)
+          log('suggestCharacterFromWorld', `Built character (attempt=${attempt}):`, JSON.stringify({
+            name: firstTry.name,
+            profession: firstTry.profession,
+            descriptionLength: firstTry.description.length,
+            campaignRoleLength: firstTry.campaignRole.length
+          }))
+
+          const truncatedJson = firstResult.finishReason === 'MAX_TOKENS' && parsedJson?.source !== 'direct'
+          const firstTryIssues = getSuggestedCharacterIssues(firstTry)
+          const diversityIssue = creativeIdentityLocked ? null : getRecentSuggestionDiversityIssue(firstTry, getRecentCharacterSuggestions(contextKey))
+          lastIssues = [
+            ...(truncatedJson ? ['truncado'] : []),
+            ...firstTryIssues,
+            ...(diversityIssue ? [diversityIssue] : [])
+          ]
+
+          if (!truncatedJson && firstTryIssues.length === 0 && !diversityIssue) {
+            const suggestion = firstTry
+            if (!creativeIdentityLocked) rememberCharacterSuggestion(contextKey, suggestion)
+            return suggestion
           }
-          return sanitizeCharacterResult(firstTry)
+
+          warn(
+            'suggestCharacterFromWorld',
+            `Tentativa insuficiente (attempt=${attempt}, finish=${firstResult.finishReason ?? 'unknown'}, source=${parsedJson?.source ?? 'none'}, issues=${lastIssues.join(', ') || 'desconhecido'})`
+          )
+        } else {
+          lastIssues = ['resposta sem objeto legivel']
+          warn('suggestCharacterFromWorld', `Tentativa sem parse legivel (attempt=${attempt}, finish=${firstResult.finishReason ?? 'unknown'})`)
         }
       }
 
-      // Retry with plain line-by-line format (no JSON mode) when first pass returned empty/defaults
-      const retrySysPrompt = [
-        'Crie um personagem de RPG baseado no enredo abaixo. Responda em exatamente 7 linhas, sem texto adicional:',
-        'NOME: nome criativo do personagem',
-        'SEXO: Masculino, Feminino ou Outro',
-        'RACA: raça ou espécie',
-        'CLASSE: classe derivada do enredo',
-        'PROFISSAO: profissão ou ofício',
-        'DESCRICAO: 2-3 frases — aparência física marcante, vestimenta coerente com a classe, personalidade e motivação',
-        'PAPEL: o que o personagem faz nesta aventura e como se conecta ao enredo',
-        'Não use os nomes: Kael, Khael, Kaell, Cael.'
-      ].join('\n')
-
-      const retryPrompt = [
-        `Temática: ${req.thematic || 'não informada'}.`,
-        `História: ${req.storyDescription || 'não informada'}.`
-      ].join('\n')
-
-      log('suggestCharacterFromWorld', 'Primeira tentativa retornou vazia — fazendo retry...')
-      const retryGenerated = await this.generateText(retryPrompt, {
-        maxOutputTokens: 600,
-        timeoutMs: this.timeoutMs,
-        temperature: 0.9,
-        systemInstruction: retrySysPrompt
-      }, 2)
-
-      const retryParsed = parseCharacterFromLooseText(retryGenerated)
-      if (!retryParsed) throw new Error('Resposta não veio em formato legível')
-
-      return sanitizeCharacterResult(buildSuggestedCharacterFromRecord(retryParsed))
+      throw new Error(`Resposta veio incompleta, repetida ou fora do JSON esperado (${lastIssues.join(', ') || 'sem detalhe'})`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
       throw new Error(`Falha ao sugerir personagem com ${this.providerLabel}: ${message}`)
@@ -2759,7 +2626,6 @@ export class GeminiAdapter implements Narrator {
       `PERSONAGEM: ${req.character.name}`,
       req.character.race ? `Raça: ${req.character.race}` : '',
       req.character.gender ? `Gênero: ${req.character.gender}` : '',
-      req.character.characterClass ? `Classe: ${req.character.characterClass}` : '',
       req.character.profession ? `Profissão: ${req.character.profession}` : '',
       req.character.description ? `Descrição: ${req.character.description}` : '',
       ...characterTraits,
@@ -2774,8 +2640,8 @@ export class GeminiAdapter implements Narrator {
       '',
       'ITENS INICIAIS (OBRIGATÓRIO):',
       'Retorne em "itemChanges" de 3 a 6 itens iniciais com changeType "gained" que o personagem já possui ao começar a aventura.',
-      'Escolha itens coerentes com a classe, profissão, raça e ambientação do mundo. Exemplos de categorias:',
-      '- Arma principal adequada à classe/profissão (espada, arco, cajado, adaga, pistola, rifle, etc.)',
+      'Escolha itens coerentes com a profissão, raça e ambientação do mundo. Exemplos de categorias:',
+      '- Arma principal adequada à profissão (espada, arco, cajado, adaga, pistola, rifle, etc.)',
       '- Se a arma for à distância (arco, besta, pistola, rifle, escopeta, etc.), inclua OBRIGATORIAMENTE a munição correspondente como item separado (flechas, virotes, balas, cartuchos, etc.) com quantidade adequada ao contexto',
       '- Armadura ou vestimenta de proteção se aplicável',
       '- Provisões básicas de viagem (ração, cantil, bolsa)',

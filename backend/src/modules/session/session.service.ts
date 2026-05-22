@@ -863,7 +863,6 @@ export class SessionService {
         },
         character: {
           name: character.name ?? 'Aventureiro',
-          characterClass: character.characterClass,
           profession: character.profession,
           race: character.race,
           gender: character.gender,
@@ -1041,7 +1040,6 @@ export class SessionService {
           : { thematic: '', storyDescription: '' },
         character: {
           name: character.name ?? 'Aventureiro',
-          characterClass: character.characterClass,
           profession: character.profession,
           race: character.race,
           gender: character.gender,

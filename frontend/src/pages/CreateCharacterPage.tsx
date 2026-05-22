@@ -110,7 +110,6 @@ export function CreateCharacterPage({ uid }: Props) {
   const [name, setName] = useState('')
   const [gender, setGender] = useState('')
   const [race, setRace] = useState('')
-  const [characterClass, setCharacterClass] = useState('')
   const [profession, setProfession] = useState('')
   const [description, setDescription] = useState('')
   const [campaignRole, setCampaignRole] = useState('')
@@ -136,6 +135,7 @@ export function CreateCharacterPage({ uid }: Props) {
   const skillPointsUsed = useMemo(() => countSkillSteps(skills), [skills])
   const skillPointsLeft = skillPointsTotal - skillPointsUsed
   const selectedCampaign = campaigns.find((campaign) => campaign.id === selectedCampaignId)
+  const selectedCampaignHasStory = Boolean(selectedCampaign?.storyDescription?.trim())
   const isOwner = !isEditMode || !ownerId || ownerId === uid
   const isReadOnly = isEditMode && !isOwner
 
@@ -202,7 +202,6 @@ export function CreateCharacterPage({ uid }: Props) {
         setName(c.name)
         setGender(c.gender ?? '')
         setRace(c.race ?? '')
-        setCharacterClass(c.characterClass ?? '')
         setProfession(c.profession ?? '')
         setDescription(c.description ?? '')
         setCampaignRole(c.campaignRole ?? '')
@@ -271,6 +270,10 @@ export function CreateCharacterPage({ uid }: Props) {
 
   async function handleSuggest() {
     if (!selectedCampaignId) return
+    if (!selectedCampaignHasStory) {
+      setError('Esta campanha ainda não possui história para gerar personagem.')
+      return
+    }
     setSuggestLoading(true)
     setError('')
     try {
@@ -279,10 +282,9 @@ export function CreateCharacterPage({ uid }: Props) {
       if (name.trim()) existing.name = name.trim()
       if (gender.trim()) existing.gender = gender.trim()
       if (race.trim()) existing.race = race.trim()
-      if (characterClass.trim()) existing.characterClass = characterClass.trim()
       if (profession.trim()) existing.profession = profession.trim()
       if (campaignRole.trim()) existing.campaignRole = campaignRole.trim()
-      //if (description.trim()) existing.description = description.trim()
+      if (description.trim()) existing.description = description.trim()
 
       const suggestion = await generateCharacterFromWorldStory({
         campaignId: selectedCampaignId,
@@ -293,7 +295,6 @@ export function CreateCharacterPage({ uid }: Props) {
       if (!name.trim()) setName(suggestion.name)
       if (!gender.trim()) setGender(suggestion.gender)
       if (!race.trim()) setRace(suggestion.race)
-      if (!characterClass.trim()) setCharacterClass(suggestion.characterClass)
       if (!profession.trim()) setProfession(suggestion.profession)
       if (!description.trim()) setDescription(suggestion.description)
       if (!campaignRole.trim()) setCampaignRole(suggestion.campaignRole)
@@ -305,7 +306,7 @@ export function CreateCharacterPage({ uid }: Props) {
   }
 
   async function handleImagePreview() {
-    if (!selectedCampaignId || !profession || !characterClass) return
+    if (!selectedCampaignId || !profession) return
     setImageLoading(true)
     setError('')
     try {
@@ -328,7 +329,6 @@ export function CreateCharacterPage({ uid }: Props) {
         gender,
         race,
         profession,
-        characterClass,
         additionalDescription: parts.join('. ') || undefined
       })
       setImage(img)
@@ -365,7 +365,7 @@ export function CreateCharacterPage({ uid }: Props) {
     try {
       if (isEditMode && characterId) {
         await updateCharacter(characterId, {
-          name, gender, race, characterClass, profession, description, campaignRole,
+          name, gender, race, profession, description, campaignRole,
           visibility,
           attributes, skills, edges: selectedEdges, hindrances: selectedHindrances,
           hindranceAllocation, image
@@ -373,7 +373,7 @@ export function CreateCharacterPage({ uid }: Props) {
       } else {
         await createCharacter({
           campaignId: selectedCampaignId,
-          name, gender, race, characterClass, profession, description, campaignRole,
+          name, gender, race, profession, description, campaignRole,
           visibility,
           attributes, skills, edges: selectedEdges, hindrances: selectedHindrances,
           hindranceAllocation, image
@@ -451,19 +451,20 @@ export function CreateCharacterPage({ uid }: Props) {
               <div className="form-row-2">
                 <button
                   className="btn-ai-gen"
-                  disabled={suggestLoading}
+                  disabled={suggestLoading || !selectedCampaignHasStory}
                   onClick={handleSuggest}
                   type="button"
+                  title={selectedCampaignHasStory ? 'Sugerir personagem pela IA' : 'A campanha precisa ter história antes de sugerir personagem'}
                 >
                   {suggestLoading ? <><span className="btn-ai-spinner" /> Gerando sugestão…</> : '✨ Sugerir pela IA'}
                 </button>
-                {(name || gender || race || characterClass || profession || description || campaignRole) && (
+                {(name || gender || race || profession || description || campaignRole) && (
                   <button
                     className="button-danger-outline"
                     type="button"
                     onClick={() => {
                       setName(''); setGender(''); setRace('')
-                      setCharacterClass(''); setProfession(''); setDescription('')
+                      setProfession(''); setDescription('')
                       setCampaignRole(''); setImage(undefined)
                     }}
                   >
@@ -471,6 +472,12 @@ export function CreateCharacterPage({ uid }: Props) {
                   </button>
                 )}
               </div>
+            )}
+
+            {selectedCampaignId && !selectedCampaignHasStory && (
+              <p className="error" style={{ margin: 0 }}>
+                Esta campanha ainda não possui história para gerar personagem.
+              </p>
             )}
 
             <label>
@@ -492,10 +499,6 @@ export function CreateCharacterPage({ uid }: Props) {
                 <input onChange={(e) => setRace(e.target.value)} type="text" value={race} placeholder="Ex: Humano, Elfo, Anão..." />
               </label>
             </div>
-            <label>
-              Classe / Conceito
-              <input onChange={(e) => setCharacterClass(e.target.value)} required type="text" value={characterClass} placeholder="Ex: Guerreiro, Mago, Explorador..." />
-            </label>
             <label>
               Profissão
               <input onChange={(e) => setProfession(e.target.value)} required type="text" value={profession} placeholder="Ex: Mercenário, Curandeiro..." />
@@ -527,7 +530,7 @@ export function CreateCharacterPage({ uid }: Props) {
             )}
             <button
               className="btn-ai-gen button-full"
-              disabled={imageLoading || !selectedCampaignId || !profession || !characterClass}
+              disabled={imageLoading || !selectedCampaignId || !profession}
               onClick={handleImagePreview}
               type="button"
               style={{ marginTop: image ? 'var(--space-3)' : 0 }}

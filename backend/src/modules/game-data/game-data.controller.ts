@@ -103,7 +103,6 @@ const CreateCharacterBody = z.object({
   name: z.string().min(1),
   gender: z.string().optional().default(''),
   race: z.string().optional().default(''),
-  characterClass: z.string().min(1),
   profession: z.string().min(1),
   description: z.string().optional(),
   campaignRole: z.string().optional(),
@@ -121,7 +120,6 @@ const UpdateCharacterBody = z.object({
   name: z.string().min(1),
   gender: z.string().optional().default(''),
   race: z.string().optional().default(''),
-  characterClass: z.string().min(1),
   profession: z.string().min(1),
   description: z.string().optional(),
   campaignRole: z.string().optional(),
@@ -140,7 +138,6 @@ const CharacterImagePreviewBody = z
     campaignId: z.string().min(1),
     gender: z.string().optional().default(''),
     race: z.string().optional().default(''),
-    characterClass: z.string().min(1),
     profession: z.string().min(1),
     additionalDescription: z.string().optional()
   })
@@ -153,7 +150,6 @@ const CharacterSuggestionBody = z
       name: z.string().optional(),
       gender: z.string().optional(),
       race: z.string().optional(),
-      characterClass: z.string().optional(),
       profession: z.string().optional(),
       description: z.string().optional(),
       campaignRole: z.string().optional(),

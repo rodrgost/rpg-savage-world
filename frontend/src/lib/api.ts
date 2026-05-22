@@ -241,7 +241,6 @@ function mapCharacterRecord(item: {
   name: string
   gender?: string
   race?: string
-  characterClass?: string
   profession?: string
   description?: string
   campaignRole?: string
@@ -265,7 +264,6 @@ function mapCharacterRecord(item: {
     name: item.name,
     gender: item.gender,
     race: item.race,
-    characterClass: item.characterClass,
     profession: item.profession,
     description: item.description,
     campaignRole: item.campaignRole,
@@ -492,7 +490,6 @@ export async function createCharacter(params: {
   name: string
   gender?: string
   race?: string
-  characterClass: string
   profession: string
   description?: string
   campaignRole?: string
@@ -518,7 +515,6 @@ export async function generateCharacterFromWorldStory(params: {
     name?: string
     gender?: string
     race?: string
-    characterClass?: string
     profession?: string
     description?: string
     campaignRole?: string
@@ -527,7 +523,6 @@ export async function generateCharacterFromWorldStory(params: {
   name: string
   gender: string
   race: string
-  characterClass: string
   profession: string
   description: string
   campaignRole: string
@@ -543,7 +538,6 @@ export async function generateCharacterImagePreview(params: {
   gender?: string
   race?: string
   profession: string
-  characterClass: string
   additionalDescription?: string
 }): Promise<StoredImage> {
   const response = await apiRequest<{ image: StoredImage }>('/characters/image-preview', {
@@ -566,7 +560,6 @@ export async function listCharacters(campaignId?: string): Promise<Character[]> 
     name: string
     gender?: string
     race?: string
-    characterClass?: string
     profession?: string
     description?: string
     campaignRole?: string
@@ -593,7 +586,6 @@ export async function getCharacter(characterId: string): Promise<Character> {
     name: string
     gender?: string
     race?: string
-    characterClass?: string
     profession?: string
     description?: string
     campaignRole?: string
@@ -621,7 +613,6 @@ export async function updateCharacter(
     name: string
     gender?: string
     race?: string
-    characterClass: string
     profession: string
     description?: string
     campaignRole?: string
