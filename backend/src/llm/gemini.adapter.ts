@@ -1143,7 +1143,7 @@ export class GeminiAdapter implements Narrator {
     const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'Nenhuma flag ativa relevante.'
 
     const sysPrompt = [
-      'Você mantém o resumo canônico de continuidade de uma sessão de RPG Savage Worlds.',
+      'Você mantém o resumo canônico de continuidade de uma história.',
       'Objetivo: gerar um resumo que preserva TANTO a continuidade mecânica QUANTO os fios narrativos abertos — permitindo que o narrador construa sobre o que já foi estabelecido.',
       'Regras:',
       '- Escreva em parágrafos corridos, sem títulos, rótulos ou seções.',
@@ -1222,7 +1222,7 @@ export class GeminiAdapter implements Narrator {
     const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'Nenhuma flag ativa relevante.'
 
     const sysPrompt = [
-      'Você mantém o resumo canônico de continuidade de uma sessão de RPG.',
+      'Você mantém o resumo canônico de continuidade de uma história.',
       'Regras:',
       '- Use o resumo anterior como base principal e as mensagens fornecidas para incorporar contexto que ainda importe para a continuação imediata e para a coerência narrativa.',
       '- Não reconte a ação passo a passo e não duplique fatos já cobertos pelo resumo anterior.',
@@ -1645,7 +1645,7 @@ export class GeminiAdapter implements Narrator {
   } = {}): string {
     const { world, campaign, rulesDigest, summaryText, playerSkills, mode = 'turn', narrativeStyle, simpleVocabulary } = opts
     const lines = [
-      'Você é o Narrador de um RPG Savage Worlds. Responda em português do Brasil, sempre em segunda pessoa do singular ("Você entra...", "Você vê...").',
+      'Você é o Narrador de uma história. Responda em português do Brasil, sempre em segunda pessoa do singular ("Você entra...", "Você vê...").',
       '',
       '━━━ REGRA PRINCIPAL DO CAMPO "narrative" ━━━',
       'Narre a consequência da ação do jogador de forma direta e progressiva.',
@@ -2425,7 +2425,7 @@ export class GeminiAdapter implements Narrator {
     }
 
     const sysPrompt = [
-      'Você é o Narrador Mestre de um RPG de mesa Savage Worlds.',
+      'Você é o Narrador de uma história.',
       'O jogador digitou uma ação livre. Sua tarefa é VALIDAR se a ação é possível no contexto atual.',
       '',
       'Você DEVE retornar SOMENTE um JSON válido (sem markdown, sem comentários) com esta estrutura:',
@@ -2621,7 +2621,7 @@ export class GeminiAdapter implements Narrator {
     if (req.character.hindrances.length) characterTraits.push(`Complicações: ${req.character.hindrances.map(h => `${h.name} (${h.severity})`).join(', ')}`)
 
     const userPrompt = [
-      'INÍCIO DE SESSÃO — Narre a abertura desta aventura de RPG.',
+      'INÍCIO DE SESSÃO — Narre a abertura desta história.',
       '',
       `PERSONAGEM: ${req.character.name}`,
       req.character.race ? `Raça: ${req.character.race}` : '',
