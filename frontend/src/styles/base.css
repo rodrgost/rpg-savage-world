@@ -1,6 +1,7 @@
 :root {
   color-scheme: dark;
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Merriweather', serif;
 
   --content-max-width: 1180px;
   --content-max-width-game: 1360px;
@@ -11,6 +12,8 @@
   --bg-app: #0c0e12;
   --bg-surface: #14171e;
   --bg-surface-hover: #1a1e28;
+  --glass-bg: rgba(20, 23, 30, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.1);
   --bg-field: #111520;
   --bg-muted: #0f1219;
   --bg-card: #161b25;
@@ -28,10 +31,10 @@
   --border-accent: #3d5afe;
   --border-subtle: #1c2030;
 
-  --accent: #4a6cf7;
-  --accent-hover: #5b7cff;
-  --accent-soft: rgba(74, 108, 247, 0.12);
-  --accent-glow: rgba(74, 108, 247, 0.25);
+  --accent: #5c7cff;
+  --accent-hover: #7c9cff;
+  --accent-soft: rgba(92, 124, 255, 0.12);
+  --accent-glow: rgba(92, 124, 255, 0.4);
 
   --action-primary: #3d5afe;
   --action-primary-hover: #536dfe;
