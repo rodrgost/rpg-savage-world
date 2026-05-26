@@ -114,6 +114,7 @@
   grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
   gap: clamp(18px, 3vw, 36px);
   align-items: stretch;
+  background: radial-gradient(circle at top left, rgba(92, 124, 255, 0.15), transparent 60%), var(--glass-bg);
 }
 
 .home-hero-copy {
@@ -360,7 +361,10 @@
   max-width: 11ch;
   font-size: clamp(2.6rem, 5vw, 4.4rem);
   line-height: 0.95;
-  letter-spacing: -0.06em;
+  letter-spacing: -0.04em;
+  background: linear-gradient(135deg, #fff 0%, #a9bcff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .auth-panel--form,
@@ -380,12 +384,19 @@
   width: fit-content;
   padding: 6px 12px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(92, 124, 255, 0.15);
+  border: 1px solid rgba(92, 124, 255, 0.3);
   color: #dbe4ff;
   font-size: var(--font-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 700;
+  animation: authKickerPulse 3s ease-in-out infinite;
+}
+
+@keyframes authKickerPulse {
+  0%, 100% { box-shadow: 0 0 0px var(--accent-glow); }
+  50% { box-shadow: 0 0 10px var(--accent-glow); }
 }
 
 .auth-highlights {
