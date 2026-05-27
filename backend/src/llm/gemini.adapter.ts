@@ -1299,12 +1299,12 @@ export class GeminiAdapter implements Narrator {
 
   async expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult> {
     const sysPrompt = [
-      'Você é um worldbuilder de RPG. Escreva em português do Brasil.',
-      'Objetivo: criar ou expandir uma campanha de RPG completa a partir de um contexto mínimo.',
+      'Você é um adventurebuilder. Escreva em português do Brasil.',
+      'Objetivo: criar ou expandir uma história completa a partir de um contexto mínimo.',
       'Saída esperada: um JSON válido com os seguintes campos:',
-      '  "name": título curto e evocativo para a campanha (5-8 palavras).',
-      '  "thematic": temática resumida da campanha (1 frase curta, ex: "Império em colapso e magia proibida").',
-      '  "storyDescription": 3-6 parágrafos curtos com contexto, conflitos, facções, locais e 2-4 ganchos de aventura.',
+      '  "name": título curto e evocativo para a história (3-8 palavras).',
+      '  "thematic": temática resumida da história (1 frase curta, ex: "Império em colapso e magia proibida").',
+      '  "storyDescription": 3-6 parágrafos com contexto, conflitos, facções, locais e 2-4 ganchos de aventura.',
       '  "storyCharacters": array de 3 a 7 NPCs do mundo relevantes para a narrativa, cada um com:',
       '    - "name": nome do personagem',
       '    - "role": papel na história (ex: antagonista, mentor, aliado, líder de facção, neutro)',
@@ -1369,7 +1369,7 @@ export class GeminiAdapter implements Narrator {
 
   async expandWorldLore(req: ExpandWorldLoreRequest): Promise<string> {
     const sysPrompt = [
-      'Você é um worldbuilder sênior especializado em RPG de mesa. Escreva exclusivamente em português do Brasil.',
+      'Você é um worldbuilder sênior especializado em história. Escreva exclusivamente em português do Brasil.',
       '',
       'Escreva com clareza e precisão — o texto serve tanto para quem nunca ouviu falar deste universo quanto para quem vai jogar nele.',
       'Ao introduzir pela primeira vez qualquer nome próprio, facção, tecnologia ou conceito exclusivo do universo, explique-o brevemente em linha — uma frase é suficiente.',
@@ -1386,19 +1386,18 @@ export class GeminiAdapter implements Narrator {
     const prompt = [
       `Tema: ${tema}`,
       '',
-      'Construa o lore completo deste universo de RPG. Use OBRIGATORIAMENTE os cabeçalhos abaixo, nesta ordem e sem alterar o texto dos cabeçalhos.',
+      'Construa o lore completo deste universo. Use OBRIGATORIAMENTE os cabeçalhos abaixo, nesta ordem e sem alterar o texto dos cabeçalhos.',
       'Seções marcadas com (se aplicável) devem ser incluídas apenas se forem relevantes ao tema fornecido.',
       '',
       '## Em Poucas Palavras',
       'Explique este universo para alguém que nunca ouviu falar dele. Use linguagem direta, sem jargão.',
-      'Responda em 3 a 5 frases:',
+      'Responda em 5 a 7frases:',
       '  • O que é este mundo? (uma frase-âncora: "É um mundo onde...", "Imagine X, mas Y")',
       '  • O que o distingue de outros universos do mesmo gênero? (o diferencial real, não o óbvio)',
       '  • O que qualquer jogador vê, ouve e sente no primeiro dia neste mundo? (realidade cotidiana concreta)',
       '',
       '## Origens e História',
       'Apresente as eras ou fases históricas que moldaram o presente, do macro (cosmologia, criação) ao micro (evento catalisador recente).',
-      'Inclua ao menos um mistério histórico não resolvido que possa ser explorado em aventuras.',
       '3 parágrafos densos.',
       '',
       '## Doenças, Pragas e Contaminações (se aplicável)',
@@ -1532,7 +1531,7 @@ export class GeminiAdapter implements Narrator {
     }
 
     const sysPrompt = [
-      'Você é um designer de personagens para RPG.',
+      'Você é um designer de personagens.',
       'Leia o nome do mundo, a lore do universo e a história da aventura. Crie um personagem cujo papel e profissão emergem NATURALMENTE desses dados, sem usar arquétipos pré-definidos pelo sistema.',
       'Responda SOMENTE em JSON válido, sem markdown e sem comentários.',
       'Retorne sempre as 6 chaves; gender e race podem ser string vazia quando o contexto não sustentar uma inferência.',
@@ -1544,7 +1543,7 @@ export class GeminiAdapter implements Narrator {
       '  race: raça/espécie somente quando houver pista contextual; caso contrário, string vazia',
       '  profession: ofício ou papel social derivado exclusivamente do nome do mundo, da lore e da história; máx 60 chars',
       '  description: 2-3 frases descrevendo aparência física (cabelo, olhos, compleição ou cicatriz marcante), vestimenta ou equipamento coerente com a profissão, e traço de personalidade com motivação. Mín 80 chars, máx 280 chars.',
-      '  campaignRole: o que este personagem está fazendo nesta aventura específica, qual sua missão ou como se conecta ao enredo. Seja concreto, não genérico. Máx 200 chars.',
+      '  campaignRole: o que este personagem está fazendo nesta aventura específica, qual sua missão ou como se conecta ao enredo. Seja concreto, não genérico. Máx 300 chars.',
       'Em chamadas repetidas para o mesmo enredo, varie nome, profissão, função narrativa, motivação, aparência e ponto de entrada na aventura.',
     ].join('\n')
 
@@ -1774,7 +1773,6 @@ export class GeminiAdapter implements Narrator {
       'REGRAS GERAIS:',
       '- O array "options" é OBRIGATÓRIO e NUNCA pode estar vazio. Sempre retorne EXATAMENTE 4 opções.',
       '- Se você retornar options vazio ou com menos de 4 itens, a resposta será considerada inválida.',
-      '- Pelo menos 1 opção deve ser de exploração/investigação e 1 de interação social.',
       '- Se houver NPC hostil presente, inclua ao menos 1 opção de combate (actionType "attack").',
       '- O campo "feasible" deve ser false se o jogador não tiver os itens/condições necessárias.',
       '- Para actionType "trait_test", inclua "skill" ou "attribute" no actionPayload.',

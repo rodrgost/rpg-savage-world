@@ -25,7 +25,7 @@ function buildWorldImagePrompt(params: { thematic: string; visualDescription?: s
     `Campaign title anchor: "${thematic || 'Untitled campaign'}".`,
     ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
     'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, mood and visual storytelling driven by the setting itself.',
-    'Restrictions: no text, no title, no logos, no watermarks, no UI, no typography, no close-up faces, no characters as the main subject.'
+    'Restrictions: no UI, no typography, no characters as the main subject.'
   ].join('\n')
 }
 
@@ -64,7 +64,7 @@ function buildCharacterImagePrompt(params: {
   return [
     'Create a RPG character portrait illustration.',
     'Style: high quality, portrait bust shot.',
-    'Rules: no text, no logos, no watermarks, no typography, safe for all audiences.',
+    'Rules: no watermarks, no typography, safe for all audiences.',
     `Setting: ${worldName || 'Unknown world'}, ${thematic || 'generic fantasy'}.`,
     ...(gender ? [`Gender: ${gender}.`] : []),
     ...(race ? [`Race/Species: ${race}.`] : []),
