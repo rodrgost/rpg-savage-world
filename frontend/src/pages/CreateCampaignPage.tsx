@@ -38,17 +38,12 @@ export function CreateCampaignPage({ uid }: Props) {
   const [storyCharacters, setStoryCharacters] = useState<StoryCharacter[]>([])
   const [imagePreview, setImagePreview] = useState<StoredImage | null>(null)
   const [youtubeUrl, setYoutubeUrl] = useState('')
-  const [lastGeneratedContextKey, setLastGeneratedContextKey] = useState('')
   const [loading, setLoading] = useState(false)
   const [llmLoading, setLlmLoading] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
   const [storyTab, setStoryTab] = useState<'preview' | 'edit'>('preview')
   const [error, setError] = useState('')
   const isOwner = !isEditMode || !ownerId || ownerId === uid
-
-  function buildContextKey(wName: string, theme: string): string {
-    return `${wName.trim().toLowerCase()}::${theme.trim().toLowerCase()}`
-  }
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -167,53 +162,25 @@ export function CreateCampaignPage({ uid }: Props) {
     }
   }
 
-  async function handleIncrementWithLlm() {
-    setError('')
-    setLlmLoading(true)
-    try {
-      const contextKey = buildContextKey(worldName, thematic)
-      const shouldContinuePreviousContext = contextKey === lastGeneratedContextKey
-
-      const result = await incrementCampaignStoryPreview({
-        worldName,
-        thematic: thematic.trim() || undefined,
-        currentDescription: shouldContinuePreviousContext ? storyDescription : undefined
-      })
-      setStoryDescription(result.storyDescription)
-      if (result.storyCharacters.length > 0) setStoryCharacters(result.storyCharacters)
-      if (result.name && !name.trim()) setName(result.name)
-      if (result.thematic && !thematic.trim()) setThematic(result.thematic)
-      setLastGeneratedContextKey(buildContextKey(worldName, result.thematic ?? thematic))
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Falha ao incrementar campanha com LLM')
-    } finally {
-      setLlmLoading(false)
-    }
-  }
-
-  async function handleRegenerateLlm() {
+  async function handleGenerateWithLlm() {
     setError('')
     setLlmLoading(true)
     try {
       const result = await incrementCampaignStoryPreview({
         worldName,
-        thematic: thematic.trim() || undefined,
-        currentDescription: undefined
+        thematic: thematic.trim() || undefined
       })
       setStoryDescription(result.storyDescription)
       if (result.storyCharacters.length > 0) setStoryCharacters(result.storyCharacters)
       if (result.name && !name.trim()) setName(result.name)
       if (result.thematic && !thematic.trim()) setThematic(result.thematic)
-      setLastGeneratedContextKey(buildContextKey(worldName, result.thematic ?? thematic))
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Falha ao regerar campanha com LLM')
+      setError(loadError instanceof Error ? loadError.message : 'Falha ao gerar campanha com LLM')
     } finally {
       setLlmLoading(false)
     }
   }
 
-  const currentContextKey = buildContextKey(worldName, thematic)
-  const hasPendingContextChange = !!lastGeneratedContextKey && currentContextKey !== lastGeneratedContextKey
   const backPath = resolvedWorldId ? `/worlds/${resolvedWorldId}/campaigns` : '/worlds'
 
   return (
@@ -228,11 +195,8 @@ export function CreateCampaignPage({ uid }: Props) {
       <form className="form-grid" onSubmit={handleSubmit}>
         {isOwner && (
           <div className="llm-actions-top">
-            <button disabled={llmLoading || loading} onClick={handleIncrementWithLlm} type="button">
-              {llmLoading ? 'Gerando com LLM...' : 'Incrementar com LLM'}
-            </button>
-            <button disabled={llmLoading || loading} onClick={handleRegenerateLlm} type="button" className="button-secondary">
-              {llmLoading ? 'Gerando...' : 'Regerar do zero'}
+            <button disabled={llmLoading || loading} onClick={handleGenerateWithLlm} type="button">
+              {llmLoading ? 'Gerando com LLM...' : 'Gerar campanha com LLM'}
             </button>
           </div>
         )}
@@ -306,7 +270,7 @@ export function CreateCampaignPage({ uid }: Props) {
               className="lore-textarea"
               value={storyDescription}
               onChange={(event) => setStoryDescription(event.target.value)}
-              placeholder="Clique no botão para incrementar com LLM"
+              placeholder="Clique no botão para gerar com LLM"
               rows={20}
             />
           ) : (
@@ -317,10 +281,6 @@ export function CreateCampaignPage({ uid }: Props) {
                 <p className="muted">Nenhuma história ainda. {isOwner ? 'Gere com LLM ou edite manualmente.' : ''}</p>
               )}
             </div>
-          )}
-
-          {hasPendingContextChange && isOwner && (
-            <p className="muted">Parâmetros alterados. O próximo incremento vai gerar um novo contexto.</p>
           )}
         </div>
 

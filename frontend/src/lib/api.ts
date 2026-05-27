@@ -373,7 +373,6 @@ export async function deleteCampaign(campaignId: string): Promise<void> {
 export async function incrementCampaignStoryPreview(params: {
   worldName: string
   thematic?: string
-  currentDescription?: string
 }): Promise<{ storyDescription: string; storyCharacters: StoryCharacter[]; name?: string; thematic?: string }> {
   const response = await apiRequest<{ storyDescription: string; storyCharacters?: StoryCharacter[]; name?: string; thematic?: string }>('/campaigns/increment-preview', {
     method: 'POST',

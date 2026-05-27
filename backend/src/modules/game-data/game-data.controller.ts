@@ -58,8 +58,7 @@ const UpdateCampaignBody = z.object({
 
 const IncrementCampaignPreviewBody = z.object({
   worldName: z.string().min(1),
-  thematic: z.string().optional(),
-  currentDescription: z.string().optional()
+  thematic: z.string().optional()
 })
 
 const CampaignImagePreviewBody = z

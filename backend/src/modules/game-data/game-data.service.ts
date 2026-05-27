@@ -497,8 +497,7 @@ export class GameDataService {
 
     const lore = await this.narrator.expandWorldLore({
       name: world.name,
-      description: world.description,
-      currentLore: world.lore
+      description: world.description
     })
 
     await this.worlds.updateLore(world.id, lore)
@@ -548,11 +547,10 @@ export class GameDataService {
     return { campaignId }
   }
 
-  async generateCampaignStoryPreview(params: { userId: string; worldName: string; thematic?: string; currentDescription?: string }) {
+  async generateCampaignStoryPreview(params: { userId: string; worldName: string; thematic?: string }) {
     const result = await this.narrator.expandAdventureStory({
       campaignName: params.worldName,
-      thematic: params.thematic,
-      currentDescription: params.currentDescription
+      thematic: params.thematic
     })
 
     return {
@@ -681,8 +679,7 @@ export class GameDataService {
     const thematic = campaign.thematic?.trim() || campaign.name?.trim() || 'Campanha sem temática definida'
     const result = await this.narrator.expandAdventureStory({
       campaignName: worldName,
-      thematic,
-      currentDescription: campaign.storyDescription
+      thematic
     })
 
     await this.campaigns.updateStoryDescription(campaign.id, result.storyDescription, result.storyCharacters)

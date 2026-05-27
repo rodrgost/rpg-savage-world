@@ -238,7 +238,7 @@ export function CreateWorldPage({ uid }: Props) {
 
           {isOwner && (
             <button className="btn-ai-gen" disabled={loreLoading || imageLoading || loading} onClick={handleGenerateLore} type="button">
-              {loreLoading ? <><span className="btn-ai-spinner" /> Gerando lore…</> : '✨ Gerar / expandir lore com IA'}
+              {loreLoading ? <><span className="btn-ai-spinner" /> Gerando lore…</> : '✨ Gerar lore com IA'}
             </button>
           )}
         </div>
