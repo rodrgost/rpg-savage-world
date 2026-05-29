@@ -63,6 +63,7 @@ const IncrementCampaignPreviewBody = z.object({
 
 const CampaignImagePreviewBody = z
   .object({
+    name: z.string().min(1).optional(),
     thematic: z.string().min(1)
   })
   .strict()

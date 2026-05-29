@@ -114,8 +114,18 @@ export type StatusChange = {
   effectId: string
   name: string
   changeType: 'applied' | 'removed'
-  turnsRemaining?: number
+  turnsRemaining?: number | null
   description: string
+  targetType?: 'player' | 'npc'
+  targetId?: string | null
+}
+
+export type StatusEffect = {
+  id: string
+  name: string
+  turnsRemaining?: number
+  targetType?: 'player' | 'npc'
+  targetId?: string
 }
 
 export type NPCMention = {
@@ -124,6 +134,19 @@ export type NPCMention = {
   disposition: 'hostile' | 'neutral' | 'friendly'
   newlyIntroduced: boolean
 }
+
+export type NarrativeSegment =
+  | {
+      type: 'narrator'
+      text: string
+    }
+  | {
+      type: 'npc'
+      npcId?: string | null
+      npcName: string
+      disposition: NPCMention['disposition']
+      text: string
+    }
 
 export type DiceCheck = {
   required: boolean
@@ -156,6 +179,7 @@ export type ValidateActionResponse = {
 
 export type NarratorTurnResponse = {
   narrative: string
+  segments?: NarrativeSegment[]
   options: ActionOption[]
   npcs: NPCMention[]
   itemChanges: ItemChange[]
@@ -174,6 +198,7 @@ export type ChatMessage = {
   seq?: number
   role: 'narrator' | 'player' | 'system'
   narrative?: string
+  segments?: NarrativeSegment[]
   playerInput?: string
   options?: ActionOption[]
   npcs?: NPCMention[]
@@ -213,13 +238,33 @@ export type GameState = {
     parry: number
     toughness: number
     armor: number
-    statusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
+    statusEffects: StatusEffect[]
     inventory: InventoryItem[]
   }
   worldState: {
     activeLocation: string
     worldFlags: Record<string, boolean>
   }
+  npcs?: NPCCombatant[]
+}
+
+export type NPCCombatant = {
+  id: string
+  name: string
+  isWildCard: boolean
+  wounds: number
+  maxWounds: number
+  fatigue?: number
+  isShaken: boolean
+  toughness: number
+  parry: number
+  armor?: number
+  pace?: number
+  bennies?: number
+  tags?: string[]
+  statusEffects?: StatusEffect[]
+  disposition?: 'hostile' | 'neutral' | 'friendly'
+  location?: string
 }
 
 export type DiceRollDetail = {

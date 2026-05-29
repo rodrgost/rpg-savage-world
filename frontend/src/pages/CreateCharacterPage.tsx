@@ -277,27 +277,22 @@ export function CreateCharacterPage({ uid }: Props) {
     setSuggestLoading(true)
     setError('')
     try {
-      // Pass only fields the user already edited so the AI respects them
+      // Preserve only the typed name; every other field should come from the story-based suggestion.
       const existing: Record<string, string> = {}
       if (name.trim()) existing.name = name.trim()
-      if (gender.trim()) existing.gender = gender.trim()
-      if (race.trim()) existing.race = race.trim()
-      if (profession.trim()) existing.profession = profession.trim()
-      if (campaignRole.trim()) existing.campaignRole = campaignRole.trim()
-      if (description.trim()) existing.description = description.trim()
 
       const suggestion = await generateCharacterFromWorldStory({
         campaignId: selectedCampaignId,
         existingFields: Object.keys(existing).length > 0 ? existing : undefined
       })
 
-      // Only overwrite fields that the user had left empty
+      // Only the typed name is preserved; the rest is regenerated from the campaign story.
       if (!name.trim()) setName(suggestion.name)
-      if (!gender.trim()) setGender(suggestion.gender)
-      if (!race.trim()) setRace(suggestion.race)
-      if (!profession.trim()) setProfession(suggestion.profession)
-      if (!description.trim()) setDescription(suggestion.description)
-      if (!campaignRole.trim()) setCampaignRole(suggestion.campaignRole)
+      setGender(suggestion.gender)
+      setRace(suggestion.race)
+      setProfession(suggestion.profession)
+      setDescription(suggestion.description)
+      setCampaignRole(suggestion.campaignRole)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao gerar sugestão por IA para este personagem')
     } finally {

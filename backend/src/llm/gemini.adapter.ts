@@ -15,6 +15,7 @@ import type {
   NarrateTurnRequest,
   NarratorTurnResponse,
   NpcAttackEntry,
+  NarrativeSegment,
   ActionOption,
   NPCMention,
   ItemChange,
@@ -338,6 +339,13 @@ function sanitizeInlineText(value: unknown, fallback = ''): string {
 function sanitizeNullableInlineText(value: unknown): string | null {
   const cleaned = sanitizeInlineText(value, '')
   return cleaned || null
+}
+
+function normalizeMentionKey(value: string): string {
+  return sanitizeInlineText(value, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
 }
 
 function sanitizeImageDescriptionOutput(text: string): string {
@@ -869,6 +877,19 @@ export class GeminiAdapter implements Narrator {
       : readEnv('GEMINI_CHARACTER_SUGGEST_TEMPERATURE', '1.0'),
     1.0
   )
+  private readonly characterSuggestionMaxOutputTokens = withMin(
+    toNumber(
+      this.provider === 'deepseek'
+        ? readEnv('DEEPSEEK_CHARACTER_SUGGEST_MAX_OUTPUT_TOKENS', '2048')
+        : readEnv('GEMINI_CHARACTER_SUGGEST_MAX_OUTPUT_TOKENS', '4096'),
+      this.provider === 'deepseek' ? 2048 : 4096
+    ),
+    2048
+  )
+  private readonly characterSuggestionThinkingBudget = withMin(
+    toNumber(readEnv('GEMINI_CHARACTER_SUGGEST_THINKING_BUDGET', '512'), 512),
+    128
+  )
   private readonly imageDescriptionTemperature = toNumber(
     this.provider === 'deepseek'
       ? readEnv('DEEPSEEK_IMAGE_DESCRIPTION_TEMPERATURE', '0.55')
@@ -1300,7 +1321,7 @@ export class GeminiAdapter implements Narrator {
   async expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult> {
     const sysPrompt = [
       'Você é um adventurebuilder. Escreva em português do Brasil.',
-      'Objetivo: criar ou expandir uma história completa a partir de um contexto mínimo.',
+      'Objetivo: criar do zero uma história completa a partir de um contexto mínimo.',
       'Saída esperada: um JSON válido com os seguintes campos:',
       '  "name": título curto e evocativo para a história (3-8 palavras).',
       '  "thematic": temática resumida da história (1 frase curta, ex: "Império em colapso e magia proibida").',
@@ -1311,14 +1332,14 @@ export class GeminiAdapter implements Narrator {
       '    - "description": descrição breve do personagem (1-2 frases)',
       '    - "status": situação atual na história (ex: ativo, foragido, morto, desconhecido)',
       'Restrições: retorne SOMENTE o JSON, sem prefácio, saudação, comentários ou separadores.',,
-      'Se já existir uma temática ou descrição fornecida, mantenha consistência e evolua — não repita literalmente.',
+      'Mesmo quando houver temática fornecida, gere um título, uma temática refinada, uma história e NPCs como uma nova criação completa.',
       'Comece diretamente com { e termine com }.'
     ].join('\n')
 
     const prompt = [
       `Nome/contexto da campanha: ${req.campaignName || 'livre'}.`,
       `Temática (se informada): ${req.thematic?.trim() || 'a definir pelo LLM'}.`,
-      `Descrição atual (se existir): ${req.currentDescription?.trim() || 'nenhuma'}.`
+      'Descrição atual: ignorar; gere do zero.'
     ].join('\n')
 
     try {
@@ -1515,8 +1536,10 @@ export class GeminiAdapter implements Narrator {
     const worldName = req.worldName?.trim() ?? ''
     const worldLore = req.worldLore?.trim() ?? ''
     const storyDescription = req.storyDescription?.trim() ?? ''
+    const promptWorldLore = worldLore.length > 6000 ? `${worldLore.slice(0, 6000)}...` : worldLore
+    const promptStoryDescription = storyDescription.length > 2800 ? `${storyDescription.slice(0, 2800)}...` : storyDescription
     const contextKey = buildCharacterSuggestionContextKey(req)
-    const creativeIdentityLocked = Boolean(existing.name?.trim() || existing.profession?.trim())
+    const creativeIdentityLocked = Boolean(existing.name?.trim())
     const existingLines: string[] = []
     if (hasExisting) {
       existingLines.push(
@@ -1538,12 +1561,13 @@ export class GeminiAdapter implements Narrator {
       '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"..."}',
       '',
       'Instruções por campo:',
-      '  name: nome coerente com o contexto; se o enredo sugerir um padrão cultural, siga esse padrão',
+      '  name: nome coerente com o contexto; se o jogador forneceu um name, preserve esse valor exatamente e trate-o apenas como âncora de identidade',
       '  gender: Masculino, Feminino ou Outro somente quando houver pista contextual; caso contrário, string vazia',
       '  race: raça/espécie somente quando houver pista contextual; caso contrário, string vazia',
       '  profession: ofício ou papel social derivado exclusivamente do nome do mundo, da lore e da história; máx 60 chars',
-      '  description: 2-3 frases descrevendo aparência física (cabelo, olhos, compleição ou cicatriz marcante), vestimenta ou equipamento coerente com a profissão, e traço de personalidade com motivação. Mín 80 chars, máx 280 chars.',
-      '  campaignRole: o que este personagem está fazendo nesta aventura específica, qual sua missão ou como se conecta ao enredo. Seja concreto, não genérico. Máx 300 chars.',
+      '  description: 2-3 frases derivadas principalmente da história da aventura e da lore, descrevendo aparência física (cabelo, olhos, compleição ou cicatriz marcante), vestimenta ou equipamento coerente com a profissão, e traço de personalidade com motivação. Mín 80 chars, máx 280 chars.',
+      '  campaignRole: o que este personagem está fazendo nesta aventura específica, qual sua missão ou como se conecta ao enredo. Derive da história/lore, seja concreto e não genérico. Máx 300 chars.',
+      'Se houver name fornecido, não invente a descrição a partir do som do nome; use o nome somente para preservar a identidade e derive todo o restante da história da aventura e da lore.',
       'Em chamadas repetidas para o mesmo enredo, varie nome, profissão, função narrativa, motivação, aparência e ponto de entrada na aventura.',
     ].join('\n')
 
@@ -1556,8 +1580,8 @@ export class GeminiAdapter implements Narrator {
         `Tentativa de variação: ${attempt}.`,
         '',
         ...(worldName ? [`Nome do mundo/universo: ${worldName}.`] : []),
-        ...(worldLore ? [`Lore do universo: ${worldLore}.`, ''] : []),
-        `História da aventura: ${storyDescription || 'não informada'}.`,
+        ...(promptWorldLore ? [`Lore do universo: ${promptWorldLore}.`, ''] : []),
+        `História da aventura: ${promptStoryDescription || 'não informada'}.`,
         '',
         'Derive a profissão e o papel somente do mundo/universo, da lore e da história da aventura.'
       ].join('\n')
@@ -1569,12 +1593,12 @@ export class GeminiAdapter implements Narrator {
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const firstResult = await this.generateTextDetailed(buildPrompt(attempt), {
-          maxOutputTokens: 1536,
+          maxOutputTokens: this.characterSuggestionMaxOutputTokens,
           timeoutMs: this.timeoutMs,
           responseMimeType: 'application/json',
           temperature: Math.max(this.characterSuggestionTemperature, attempt === 1 ? 0.95 : 1.15),
           systemInstruction: sysPrompt,
-          thinkingBudget: 0
+          ...(this.provider === 'gemini' ? { thinkingBudget: this.characterSuggestionThinkingBudget } : {})
         }, attempt)
         const generated = firstResult.text
 
@@ -1675,6 +1699,10 @@ export class GeminiAdapter implements Narrator {
       'Você DEVE retornar SOMENTE um JSON válido (sem markdown, sem comentários) com a seguinte estrutura:',
       '{',
       '  "narrative": "<texto narrativo do passo da história, 2-3 parágrafos curtos>",',
+      '  "segments": [',
+      '    { "type": "narrator", "text": "<narração, descrição de contexto ou consequência>" },',
+      '    { "type": "npc", "npcId": "<id do NPC presente>", "npcName": "<nome do NPC>", "disposition": "hostile|neutral|friendly", "text": "<fala direta do NPC>" }',
+      '  ],',
       '  "options": [',
       '    {',
       '      "id": "<uuid>",',
@@ -1701,7 +1729,7 @@ export class GeminiAdapter implements Narrator {
       '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|money|vehicle|property|quest|misc" }',
       '  ],',
       '  "statusChanges": [',
-      '    { "effectId": "<uuid>", "name": "<nome do efeito>", "changeType": "applied|removed", "turnsRemaining": 3, "description": "<desc>" }',
+      '    { "effectId": "<uuid>", "name": "<nome do efeito>", "changeType": "applied|removed", "turnsRemaining": 3, "description": "<desc>", "targetType": "player|npc", "targetId": "<id do NPC quando targetType=npc ou null>" }',
       '  ],',
       '  "npcAttacks": [',
       '    { "npcId": "<id do NPC que ataca>", "skillDie": <6|8|10|12>, "damageFormula": "<str+d6 ou 2d6 etc>", "ap": 0 }',
@@ -1771,6 +1799,10 @@ export class GeminiAdapter implements Narrator {
       '- Use os nomes das perícias em português do Brasil conforme listado nas PERÍCIAS DO JOGADOR no contexto.',
       '',
       'REGRAS GERAIS:',
+      '- O campo "narrative" continua obrigatório e deve conter o texto completo do turno em ordem, incluindo narração e falas diretas.',
+      '- Use "segments" para separar visualmente narração e fala direta de NPC. Contexto, descrição, ação e consequências ficam em segmentos type="narrator"; falas diretas de NPC ficam em segmentos type="npc".',
+      '- Quando type="npc", use npcId de um NPC presente em NPCs PRESENTES ou de um NPC introduzido neste mesmo retorno em "npcs". Use o mesmo nome e disposition desse NPC.',
+      '- Se não houver fala direta de NPC, retorne "segments" com um único bloco type="narrator" contendo a narrative completa.',
       '- O array "options" é OBRIGATÓRIO e NUNCA pode estar vazio. Sempre retorne EXATAMENTE 4 opções.',
       '- Se você retornar options vazio ou com menos de 4 itens, a resposta será considerada inválida.',
       '- Se houver NPC hostil presente, inclua ao menos 1 opção de combate (actionType "attack").',
@@ -1974,6 +2006,11 @@ export class GeminiAdapter implements Narrator {
         '  Jamais use "gained" com categories "weapon" ou "armor" em turno normal.',
         '- No turno normal, use itemChanges apenas para "lost", "used" ou "gained" (conforme regras acima) de itens relevantes à ação deste turno.',
         '- No turno normal, NÃO aplique statusChanges novos sem evidência direta no RESULTADO MECÂNICO ou em EFEITOS ATIVOS já existentes.',
+        '- Se a ação ou narrativa estabelecer descanso seguro, hospitalização, internação, alta médica, tratamento prolongado ou passagem de semanas/meses, remova em statusChanges os efeitos temporários que tenham sido curados, expirado ou deixado de fazer sentido.',
+        '- Para remover status temporário, use changeType "removed" com o effectId/name exato do efeito ativo. Para status do jogador use targetType "player"; para status de NPC use targetType "npc" e targetId do NPC afetado.',
+        '- turnsRemaining representa apenas duração curta em turnos narrativos. Quando houver salto temporal longo, não dependa de turnsRemaining: registre remoções explícitas em statusChanges.',
+        '- Não remova status permanentes, complicações, sequelas ou condições de personagem sem evidência narrativa direta de cura ou resolução.',
+        '- Em statusChanges, sempre indique targetType. Use targetType "npc" e targetId do NPC atingido quando o efeito decorre de ataque, dano, veneno, queimadura, medo ou condição aplicada ao inimigo. Use targetType "player" apenas para efeitos no personagem do jogador.',
         '- No turno normal, só preencha locationChange se a ação do jogador for travel ou se o RESULTADO MECÂNICO trouxer location_change.',
         '- Use apenas IDs de NPC já listados em NPCs PRESENTES (ou do novo NPC hostil desta narrativa) para actionPayload.targetId.',
         '- Se faltar evidência canônica para mutação de estado, deixe os campos mutáveis vazios/null.',
@@ -1991,6 +2028,14 @@ export class GeminiAdapter implements Narrator {
       '  • Sucesso: descreva a consequência positiva concreta + seu impacto imediato no mundo ou nos NPCs presentes.',
       '  • Falha: descreva o que especificamente falhou + uma nova complicação ou risco que emerge do fracasso (falha nunca é neutra — ela muda algo).',
       '  • Sucesso com Raise: narre um benefício extra inesperado além do esperado.',
+      '',
+      'PLAUSIBILIDADE NARRATIVA:',
+      '  • Antes de narrar, avalie internamente se o resultado mecânico faz sentido dentro da história, do contexto atual, do universo, da campanha, do local, dos NPCs presentes, do inventário, dos ferimentos/status e do resumo da aventura.',
+      '  • O RESULTADO MECÂNICO é obrigatório e não pode ser anulado: sucesso nunca vira fracasso, falha nunca vira sucesso limpo.',
+      '  • Em sucesso, preserve uma consequência positiva real, mas você pode acrescentar custo, atrito, atenção indesejada, dilema ou detalhe inquietante se isso for plausível no contexto.',
+      '  • Em falha, preserve uma consequência negativa real, mas você pode revelar uma pista, abrir uma alternativa pior, plantar uma suspeita ou mostrar algo útil com preço narrativo.',
+      '  • Use sucessos e falhas para semear futuras tramas quando natural: dívida social, inimigo alertado, recurso comprometido, pista incompleta, rumor, marca deixada ou consequência que possa voltar depois.',
+      '  • Nunca crie fato canônico, NPC, item, status ou mudança de local sem apoio no contexto estruturado; ganchos futuros devem aparecer como tensão, indício ou possibilidade narrativa.',
       '',
       'PROGRESSÃO NARRATIVA (adapte ao estilo ativo):',
       '  • CONSTRUÇÃO (todos os estilos): quando natural, referencie elemento já estabelecido — NPC, objeto, local, frase dita.',
@@ -2196,6 +2241,46 @@ export class GeminiAdapter implements Narrator {
       }
     })
 
+    const npcById = new Map(npcs.map((npc) => [npc.id, npc]))
+    const npcsByName = new Map<string, NPCMention[]>()
+    for (const npc of npcs) {
+      const key = normalizeMentionKey(npc.name)
+      npcsByName.set(key, [...(npcsByName.get(key) ?? []), npc])
+    }
+
+    const rawSegments = Array.isArray(raw.segments) ? raw.segments : []
+    const segments: NarrativeSegment[] = []
+    for (const segment of rawSegments) {
+      const source = (segment && typeof segment === 'object' ? segment : {}) as Record<string, unknown>
+      const text = sanitizeInlineText(source.text, '')
+      if (!text) continue
+
+      if (source.type === 'npc') {
+        const rawNpcId = sanitizeNullableInlineText(source.npcId)
+        const rawNpcName = sanitizeInlineText(source.npcName, '')
+        const nameMatches = rawNpcName ? npcsByName.get(normalizeMentionKey(rawNpcName)) ?? [] : []
+        const matchedNpc = rawNpcId ? npcById.get(rawNpcId) : nameMatches.length === 1 ? nameMatches[0] : undefined
+        const disposition = (['hostile', 'neutral', 'friendly'].includes(source.disposition as string)
+          ? source.disposition
+          : matchedNpc?.disposition ?? 'neutral') as NPCMention['disposition']
+
+        segments.push({
+          type: 'npc',
+          npcId: matchedNpc?.id ?? rawNpcId,
+          npcName: (matchedNpc?.name ?? rawNpcName) || 'Desconhecido',
+          disposition,
+          text
+        })
+        continue
+      }
+
+      segments.push({ type: 'narrator', text })
+    }
+
+    if (!segments.length && narrative) {
+      segments.push({ type: 'narrator', text: narrative })
+    }
+
     // Parse item changes
     const VALID_ITEM_CATEGORIES = new Set(['weapon', 'armor', 'consumable', 'ammunition', 'money', 'vehicle', 'property', 'quest', 'misc'])
     const rawItems = Array.isArray(raw.itemChanges) ? raw.itemChanges : []
@@ -2228,12 +2313,20 @@ export class GeminiAdapter implements Narrator {
     const rawStatus = Array.isArray(raw.statusChanges) ? raw.statusChanges : []
     const statusChanges: StatusChange[] = rawStatus.map((st: unknown) => {
       const status = (st && typeof st === 'object' ? st : {}) as Record<string, unknown>
+      const targetType = status.targetType === 'player' || status.targetType === 'npc'
+        ? status.targetType
+        : undefined
+      const targetId = typeof status.targetId === 'string' && status.targetId.trim()
+        ? status.targetId.trim()
+        : null
       return {
         effectId: typeof status.effectId === 'string' ? status.effectId : randomUUID(),
         name: sanitizeInlineText(status.name, 'Efeito'),
         changeType: (['applied', 'removed'].includes(status.changeType as string) ? status.changeType : 'applied') as StatusChange['changeType'],
         turnsRemaining: typeof status.turnsRemaining === 'number' ? status.turnsRemaining : null,
-        description: sanitizeInlineText(status.description, '')
+        description: sanitizeInlineText(status.description, ''),
+        ...(targetType ? { targetType } : {}),
+        ...(targetType === 'npc' ? { targetId } : {})
       }
     })
 
@@ -2250,6 +2343,7 @@ export class GeminiAdapter implements Narrator {
 
     return {
       narrative,
+      segments,
       options,
       npcs,
       itemChanges,
@@ -2500,7 +2594,10 @@ export class GeminiAdapter implements Narrator {
           const tipo = n.isWildCard ? 'Wild Card' : 'Extra'
           const disp = n.disposition ?? 'neutral'
           const status = n.wounds > 0 ? ` ferido ${n.wounds}/${n.maxWounds}` : ''
-          return `${n.name} (${n.id}) [${tipo}, ${disp}, Res ${n.toughness}, Aparar ${n.parry}${status}]`
+          const effects = (n.statusEffects ?? []).length
+            ? `, efeitos: ${(n.statusEffects ?? []).map((effect) => `${effect.name}${effect.turnsRemaining != null ? ` (${effect.turnsRemaining}t)` : ''}`).join(', ')}`
+            : ''
+          return `${n.name} (${n.id}) [${tipo}, ${disp}, Res ${n.toughness}, Aparar ${n.parry}${status}${effects}]`
         }).join(', ')
       : 'nenhum'
     const defeatedText = (ctx.defeatedNpcIds ?? []).length
@@ -2728,7 +2825,10 @@ export class GeminiAdapter implements Narrator {
           const tipo = n.isWildCard ? 'Wild Card' : 'Extra'
           const disp = n.disposition ?? 'neutral'
           const status = n.wounds > 0 ? ` | ferido ${n.wounds}/${n.maxWounds}` : ''
-          return `- ${n.name} (${n.id}) [${tipo}, ${disp}, Res ${n.toughness}, Aparar ${n.parry}${status}]`
+          const effects = (n.statusEffects ?? []).length
+            ? ` | efeitos: ${(n.statusEffects ?? []).map(effect => `${effect.name}${effect.turnsRemaining !== undefined ? ` (${effect.turnsRemaining} turnos)` : ''}`).join(', ')}`
+            : ''
+          return `- ${n.name} (${n.id}) [${tipo}, ${disp}, Res ${n.toughness}, Aparar ${n.parry}${status}${effects}]`
         }).join('\n')
       : 'Nenhum NPC presente'
 
@@ -2763,6 +2863,7 @@ export class GeminiAdapter implements Narrator {
       `Descrição: ${req.playerAction.description}`,
       '',
       '── RESULTADO MECÂNICO ──',
+      'Use este bloco como âncora obrigatória: narre suas consequências sem contradizer sucesso, falha, dano, status ou mudanças nele descritos.',
       engineResultText
     ].join('\n')
 

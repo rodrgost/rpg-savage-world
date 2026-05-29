@@ -761,7 +761,7 @@ button:disabled {
 
 .msg.player .player-text p {
   margin: 0;
-  font-size: var(--font-sm);
+  font-size: 1.05rem;
   color: var(--text-primary);
   line-height: 1.5;
 }
@@ -785,7 +785,7 @@ button:disabled {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
-.msg.narrator strong {
+.msg.narrator .narrator-label {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -797,17 +797,80 @@ button:disabled {
   margin-bottom: var(--space-2);
 }
 
-.msg.narrator .narrative-text p {
-  margin: 0 0 10px;
-  line-height: 1.8;
-  font-family: var(--font-serif);
+.msg.narrator .narrative-text,
+.markdown-view {
   font-size: 1.05rem;
+  line-height: 1.8;
   color: var(--text-primary);
   letter-spacing: 0.01em;
 }
 
+.msg.narrator .narrative-text p {
+  margin: 0 0 10px;
+}
+
 .msg.narrator .narrative-text p:last-child {
   margin-bottom: 0;
+}
+
+.narrative-segments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.narrative-segment {
+  min-width: 0;
+}
+
+.npc-dialogue {
+  border-left: 3px solid rgba(234, 179, 8, 0.8);
+  padding: var(--space-2) 0 var(--space-2) var(--space-3);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: linear-gradient(90deg, rgba(234, 179, 8, 0.08) 0%, transparent 70%);
+}
+
+.npc-dialogue-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--font-xs);
+  font-variant: small-caps;
+  letter-spacing: 0;
+  color: #eab308;
+  opacity: 0.95;
+  margin-bottom: var(--space-2);
+}
+
+.npc-dialogue-text {
+  color: var(--text-primary);
+}
+
+.npc-dialogue--friendly {
+  border-left-color: #22c55e;
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.08) 0%, transparent 70%);
+}
+
+.npc-dialogue--friendly .npc-dialogue-label {
+  color: #22c55e;
+}
+
+.npc-dialogue--neutral {
+  border-left-color: #eab308;
+  background: linear-gradient(90deg, rgba(234, 179, 8, 0.08) 0%, transparent 70%);
+}
+
+.npc-dialogue--neutral .npc-dialogue-label {
+  color: #eab308;
+}
+
+.npc-dialogue--hostile {
+  border-left-color: #ef4444;
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, transparent 70%);
+}
+
+.npc-dialogue--hostile .npc-dialogue-label {
+  color: #ef4444;
 }
 
 /* ─── Loading / Typing Indicator ─── */
@@ -2302,6 +2365,33 @@ button:disabled {
 .markdown-view h6,
 .markdown-view blockquote {
   margin: 0 0 10px;
+}
+
+.markdown-view h1,
+.markdown-view h2,
+.markdown-view h3,
+.markdown-view h4,
+.markdown-view h5,
+.markdown-view h6 {
+  font-family: inherit;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.markdown-view h1,
+.markdown-view h2 {
+  font-size: var(--font-lg);
+}
+
+.markdown-view h3,
+.markdown-view h4,
+.markdown-view h5,
+.markdown-view h6 {
+  font-size: var(--font-md);
+}
+
+.markdown-view strong {
+  color: inherit;
 }
 
 .markdown-view ul,

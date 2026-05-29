@@ -19,6 +19,8 @@ export type StatusEffect = {
   id: string
   name: string
   turnsRemaining?: number
+  targetType?: 'player' | 'npc'
+  targetId?: string
 }
 
 export type NPCCombatant = {
@@ -37,6 +39,7 @@ export type NPCCombatant = {
   pace: number
   bennies: number
   tags?: string[]
+  statusEffects?: StatusEffect[]
   disposition?: 'hostile' | 'neutral' | 'friendly'
   location?: string
   /** Dado de ataque do NPC (ex: 6 = d6). Preenchido pelo LLM ao introduzir NPCs hostis. */

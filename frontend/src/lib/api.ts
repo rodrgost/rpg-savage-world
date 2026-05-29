@@ -394,6 +394,7 @@ export async function incrementCampaignStory(campaignId: string): Promise<{ stor
 }
 
 export async function generateCampaignImagePreview(params: {
+  name?: string
   thematic: string
 }): Promise<StoredImage> {
   const response = await apiRequest<{ image: StoredImage }>('/campaigns/image-preview', {

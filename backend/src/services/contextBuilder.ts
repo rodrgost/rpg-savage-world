@@ -138,6 +138,7 @@ export type LlmContext = {
       maxWounds: number
       toughness: number
       parry: number
+      statusEffects?: Array<{ id: string; name: string; turnsRemaining?: number }>
     }>
     /** IDs de NPCs já derrotados nesta sessão — para orientar o LLM a não referenciá-los como ameaças ativas */
     defeatedNpcIds: string[]
@@ -183,7 +184,12 @@ export function buildLlmContext(params: {
           wounds: n.wounds,
           maxWounds: n.maxWounds,
           toughness: n.toughness,
-          parry: n.parry
+          parry: n.parry,
+          statusEffects: (n.statusEffects ?? []).map((effect) => ({
+            id: effect.id,
+            name: effect.name,
+            turnsRemaining: effect.turnsRemaining
+          }))
         })),
       defeatedNpcIds: state.defeatedNpcIds ?? [],
       situation,

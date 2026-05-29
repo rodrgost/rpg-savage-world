@@ -96,7 +96,7 @@ export function CreateCampaignPage({ uid }: Props) {
     setImageLoading(true)
 
     try {
-      const image = await generateCampaignImagePreview({ thematic })
+      const image = await generateCampaignImagePreview({ name: name.trim() || undefined, thematic })
       setImagePreview(image)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Falha ao gerar imagem da campanha')
@@ -166,14 +166,11 @@ export function CreateCampaignPage({ uid }: Props) {
     setError('')
     setLlmLoading(true)
     try {
-      const result = await incrementCampaignStoryPreview({
-        worldName,
-        thematic: thematic.trim() || undefined
-      })
+      const result = await incrementCampaignStoryPreview({ worldName })
       setStoryDescription(result.storyDescription)
-      if (result.storyCharacters.length > 0) setStoryCharacters(result.storyCharacters)
-      if (result.name && !name.trim()) setName(result.name)
-      if (result.thematic && !thematic.trim()) setThematic(result.thematic)
+      setStoryCharacters(result.storyCharacters)
+      setName(result.name ?? '')
+      setThematic(result.thematic ?? '')
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Falha ao gerar campanha com LLM')
     } finally {

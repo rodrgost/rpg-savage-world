@@ -34,7 +34,7 @@ type ReusableSessionCandidate = {
   createdAtMillis: number
 }
 
-const RECENT_LLM_MESSAGE_LIMIT = 24
+const RECENT_LLM_MESSAGE_LIMIT = 20
 
 const ATTRIBUTE_ALIAS_TO_KEY: Readonly<Record<string, AttributeName>> = {
   agility: 'agility',
@@ -535,19 +535,37 @@ export class SessionService {
   private validateNarratorStatusChanges(
     changes: NarratorTurnResponse['statusChanges'],
     state: GameState,
-    mode: 'start' | 'turn'
+    mode: 'start' | 'turn',
+    action?: PlayerAction
   ): NarratorTurnResponse['statusChanges'] {
     if (mode === 'start') {
       return changes.filter((change) => Boolean(change.name.trim()))
     }
 
     return changes.filter((change) => {
-      const matchesExisting = state.player.statusEffects.some(
-        (effect) => effect.id === change.effectId || normalizeLookupValue(effect.name) === normalizeLookupValue(change.name)
+      const matchesEffect = (effects: Array<{ id: string; name: string }> | undefined) => (
+        (effects ?? []).some(
+          (effect) => effect.id === change.effectId || normalizeLookupValue(effect.name) === normalizeLookupValue(change.name)
+        )
       )
+      const targetId = typeof change.targetId === 'string' ? change.targetId.trim() : ''
+      const npcTargetIds = new Set<string>()
+      if (targetId) npcTargetIds.add(targetId)
+      if (!targetId && change.targetType !== 'player' && action?.type === 'attack') npcTargetIds.add(action.targetId.trim())
+
+      const matchesPlayer = change.targetType !== 'npc' && matchesEffect(state.player.statusEffects)
+      const matchesNpc = change.targetType !== 'player' && [...npcTargetIds].some((id) => {
+        const npc = state.npcs.find((candidate) => candidate.id === id)
+          ?? state.combat?.combatants.find((candidate) => candidate.id === id)
+        return matchesEffect(npc?.statusEffects)
+      })
+      const matchesExisting = matchesPlayer || matchesNpc
 
       if (!matchesExisting) {
-        warn('validateNarratorStatusChanges', `Descartando status sem âncora canônica: "${change.name}"`)
+        const targetLabel = change.targetType === 'npc'
+          ? `npc:${targetId || 'sem-id'}`
+          : change.targetType ?? 'player-or-any'
+        warn('validateNarratorStatusChanges', `Descartando status sem âncora canônica (${targetLabel}): "${change.name}"`)
         return false
       }
 
@@ -591,6 +609,59 @@ export class SessionService {
     }
 
     return params.state.worldState.activeLocation
+  }
+
+  private validateNarrativeSegments(params: {
+    segments: NarratorTurnResponse['segments']
+    narrative: string
+    state: GameState
+    sceneNpcIds: Set<string>
+  }): NonNullable<NarratorTurnResponse['segments']> {
+    const fallbackText = params.narrative.trim()
+    const fallback = fallbackText ? [{ type: 'narrator' as const, text: fallbackText }] : []
+    if (!params.segments?.length) return fallback
+
+    const sceneNpcs = params.state.npcs.filter((npc) => params.sceneNpcIds.has(npc.id))
+    const npcById = new Map(sceneNpcs.map((npc) => [npc.id, npc]))
+    const npcsByName = new Map<string, typeof sceneNpcs>()
+    for (const npc of sceneNpcs) {
+      const key = normalizeLookupValue(npc.name)
+      npcsByName.set(key, [...(npcsByName.get(key) ?? []), npc])
+    }
+
+    const segments: NonNullable<NarratorTurnResponse['segments']> = []
+    for (const segment of params.segments) {
+      const text = segment.text.trim()
+      if (!text) continue
+
+      if (segment.type === 'narrator') {
+        segments.push({ type: 'narrator', text })
+        continue
+      }
+
+      const namedMatches = segment.npcName ? npcsByName.get(normalizeLookupValue(segment.npcName)) ?? [] : []
+      const canonicalNpc = segment.npcId
+        ? npcById.get(segment.npcId) ?? (namedMatches.length === 1 ? namedMatches[0] : undefined)
+        : namedMatches.length === 1
+          ? namedMatches[0]
+          : undefined
+
+      if (!canonicalNpc) {
+        warn('validateNarrativeSegments', `Convertendo fala de NPC inválido para narrador: "${segment.npcName}"`)
+        segments.push({ type: 'narrator', text })
+        continue
+      }
+
+      segments.push({
+        type: 'npc',
+        npcId: canonicalNpc.id,
+        npcName: canonicalNpc.name,
+        disposition: canonicalNpc.disposition ?? segment.disposition ?? 'neutral',
+        text
+      })
+    }
+
+    return segments.length ? segments : fallback
   }
 
   private validateNarratorResponse(params: {
@@ -649,14 +720,22 @@ export class SessionService {
         .filter((npc) => !npc.location || npc.location === canonicalNarrativeState.worldState.activeLocation)
         .map((npc) => npc.id)
     )
+    const npcs = response.npcs.filter((npc) => sceneNpcIds.has(npc.id))
+    const segments = this.validateNarrativeSegments({
+      segments: response.segments,
+      narrative: response.narrative,
+      state: canonicalNarrativeState,
+      sceneNpcIds
+    })
 
     return {
       ...response,
       narrative: response.narrative,
+      segments,
       options,
-      npcs: response.npcs.filter((npc) => sceneNpcIds.has(npc.id)),
+      npcs,
       itemChanges,
-      statusChanges: this.validateNarratorStatusChanges(response.statusChanges, state, mode),
+      statusChanges: this.validateNarratorStatusChanges(response.statusChanges, canonicalNarrativeState, mode, action),
       locationChange,
       chapterTitle: locationChange ? response.chapterTitle ?? null : null
     }
@@ -913,6 +992,7 @@ export class SessionService {
       turn: 0,
       role: 'narrator',
       narrative: narratorResponse.narrative,
+      segments: narratorResponse.segments,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
@@ -1087,6 +1167,7 @@ export class SessionService {
       turn: 0,
       role: 'narrator',
       narrative: narratorResponse.narrative,
+      segments: narratorResponse.segments,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
@@ -1281,8 +1362,12 @@ export class SessionService {
     )
     narratorResponse = { ...narratorResponse, itemChanges: dedupedItemChanges }
     finalState = this.inventory.applyItemChanges(finalState, dedupedItemChanges)
-    finalState = this.statusEffects.applyStatusChanges(finalState, narratorResponse.statusChanges)
+    finalState = this.statusEffects.applyStatusChanges(finalState, narratorResponse.statusChanges, { action: normalizedAction })
     finalState = this.statusEffects.tickEffects(finalState)
+    finalState = this.statusEffects.applyNarrativeRecovery(finalState, {
+      actionText: actionDescription,
+      narrative: narratorResponse.narrative
+    })
 
     // 5.5. Processar ataques de NPCs contra o jogador
     // No Savage Worlds cada personagem age no seu próprio turno de iniciativa.
@@ -1339,20 +1424,20 @@ export class SessionService {
 
     // 6. Salvar estado final e mensagem do narrador
     await this.snapshots.saveTurnState(finalState)
-    await this.summaries.maybeUpdateSummary({ state: finalState })
 
     await this.chatMessages.append({
       sessionId: params.sessionId,
       turn: finalState.meta.turn,
       role: 'narrator',
       narrative: narratorResponse.narrative,
+      segments: narratorResponse.segments,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
       statusChanges: narratorResponse.statusChanges
     })
 
-    // 7. Resumir histórico se acumulou >= 20 mensagens
+    // 7. Resumir histórico incrementalmente, mantendo apenas as 20 mensagens recentes
     await this.summaries.maybeSummarizeHistory({ state: finalState })
 
     const payload = await this.buildSessionPayload(params.sessionId)

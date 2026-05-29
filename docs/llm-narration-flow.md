@@ -64,7 +64,7 @@ Jogador escolhe opção (ou digita ação livre)
 [contextBuilder.ts]
  Monta NarrateTurnRequest com:
   - Estado atual (local, ferimentos, inventário, NPCs)
-  - Histórico recente (multi-turn contents[])
+  - Histórico recente: últimas 20 mensagens (multi-turn contents[])
   - rulesDigest (regras Savage Worlds)
   - summaryText (resumo canônico)
   - playerSkills (mapa de perícias)
@@ -84,7 +84,18 @@ Jogador escolhe opção (ou digita ação livre)
  5. isNarratorResponseStructurallyValid() → rejeita se inválido
         │
         ▼
-NarratorTurnResponse → session.service.ts → frontend
+NarratorTurnResponse → session.service.ts
+  │
+  ▼
+[summary.service.ts]
+ Após salvar a mensagem do narrador, compacta o excedente do histórico:
+  - mantém as últimas 20 mensagens na sessão
+  - junta resumo anterior + mensagens antigas em ordem cronológica
+  - gera novo summaryText incremental via summarizeHistory()
+  - remove apenas as mensagens já incorporadas ao resumo
+  │
+  ▼
+session.service.ts → frontend
 ```
 
 ---
@@ -114,6 +125,30 @@ Composto dinamicamente pela função `buildNarratorSystemPrompt()`. Seções inj
 | `=== RESUMO DA AVENTURA ===` | Resumo canônico gerado por `summarize()` | Via `summaryText` |
 | Regras de modo | `REGRAS DE INÍCIO DE SESSÃO` ou `REGRAS DE TURNO CANÔNICO` | Depende de `mode` |
 | `=== INSTRUÇÕES DE NARRAÇÃO ===` | Diretrizes de narrativa, âncoras canônicas | Sempre |
+
+---
+
+## Segmentos de narração e fala de NPC
+
+Além de `narrative`, a resposta de narração pode incluir `segments` para apresentação visual no frontend:
+
+```json
+{
+  "narrative": "Texto completo do turno em ordem.",
+  "segments": [
+    { "type": "narrator", "text": "Descrição da cena ou consequência." },
+    { "type": "npc", "npcId": "npc-1", "npcName": "Iara", "disposition": "friendly", "text": "Fala direta do NPC." }
+  ]
+}
+```
+
+Regras:
+
+- `narrative` continua obrigatório e é o texto completo usado para histórico, resumo e compatibilidade com mensagens antigas.
+- `segments` é opcional e serve para renderização: narração fica como `type: "narrator"`; fala direta de NPC fica como `type: "npc"`.
+- Segmentos de NPC devem usar um `npcId` presente na cena ou introduzido no mesmo retorno em `npcs`.
+- O backend valida o NPC canônico antes de salvar. Se a fala apontar para NPC inexistente ou ambíguo, o bloco é convertido para narrador.
+- Mensagens antigas sem `segments` continuam sendo exibidas a partir de `narrative`.
 
 ---
 

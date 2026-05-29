@@ -1,5 +1,5 @@
 import { FieldValue, firestore } from '../infrastructure/firebase.js'
-import type { ActionOption, NPCMention, ItemChange, StatusChange } from '../domain/types/narrative.js'
+import type { ActionOption, NPCMention, ItemChange, StatusChange, NarrativeSegment } from '../domain/types/narrative.js'
 import { randomUUID } from 'node:crypto'
 
 /** Recursively replace undefined values with null for Firestore compatibility */
@@ -22,6 +22,7 @@ export type ChatMessageRow = {
   seq: number
   role: 'narrator' | 'player' | 'system'
   narrative?: string
+  segments?: NarrativeSegment[]
   playerInput?: string
   options?: ActionOption[]
   npcs?: NPCMention[]

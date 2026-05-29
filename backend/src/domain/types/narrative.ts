@@ -45,6 +45,8 @@ export type StatusChange = {
   changeType: 'applied' | 'removed'
   turnsRemaining?: number | null
   description: string
+  targetType?: 'player' | 'npc'
+  targetId?: string | null
 }
 
 // ─── NPCs mencionados ───
@@ -55,6 +57,19 @@ export type NPCMention = {
   disposition: 'hostile' | 'neutral' | 'friendly'
   newlyIntroduced: boolean
 }
+
+export type NarrativeSegment =
+  | {
+      type: 'narrator'
+      text: string
+    }
+  | {
+      type: 'npc'
+      npcId?: string | null
+      npcName: string
+      disposition: NPCMention['disposition']
+      text: string
+    }
 
 // ─── Dice Check (avaliação de teste de dados) ───
 
@@ -110,6 +125,7 @@ export type ValidateActionRequest = {
       maxWounds: number
       toughness: number
       parry: number
+      statusEffects?: Array<{ id: string; name: string; turnsRemaining?: number }>
     }>
     /** IDs de NPCs já derrotados nesta sessão */
     defeatedNpcIds?: string[]
@@ -159,6 +175,8 @@ export type NpcAttackEntry = {
 export type NarratorTurnResponse = {
   /** Texto narrativo descrevendo o passo da história */
   narrative: string
+  /** Blocos estruturados para renderizar narração e falas diretas de NPCs */
+  segments?: NarrativeSegment[]
   /** Sempre 4 opções de ação para o jogador */
   options: ActionOption[]
   /** NPCs presentes ou mencionados na cena */
@@ -240,6 +258,7 @@ export type NarrateTurnRequest = {
       maxWounds: number
       toughness: number
       parry: number
+      statusEffects?: Array<{ id: string; name: string; turnsRemaining?: number }>
     }>
     /** IDs de NPCs já derrotados nesta sessão */
     defeatedNpcIds?: string[]

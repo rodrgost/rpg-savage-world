@@ -16,16 +16,19 @@ function sanitizeInlineText(value: string | undefined): string {
   return (value ?? '').trim().replace(/\s+/g, ' ')
 }
 
-function buildWorldImagePrompt(params: { thematic: string; visualDescription?: string }): string {
+function buildWorldImagePrompt(params: { campaignName?: string; thematic: string; visualDescription?: string }): string {
+  const campaignName = sanitizeInlineText(params.campaignName)
   const thematic = sanitizeInlineText(params.thematic)
   const visualDescription = sanitizeInlineText(params.visualDescription)
+  const title = campaignName || thematic || 'Untitled campaign'
 
   return [
     'Create a illustrated key art.',
-    `Campaign title anchor: "${thematic || 'Untitled campaign'}".`,
+    `Campaign title anchor: "${title}".`,
     ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
     'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, mood and visual storytelling driven by the setting itself.',
-    'Restrictions: no UI, no typography, no characters as the main subject.'
+    `Title integration: render ONLY the exact campaign name "${title}" as readable cover/poster typography inside the artwork. Keep all letters within the central 80% safe zone, with no subtitles, taglines, logos, watermarks, UI, or extra words.`,
+    'Restrictions: no UI, no characters as the main subject.'
   ].join('\n')
 }
 
@@ -650,15 +653,17 @@ export class GameDataService {
 
   async generateCampaignImagePreview(params: {
     userId: string
+    name?: string
     thematic: string
   }): Promise<{ image: StoredImage }> {
+    const campaignName = params.name?.trim() ?? ''
     const thematic = params.thematic?.trim() ?? ''
     if (!thematic) throw new BadRequestException('Temática é obrigatória')
 
-    const visualDescription = await this.buildVisualDescription({ entityType: 'campaign', title: thematic })
+    const visualDescription = await this.buildVisualDescription({ entityType: 'campaign', title: campaignName || thematic })
 
     const generated = await this.imageGenerator.generateImage({
-      prompt: buildWorldImagePrompt({ thematic, visualDescription }),
+      prompt: buildWorldImagePrompt({ campaignName, thematic, visualDescription }),
       width: 768,
       height: 432,
       mimeType: 'image/webp'
@@ -837,10 +842,13 @@ export class GameDataService {
       campaignRole?: string
     }
   }) {
+    const typedName = params.existingFields?.name?.trim() ?? ''
+    const existingFields = typedName ? { name: typedName } : undefined
+
     log('suggestCharacterFromWorld', 'request received', {
       campaignId: params.campaignId,
       userId: params.userId,
-      existingFields: Object.keys(params.existingFields ?? {})
+      existingFields: Object.keys(existingFields ?? {})
     })
 
     const campaign = await this.campaigns.get(params.campaignId)
@@ -873,16 +881,15 @@ export class GameDataService {
         worldName,
         storyDescription,
         worldLore,
-        existingFields: params.existingFields
+        existingFields
       })
 
-      const existingFields = params.existingFields ?? {}
-      const name = (existingFields.name?.trim() || suggestion.name).trim()
-      const gender = (existingFields.gender?.trim() || suggestion.gender || '').trim()
-      const race = (existingFields.race?.trim() || suggestion.race || '').trim()
-      const profession = (existingFields.profession?.trim() || suggestion.profession).trim()
-      const description = (existingFields.description?.trim() || suggestion.description).trim()
-      const campaignRole = (existingFields.campaignRole?.trim() || suggestion.campaignRole || '').trim()
+      const name = (typedName || suggestion.name).trim()
+      const gender = (suggestion.gender || '').trim()
+      const race = (suggestion.race || '').trim()
+      const profession = suggestion.profession.trim()
+      const description = suggestion.description.trim()
+      const campaignRole = (suggestion.campaignRole || '').trim()
 
       if (!name || !profession || description.length < 80 || !campaignRole) {
         throw new Error('O provedor de IA retornou uma sugestão incompleta.')

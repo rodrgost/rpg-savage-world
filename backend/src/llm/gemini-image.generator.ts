@@ -45,7 +45,7 @@ export const imageGenerationParamsSchema = z
       .optional(),
     mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp']).optional(),
     seed: z.number().int().nonnegative().max(2 ** 31 - 1).optional(),
-    timeoutMs: z.number().int().positive().max(120_000).optional()
+    timeoutMs: z.number().int().positive().max(300_000).optional()
   })
   .strict()
 
@@ -116,7 +116,7 @@ export class GeminiImageGenerator {
   private readonly model = readEnv('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image')
   private readonly baseUrl = readEnv('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com')
   private readonly temperature = toNumber(readEnv('GEMINI_IMAGE_TEMPERATURE', '0.8'), 0.8)
-  private readonly timeoutMs = withMin(toNumber(readEnv('GEMINI_TIMEOUT_MS', '45000'), 45000), 15000)
+  private readonly timeoutMs = withMin(toNumber(readEnv('GEMINI_IMAGE_TIMEOUT_MS', readEnv('GEMINI_TIMEOUT_MS', '120000')), 120000), 30000)
 
   async generateImage(params: ImageGenerationParams): Promise<GeneratedImage> {
     if (!this.apiKey) {
@@ -190,6 +190,18 @@ export class GeminiImageGenerator {
           }
           throw new Error(blockReason ?? 'Gemini não retornou imagem (inlineData)')
         }
+      } catch (error) {
+        const isAbort = error instanceof Error && error.name === 'AbortError'
+        if (isAbort) {
+          const timeoutMs = parsedParams.timeoutMs ?? this.timeoutMs
+          warn('GeminiImage', `Tentativa ${attempt}/${maxAttempts} excedeu ${timeoutMs}ms e foi abortada.`)
+          if (attempt < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 1500 * attempt))
+            continue
+          }
+          throw new Error(`Gemini demorou mais de ${timeoutMs}ms para gerar imagem`)
+        }
+        throw error
       } finally {
         clearTimeout(timeout)
       }

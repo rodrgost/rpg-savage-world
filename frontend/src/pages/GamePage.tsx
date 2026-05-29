@@ -19,7 +19,7 @@ import {
   getCharacter
 } from '../lib/api'
 import type { EnginePhaseData } from '../lib/api'
-import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, NarratorTurnResponse, NarrativeStyle, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
+import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, NarratorTurnResponse, NarrativeSegment, NarrativeStyle, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
 import { ATTRIBUTES, SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
 import { YouTubeAmbient } from '../components/YouTubeAmbient'
 
@@ -62,6 +62,38 @@ function splitNarrativeParagraphs(narrative?: string): string[] {
     .split('\n')
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
+}
+
+function getNarrativeSegments(message: ChatMessage): NarrativeSegment[] {
+  const segments = (message.segments ?? [])
+    .map((segment) => ({ ...segment, text: normalizeEscapedText(segment.text) }))
+    .filter((segment) => segment.text.length > 0)
+
+  if (segments.length > 0) return segments
+
+  const fallbackText = normalizeEscapedText(message.narrative ?? '')
+  return fallbackText ? [{ type: 'narrator', text: fallbackText }] : []
+}
+
+function joinNarrativeSegments(segments: NarrativeSegment[]): string {
+  return segments.map((segment) => segment.text).join('\n\n')
+}
+
+function sliceNarrativeSegments(segments: NarrativeSegment[], maxChars: number): NarrativeSegment[] {
+  let remaining = maxChars
+  const visible: NarrativeSegment[] = []
+
+  for (const segment of segments) {
+    if (remaining <= 0) break
+
+    const text = segment.text.slice(0, remaining)
+    if (text.trim()) visible.push({ ...segment, text })
+
+    remaining -= segment.text.length
+    if (remaining > 0) remaining -= 2
+  }
+
+  return visible
 }
 
 function trimIncompleteSummaryText(text?: string): string {
@@ -357,15 +389,18 @@ function formatState(state: GameState): string {
 
 // ─── Components ───
 
-function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerImage }: {
+function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerImage, npcs = [] }: {
   message: ChatMessage
   isNew?: boolean
   charsPerTick?: number
   playerName?: string
   playerImage?: { mimeType: string; base64: string } | null
+  npcs?: NonNullable<GameState['npcs']>
 }) {
-  const fullText = message.narrative ?? ''
+  const segments = getNarrativeSegments(message)
+  const fullText = joinNarrativeSegments(segments)
   const [displayedText, setDisplayedText] = useState(isNew && charsPerTick > 0 ? '' : fullText)
+  const displayedSegments = sliceNarrativeSegments(segments, fullText.length === 0 ? 0 : displayedText.length)
 
   useEffect(() => {
     if (!isNew || charsPerTick <= 0) {
@@ -441,10 +476,27 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
 
   return (
     <div className="msg narrator">
-      <strong>📖 Narrador</strong>
-      <div className="narrative-text">
-        {splitNarrativeParagraphs(displayedText).map((paragraph, i) => (
-          <p key={i}>{paragraph}</p>
+      <div className="narrative-segments">
+        {displayedSegments.map((segment, segmentIndex) => (
+          segment.type === 'npc' ? (
+            <div key={`${message.messageId}-segment-${segmentIndex}`} className={`narrative-segment npc-dialogue npc-dialogue--${segment.disposition}`}>
+              <strong className="npc-dialogue-label">{segment.npcName}</strong>
+              <div className="narrative-text npc-dialogue-text">
+                {splitNarrativeParagraphs(segment.text).map((paragraph, i) => (
+                  <p key={i}>{paragraph}</p>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div key={`${message.messageId}-segment-${segmentIndex}`} className="narrative-segment narrator-segment">
+              <strong className="narrator-label">📖 Narrador</strong>
+              <div className="narrative-text">
+                {splitNarrativeParagraphs(segment.text).map((paragraph, i) => (
+                  <p key={i}>{paragraph}</p>
+                ))}
+              </div>
+            </div>
+          )
         ))}
       </div>
 
@@ -480,15 +532,26 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
       {/* Status changes */}
       {message.statusChanges && message.statusChanges.length > 0 && (
         <div className="status-changes">
-          {message.statusChanges.map((change) => (
-            <span
-              key={change.effectId}
-              className={`status-change ${change.changeType}`}
-            >
-              {change.changeType === 'applied' ? '▲' : '▼'} {change.name}
-              {change.turnsRemaining !== undefined ? ` (${change.turnsRemaining}t)` : ''}
-            </span>
-          ))}
+          {message.statusChanges.map((change) => {
+            const npcName = change.targetType === 'npc'
+              ? npcs.find((npc) => npc.id === change.targetId)?.name
+              : null
+            const targetLabel = change.targetType === 'npc'
+              ? ` em ${npcName ?? 'inimigo'}`
+              : change.targetType === 'player'
+                ? ' em você'
+                : ''
+
+            return (
+              <span
+                key={`${change.effectId}-${change.targetType ?? 'player'}-${change.targetId ?? ''}`}
+                className={`status-change ${change.changeType}`}
+              >
+                {change.changeType === 'applied' ? '▲' : '▼'} {change.name}{targetLabel}
+                {typeof change.turnsRemaining === 'number' ? ` (${change.turnsRemaining}t)` : ''}
+              </span>
+            )
+          })}
         </div>
       )}
     </div>
@@ -588,7 +651,7 @@ function InventoryPanel({ items }: { items: InventoryItem[] }) {
   )
 }
 
-function StatusEffectsPanel({ effects }: { effects: Array<{ id: string; name: string; turnsRemaining?: number }> }) {
+function StatusEffectsPanel({ effects }: { effects: GameState['player']['statusEffects'] }) {
   if (!effects.length) return null
 
   return (
@@ -601,6 +664,25 @@ function StatusEffectsPanel({ effects }: { effects: Array<{ id: string; name: st
             {effect.turnsRemaining !== undefined && ` (${effect.turnsRemaining}t)`}
           </span>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function NpcStatusEffectsPanel({ npcs }: { npcs: NonNullable<GameState['npcs']> }) {
+  const affectedNpcs = npcs.filter((npc) => (npc.statusEffects ?? []).length > 0)
+  if (!affectedNpcs.length) return null
+
+  return (
+    <div className="status-effects-panel">
+      <h4>Inimigos afetados</h4>
+      <div className="effects-list">
+        {affectedNpcs.flatMap((npc) => (npc.statusEffects ?? []).map((effect) => (
+          <span key={`${npc.id}-${effect.id}`} className="effect-tag" title={npc.name}>
+            {npc.name}: {effect.name}
+            {effect.turnsRemaining !== undefined && ` (${effect.turnsRemaining}t)`}
+          </span>
+        )))}
       </div>
     </div>
   )
@@ -1923,6 +2005,7 @@ export function GamePage() {
   const isShaken = state?.player.isShaken ?? false
   const inventory = state?.player.inventory ?? []
   const statusEffects = state?.player.statusEffects ?? []
+  const npcEffects = state?.npcs ?? []
 
   return (
     <section className="page-game">
@@ -2017,6 +2100,12 @@ export function GamePage() {
 
       {/* ── Chat Narrativo ── */}
       <div className="chat-panel">
+        {(statusEffects.length > 0 || npcEffects.some((npc) => (npc.statusEffects ?? []).length > 0)) && (
+          <div className="state-brief">
+            <StatusEffectsPanel effects={statusEffects} />
+            <NpcStatusEffectsPanel npcs={npcEffects} />
+          </div>
+        )}
         <div className="chat-log">
           {displayMessages.length === 0 && !loading && (
             <div className="chat-empty">
@@ -2034,7 +2123,7 @@ export function GamePage() {
                     <span className="turn-separator-label">Turno {msg.turn} · Cap. {state?.meta.chapter ?? 1}</span>
                   </div>
                 )}
-                <NarrativeBubble message={msg} isNew={msg.messageId === latestNarratorId} charsPerTick={typewriterSpeed} playerName={playerName ?? state?.player.name} playerImage={playerImage} />
+                <NarrativeBubble message={msg} isNew={msg.messageId === latestNarratorId} charsPerTick={typewriterSpeed} playerName={playerName ?? state?.player.name} playerImage={playerImage} npcs={state?.npcs ?? []} />
               </div>
             )
           })}

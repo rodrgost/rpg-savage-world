@@ -27,9 +27,8 @@ function trimIncompleteSummaryText(text: string): string {
 }
 
 export class SummaryService {
-  private static readonly HISTORY_BATCH_SIZE = 20
-  /** Número mínimo de mensagens recentes que NUNCA são resumidas */
-  private static readonly HISTORY_TAIL_KEEP = 10
+  /** Número de mensagens recentes mantidas fora do resumo canônico. */
+  private static readonly RECENT_MESSAGES_TO_KEEP = 20
 
   private isPersistedLegacySummary(message: {
     role: 'narrator' | 'player' | 'system'
@@ -142,22 +141,19 @@ export class SummaryService {
     })
   }
 
-  /**
-   * Verifica se há >= 20 mensagens; se sim, integra as 20 mais antigas ao resumo
-   * canônico e apaga apenas as mensagens já incorporadas.
-   */
+  /** Integra ao resumo apenas o excedente, preservando as 20 mensagens mais recentes. */
   async maybeSummarizeHistory(params: { state: GameState }): Promise<void> {
     const { state } = params
     const sessionId = state.meta.sessionId
     const totalMessages = await this.chatMessages.countBySession(sessionId)
-    const minToTrigger = SummaryService.HISTORY_BATCH_SIZE + SummaryService.HISTORY_TAIL_KEEP
+    const messagesToCompact = totalMessages - SummaryService.RECENT_MESSAGES_TO_KEEP
 
-    if (totalMessages < minToTrigger) return
+    if (messagesToCompact <= 0) return
 
-    log('summarizeHistory', `${totalMessages} messages (min ${minToTrigger}), summarizing oldest ${SummaryService.HISTORY_BATCH_SIZE} — keeping last ${SummaryService.HISTORY_TAIL_KEEP} intact`)
+    log('summarizeHistory', `${totalMessages} messages, compacting oldest ${messagesToCompact} — keeping last ${SummaryService.RECENT_MESSAGES_TO_KEEP} intact`)
 
-    const oldestMessages = await this.chatMessages.getOldest(sessionId, SummaryService.HISTORY_BATCH_SIZE)
-    if (oldestMessages.length < SummaryService.HISTORY_BATCH_SIZE) return
+    const oldestMessages = await this.chatMessages.getOldest(sessionId, messagesToCompact)
+    if (oldestMessages.length < messagesToCompact) return
 
     const existing = await this.summaries.getSummary(sessionId)
     const summarySeed = this.buildSummarySeed(existing, oldestMessages)
