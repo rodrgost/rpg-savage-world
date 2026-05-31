@@ -1371,18 +1371,26 @@ export class SessionService {
 
     // 5.5. Processar ataques de NPCs contra o jogador
     // No Savage Worlds cada personagem age no seu próprio turno de iniciativa.
-    // Quando o jogador usa 'attack', o NPC já recebeu dano neste turno —
-    // processar npcAttacks simultaneamente resultaria no jogador sofrendo dano
-    // no mesmo turno em que atacou, o que é incorreto mecanicamente.
-    const pendingNpcAttacks = normalizedAction.type === 'attack' ? [] : (narratorResponse.npcAttacks ?? [])
+    // Quando o jogador ataca (seja via action 'attack' ou outro tipo que resulte em ataque),
+    // o NPC já recebeu dano neste turno — processar npcAttacks simultaneamente resultaria 
+    // no jogador sofrendo dano no mesmo turno em que atacou, o que é incorreto mecanicamente.
+    // Verifica tanto o tipo da ação quanto os eventos emitidos para capturar todos os casos de ataque.
+    const hasPlayerAttack = normalizedAction.type === 'attack' 
+      || result.emittedEvents.some(ev => ev.type === 'attack_hit' || ev.type === 'attack_miss')
+    const pendingNpcAttacks = hasPlayerAttack ? [] : (narratorResponse.npcAttacks ?? [])
     const npcAttackEvents: Array<{ type: string; payload: unknown }> = []
     for (const entry of pendingNpcAttacks) {
-      // Validar: NPC deve estar na cena e skillDie deve ser DieType válido
+      // Validar: NPC deve estar na cena, ser diferente do jogador, e skillDie deve ser DieType válido
       const sceneNpc = finalState.npcs.find(
         (n) => n.id === entry.npcId && (!n.location || n.location === finalState.worldState.activeLocation)
       )
       if (!sceneNpc) {
         warn('applyNpcAttack', `NPC "${entry.npcId}" não encontrado na cena — ataque ignorado`)
+        continue
+      }
+      // Garantir que o atacante não seja o próprio jogador (prevenção extra)
+      if (entry.npcId === finalState.player.characterId) {
+        warn('applyNpcAttack', `Ataque do próprio jogador ignorado — jogador não pode atacar a si mesmo`)
         continue
       }
       if (!isDieType(entry.skillDie) || !entry.damageFormula?.trim()) {
