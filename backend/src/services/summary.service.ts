@@ -171,7 +171,8 @@ export class SummaryService {
           summaryText: summarySeed
         })
       }
-      await this.chatMessages.deleteBatch(sessionId, oldestMessages.map((m) => m.messageId))
+      // TODO(diagnostics): deleteBatch temporariamente desabilitado para validar o resumo com conteúdo completo
+      // await this.chatMessages.deleteBatch(sessionId, oldestMessages.map((m) => m.messageId))
       return
     }
 
@@ -199,10 +200,11 @@ export class SummaryService {
       summaryText: nextSummaryText
     })
 
-    const idsToDelete = oldestMessages.map((m) => m.messageId)
-    await this.chatMessages.deleteBatch(sessionId, idsToDelete)
+    // TODO(diagnostics): deleteBatch temporariamente desabilitado para validar o resumo com conteúdo completo
+    // const idsToDelete = oldestMessages.map((m) => m.messageId)
+    // await this.chatMessages.deleteBatch(sessionId, idsToDelete)
 
-    log('summarizeHistory', `Done — compacted ${idsToDelete.length} messages into canonical summary with ${nextSummaryText.length} chars`)
+    log('summarizeHistory', `Done — summary updated with ${nextSummaryText.length} chars (deleteBatch disabled for diagnostics)`)
   }
 
   async rebuildSummary(params: { state: GameState }): Promise<string> {
