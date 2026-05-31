@@ -62,7 +62,11 @@ export class SummaryService {
       return true
     })
 
-    return nonSummaryMessages.map((m) => {
+    // Garante ordem cronológica: seq é o critério primário (atribuído na inserção),
+    // turn é o fallback para mensagens legadas onde seq pode ser igual.
+    const sorted = [...nonSummaryMessages].sort((a, b) => a.seq - b.seq || a.turn - b.turn)
+
+    return sorted.map((m) => {
       if (m.role === 'narrator') return { role: m.role, text: m.narrative ?? '', turn: m.turn }
       if (m.role === 'player') return { role: m.role, text: m.playerInput ?? '', turn: m.turn }
       const eventsText = (m.engineEvents ?? [])
@@ -171,7 +175,8 @@ export class SummaryService {
           summaryText: summarySeed
         })
       }
-      await this.chatMessages.deleteBatch(sessionId, oldestMessages.map((m) => m.messageId))
+      // TODO(diagnostics): deleteBatch temporariamente desabilitado para validar o resumo com conteúdo completo
+      // await this.chatMessages.deleteBatch(sessionId, oldestMessages.map((m) => m.messageId))
       return
     }
 
@@ -199,10 +204,11 @@ export class SummaryService {
       summaryText: nextSummaryText
     })
 
-    const idsToDelete = oldestMessages.map((m) => m.messageId)
-    await this.chatMessages.deleteBatch(sessionId, idsToDelete)
+    // TODO(diagnostics): deleteBatch temporariamente desabilitado para validar o resumo com conteúdo completo
+    // const idsToDelete = oldestMessages.map((m) => m.messageId)
+    // await this.chatMessages.deleteBatch(sessionId, idsToDelete)
 
-    log('summarizeHistory', `Done — compacted ${idsToDelete.length} messages into canonical summary with ${nextSummaryText.length} chars`)
+    log('summarizeHistory', `Done — summary updated with ${nextSummaryText.length} chars (deleteBatch disabled for diagnostics)`)
   }
 
   async rebuildSummary(params: { state: GameState }): Promise<string> {
