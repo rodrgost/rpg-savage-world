@@ -62,7 +62,11 @@ export class SummaryService {
       return true
     })
 
-    return nonSummaryMessages.map((m) => {
+    // Garante ordem cronológica: seq é o critério primário (atribuído na inserção),
+    // turn é o fallback para mensagens legadas onde seq pode ser igual.
+    const sorted = [...nonSummaryMessages].sort((a, b) => a.seq - b.seq || a.turn - b.turn)
+
+    return sorted.map((m) => {
       if (m.role === 'narrator') return { role: m.role, text: m.narrative ?? '', turn: m.turn }
       if (m.role === 'player') return { role: m.role, text: m.playerInput ?? '', turn: m.turn }
       const eventsText = (m.engineEvents ?? [])
