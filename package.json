@@ -18,8 +18,11 @@
     "dev:functions": "npm -w functions run dev",
     "dev:emulators": "npm -w functions run emulators",
     "build": "npm -w functions run build",
+    "build:functions": "npm -w functions run build",
+    "build:all": "npm run build:backend && npm run build:frontend && npm run build",
     "build:frontend": "npm -w frontend run build",
     "build:backend": "npm -w backend run build",
+    "validate": "npm run build:all",
     "deploy:functions": "npx firebase deploy --only functions",
     "start": "npm -w functions run start"
   }

@@ -15,10 +15,21 @@ type SessionPayload = {
   narratorResponse?: NarratorTurnResponse
 }
 
+class ApiStreamError extends Error {}
+
 function normalizeEnvValue(value: unknown): string {
   if (typeof value !== 'string') return ''
   const trimmed = value.trim()
   return trimmed.replace(/^"(.*)"$/, '$1')
+}
+
+function getErrorMessage(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null
+  const record = data as Record<string, unknown>
+  if (typeof record.message === 'string') {
+    return record.message
+  }
+  return null
 }
 
 // Em produção (Railway), VITE_BACKEND_URL não é definida → string vazia → URLs relativas (same-origin).
@@ -45,10 +56,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const data = raw ? (JSON.parse(raw) as unknown) : null
 
   if (!response.ok) {
-    const message =
-      typeof data === 'object' && data && 'message' in data
-        ? String((data as Record<string, unknown>).message)
-        : raw || `Erro HTTP ${response.status}`
+    const message = getErrorMessage(data) || raw || `Erro HTTP ${response.status}`
     throw new Error(message)
   }
 
@@ -78,7 +86,7 @@ async function apiStreamRequest<T>(
     let message = `Erro HTTP ${response.status}`
     try {
       const parsed = JSON.parse(raw)
-      if (parsed?.message) message = parsed.message
+      message = getErrorMessage(parsed) ?? message
     } catch { /* ignore */ }
     throw new Error(message)
   }
@@ -112,12 +120,12 @@ async function apiStreamRequest<T>(
           })
         }
         if (data.phase === 'error') {
-          throw new Error(String(data.message ?? 'Erro no servidor'))
+          throw new ApiStreamError(getErrorMessage(data) ?? 'Erro no servidor')
         }
         onPhase(data)
         lastResult = data as T
       } catch (e) {
-        if (e instanceof Error && e.message.startsWith('Erro')) throw e
+        if (e instanceof ApiStreamError) throw e
         console.warn('[apiStreamRequest] Failed to parse NDJSON line:', line)
       }
     }
@@ -138,12 +146,12 @@ async function apiStreamRequest<T>(
         })
       }
       if (data.phase === 'error') {
-        throw new Error(String(data.message ?? 'Erro no servidor'))
+        throw new ApiStreamError(getErrorMessage(data) ?? 'Erro no servidor')
       }
       onPhase(data)
       lastResult = data as T
     } catch (e) {
-      if (e instanceof Error && e.message.startsWith('Erro')) throw e
+      if (e instanceof ApiStreamError) throw e
     }
   }
 

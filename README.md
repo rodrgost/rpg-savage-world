@@ -76,6 +76,17 @@ Coleções base do MVP:
 - `npm -w frontend run build`: build do frontend
 - `npm -w backend run build`: build do backend HTTP
 - `npm -w functions run build`: build das Functions
+- `npm run build:all`: executa os builds de backend, frontend e functions em sequência
+- `npm run validate`: atalho de validação mínima (equivalente a `build:all`)
+
+## Validação mínima recomendada
+
+Antes de publicar mudanças, execute:
+
+1. `npm run validate`
+2. Corrija qualquer erro de compilação de backend/frontend/functions
+
+Isso garante consistência de contratos TypeScript e detecta regressões de integração básica entre os workspaces.
 
 ## Princípios
 

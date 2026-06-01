@@ -3,6 +3,7 @@ import type { Response } from 'express'
 import { z } from 'zod'
 import { SessionService } from './session.service.js'
 import { CurrentUser } from '../../auth/current-user.decorator.js'
+import { error as logError } from '../../utils/file-logger.js'
 
 const StartSessionBody = z.object({
   campaignId: z.string().min(1),
@@ -42,6 +43,20 @@ const ApplyTurnBody = z.object({
 const ChooseOptionBody = z.object({
   optionId: z.string().min(1)
 })
+
+function flushIfSupported(res: Response): void {
+  const maybeFlush = Reflect.get(res as object, 'flush')
+  if (typeof maybeFlush === 'function') {
+    maybeFlush.call(res)
+  }
+}
+
+const defaultStreamErrorMessage = 'Erro interno no servidor'
+
+function logStreamError(route: string, sessionId: string, userId: string, err: unknown): void {
+  const reason = err instanceof Error ? err.message : String(err)
+  logError('session.controller.stream', { route, sessionId, userId, reason })
+}
 
 @Controller('/sessions')
 export class SessionController {
@@ -117,13 +132,14 @@ export class SessionController {
         { ownerId: userId, sessionId, action: parsed.action },
         (engineData) => {
           res.write(JSON.stringify({ phase: 'engine', ...engineData }) + '\n')
-          if (typeof (res as any).flush === 'function') (res as any).flush()
+          flushIfSupported(res)
         }
       )
       res.write(JSON.stringify({ phase: 'narration', ...result }) + '\n')
       res.end()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro interno'
+      logStreamError('actions/stream', sessionId, userId, err)
+      const message = defaultStreamErrorMessage
       if (!res.headersSent) {
         res.status(500).json({ message })
       } else {
@@ -163,13 +179,14 @@ export class SessionController {
         { ownerId: userId, sessionId, optionId: parsed.optionId },
         (engineData) => {
           res.write(JSON.stringify({ phase: 'engine', ...engineData }) + '\n')
-          if (typeof (res as any).flush === 'function') (res as any).flush()
+          flushIfSupported(res)
         }
       )
       res.write(JSON.stringify({ phase: 'narration', ...result }) + '\n')
       res.end()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro interno'
+      logStreamError('choose/stream', sessionId, userId, err)
+      const message = defaultStreamErrorMessage
       if (!res.headersSent) {
         res.status(500).json({ message })
       } else {
