@@ -6,7 +6,7 @@ import type { ChatMessageRow } from '../repositories/chatMessage.repo.js'
 import type { GameState } from '../domain/types/gameState.js'
 import type { Narrator } from '../llm/narrator.js'
 import { GeminiAdapter } from '../llm/gemini.adapter.js'
-import { log } from '../utils/file-logger.js'
+import { log, warn } from '../utils/file-logger.js'
 
 export type SummaryDecisionHints = {
   endedCombat?: boolean
@@ -74,6 +74,19 @@ export class SummaryService {
         .join('; ')
       return { role: m.role as 'narrator' | 'player', text: eventsText, turn: m.turn }
     }).filter((m) => m.text.trim())
+  }
+
+  private async deleteCompactedMessages(sessionId: string, messages: ChatMessageRow[]): Promise<void> {
+    const messageIds = [...new Set(messages.map((m) => m.messageId).filter(Boolean))]
+    if (!messageIds.length) return
+
+    try {
+      await this.chatMessages.deleteBatch(sessionId, messageIds)
+      log('summarizeHistory', `Deleted ${messageIds.length} compacted messages from session storage`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      warn('summarizeHistory', `Summary updated but compacted messages were not deleted: ${message}`)
+    }
   }
 
   constructor(
@@ -175,8 +188,7 @@ export class SummaryService {
           summaryText: summarySeed
         })
       }
-      // TODO(diagnostics): deleteBatch temporariamente desabilitado para validar o resumo com conteúdo completo
-      // await this.chatMessages.deleteBatch(sessionId, oldestMessages.map((m) => m.messageId))
+      await this.deleteCompactedMessages(sessionId, oldestMessages)
       return
     }
 
@@ -204,11 +216,8 @@ export class SummaryService {
       summaryText: nextSummaryText
     })
 
-    // TODO(diagnostics): deleteBatch temporariamente desabilitado para validar o resumo com conteúdo completo
-    // const idsToDelete = oldestMessages.map((m) => m.messageId)
-    // await this.chatMessages.deleteBatch(sessionId, idsToDelete)
-
-    log('summarizeHistory', `Done — summary updated with ${nextSummaryText.length} chars (deleteBatch disabled for diagnostics)`)
+    await this.deleteCompactedMessages(sessionId, oldestMessages)
+    log('summarizeHistory', `Done — summary updated with ${nextSummaryText.length} chars`)
   }
 
   async rebuildSummary(params: { state: GameState }): Promise<string> {

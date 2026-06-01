@@ -4,23 +4,33 @@ import { existsSync, readFileSync } from 'node:fs'
 
 assertFirebaseEnv()
 
+type ServiceAccountWithProjectId = admin.ServiceAccount & { project_id?: string }
+
+function parseServiceAccount(raw: string): ServiceAccountWithProjectId {
+  return JSON.parse(raw) as ServiceAccountWithProjectId
+}
+
+function resolveProjectId(serviceAccount: ServiceAccountWithProjectId): string | undefined {
+  return env.firebaseProjectId || serviceAccount.project_id || undefined
+}
+
 function init(): admin.app.App {
   if (admin.apps.length > 0) return admin.app()
 
   if (env.firebaseServiceAccountJson) {
-    const serviceAccount = JSON.parse(env.firebaseServiceAccountJson) as admin.ServiceAccount
+    const serviceAccount = parseServiceAccount(env.firebaseServiceAccountJson)
     return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      projectId: env.firebaseProjectId || (serviceAccount as any).project_id
+      projectId: resolveProjectId(serviceAccount)
     })
   }
 
   if (env.firebaseServiceAccountPath && existsSync(env.firebaseServiceAccountPath)) {
     const raw = readFileSync(env.firebaseServiceAccountPath, 'utf-8')
-    const serviceAccount = JSON.parse(raw) as admin.ServiceAccount
+    const serviceAccount = parseServiceAccount(raw)
     return admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      projectId: env.firebaseProjectId || (serviceAccount as any).project_id
+      projectId: resolveProjectId(serviceAccount)
     })
   }
 
