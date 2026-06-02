@@ -849,15 +849,15 @@ export class GeminiAdapter implements Narrator {
   )
   private readonly narrateStartTemperature = toNumber(
     this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_NARRATE_START_TEMPERATURE', '0.45')
-      : readEnv('GEMINI_NARRATE_START_TEMPERATURE', '0.50'),
-    this.provider === 'deepseek' ? 0.45 : 0.50
+      ? readEnv('DEEPSEEK_NARRATE_START_TEMPERATURE', '0.25')
+      : readEnv('GEMINI_NARRATE_START_TEMPERATURE', '0.25'),
+    this.provider === 'deepseek' ? 0.25 : 0.25
   )
   private readonly narrateTurnTemperature = toNumber(
     this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_NARRATE_TURN_TEMPERATURE', '0.40')
-      : readEnv('GEMINI_NARRATE_TURN_TEMPERATURE', '0.45'),
-    this.provider === 'deepseek' ? 0.40 : 0.45
+      ? readEnv('DEEPSEEK_NARRATE_TURN_TEMPERATURE', '0.20')
+      : readEnv('GEMINI_NARRATE_TURN_TEMPERATURE', '0.20'),
+    this.provider === 'deepseek' ? 0.20 : 0.20
   )
   private readonly summaryTemperature = toNumber(
     this.provider === 'deepseek'
@@ -1166,10 +1166,15 @@ export class GeminiAdapter implements Narrator {
     const sysPrompt = [
       'Você mantém o resumo canônico de continuidade de uma história.',
       'Objetivo: gerar um resumo que preserva TANTO a continuidade mecânica QUANTO os fios narrativos abertos — permitindo que o narrador construa sobre o que já foi estabelecido.',
+      'PRIORIDADE DE FONTES (do mais para o menos autoritativo):',
+      '  1. ESTADO ATUAL ESTRUTURADO (âncora factual) — prevalece sobre qualquer dado no resumo anterior ou nas mensagens.',
+      '  2. Mensagens mais recentes — têm prioridade sobre mensagens mais antigas quando houver conflito narrativo.',
+      '  3. Resumo anterior — ponto de partida; substitua o que foi superado pelos eventos recentes.',
       'Regras:',
       '- Escreva em parágrafos corridos, sem títulos, rótulos ou seções.',
       '- Use 2 a 4 parágrafos — as informações que importam para a continuação imediata e para a coerência narrativa.',
       '- Preserve fatos que afetam a situação atual: posição, ameaças, objetivos pendentes, problemas não resolvidos.',
+      '- NÃO preserve situações, objetivos ou estados que já foram explicitamente cumpridos, derrotados ou superados — mantê-los cria incoerência.',
       '- TAMBÉM preserve fios narrativos abertos: mistérios levantados, promessas feitas, segredos revelados, perguntas sem resposta, tensões não resolvidas.',
       '- Preserve nome e pelo menos 1 traço de personalidade ou motivação de NPCs relevantes que apareceram — não apenas disposição.',
       '- Preserve descobertas de worldbuilding que podem ser referenciadas: detalhes específicos de locais, lore revelado, facções mencionadas, objetos significativos.',
@@ -1180,23 +1185,27 @@ export class GeminiAdapter implements Narrator {
     ].join('\n')
 
     const narrativeBlock = req.recentMessages?.length
-      ? `Mensagens da sessão (ordem cronológica — inclui abertura e recentes):\n${req.recentMessages.map((m) => `[${m.role === 'narrator' ? 'Narrador' : 'Jogador'} T${m.turn}] ${m.text}`).join('\n')}`
+      ? `Mensagens da sessão (abertura e recentes, ordem cronológica):\n${req.recentMessages.map((m) => `[${m.role === 'narrator' ? 'Narrador' : 'Jogador'} T${m.turn}] ${m.text}`).join('\n')}`
       : null
 
     const prompt = [
-      `Turno atual: ${req.upToTurn}.`,
-      `Resumo anterior canônico: ${req.previousSummary || 'sem resumo anterior'}.`,
-      `Local atual: ${state.worldState.activeLocation}.`,
+      `=== ESTADO ATUAL (âncora factual — prevalece em qualquer conflito) ===`,
+      `Turno: ${req.upToTurn}. Local: ${state.worldState.activeLocation}.`,
       combatText,
       `Ferimentos: ${p.wounds}/${p.maxWounds}. Fadiga: ${p.fatigue}. Abalado: ${p.isShaken ? 'sim' : 'não'}. Bennies: ${p.bennies}.`,
       `Ameaças visíveis: ${threatsText}`,
-      `Forças/NPCs relevantes no local: ${forcesText}`,
+      `Forças/NPCs no local: ${forcesText}`,
       `Efeitos ativos: ${statusText}`,
       `Flags de mundo ativas: ${activeFlagsText}`,
-      `Eventos novos (JSON): ${JSON.stringify(req.keyEvents)}.`,
+      `Eventos recentes: ${JSON.stringify(req.keyEvents)}.`,
+      '',
+      `=== RESUMO ANTERIOR (ponto de partida — substituir o que foi superado) ===`,
+      req.previousSummary || 'sem resumo anterior.',
+      narrativeBlock ? '' : null,
       narrativeBlock,
-      'Atualize o resumo canônico sem repetir fatos antigos que já estejam cobertos.'
-    ].filter(Boolean).join('\n')
+      '',
+      'Gere o resumo atualizado. Descarte do resumo anterior tudo que já foi superado. Não repita fatos que o estado atual torna obsoletos.'
+    ].filter((line) => line !== null).join('\n')
 
     try {
       const generated = await this.generateText(prompt, {
@@ -1244,11 +1253,14 @@ export class GeminiAdapter implements Narrator {
 
     const sysPrompt = [
       'Você mantém o resumo canônico de continuidade de uma história.',
+      'PRIORIDADE DE FONTES (do mais para o menos autoritativo):',
+      '  1. ESTADO ATUAL ESTRUTURADO (âncora factual) — prevalece sobre qualquer dado no resumo anterior ou nas mensagens.',
+      '  2. Mensagens mais recentes — têm prioridade sobre mensagens mais antigas quando houver conflito narrativo.',
+      '  3. Resumo anterior — ponto de partida; substitua o que foi superado pelos eventos mais recentes.',
       'Regras:',
-      '- Use o resumo anterior como base principal e as mensagens fornecidas para incorporar contexto que ainda importe para a continuação imediata e para a coerência narrativa.',
-      '- Não reconte a ação passo a passo e não duplique fatos já cobertos pelo resumo anterior.',
-      '- Preserve posição atual, ameaça ativa, forças em cena e problema imediato.',
-      '- TAMBÉM preserve fios narrativos abertos incorporados nas mensagens: mistérios, tensões, promessas, segredos, relações estabelecidas com NPCs.',
+      '- NÃO preserve situações, objetivos ou estados que já foram explicitamente cumpridos, derrotados ou superados — mantê-los cria incoerência.',
+      '- Preserve posicão atual, ameaça ativa, forças em cena e problema imediato — sempre alinhados com o ESTADO ATUAL acima.',
+      '- TAMBÉM preserve fios narrativos abertos incorporados nas mensagens: mistérios, tensões, promessas, segredos, relações com NPCs.',
       '- Preserve nome e traço de personalidade de NPCs relevantes que aparecem no histórico — não apenas disposição.',
       '- Preserve descobertas de worldbuilding específicas: locais descritos, lore revelado, objetos significativos mencionados.',
       '- Nunca liste itens do inventário no resumo — eles são rastreados separadamente.',
@@ -1263,19 +1275,22 @@ export class GeminiAdapter implements Narrator {
       .join('\n')
 
     const prompt = [
-      req.previousSummary ? `RESUMO CANÔNICO ATUAL:\n${req.previousSummary}\n` : 'RESUMO CANÔNICO ATUAL: sem resumo anterior\n',
-      'MENSAGENS QUE SERÃO COMPACTADAS:',
-      messagesText,
-      '',
+      '=== ESTADO ATUAL (âncora factual — prevalece em qualquer conflito) ===',
       `Local atual: ${state.worldState.activeLocation}.`,
       combatText,
       `Ferimentos: ${p.wounds}/${p.maxWounds}. Fadiga: ${p.fatigue}. Abalado: ${p.isShaken ? 'sim' : 'não'}. Bennies: ${p.bennies}.`,
       `Ameaças visíveis: ${threatsText}`,
-      `Forças/NPCs relevantes no local: ${forcesText}`,
+      `Forças/NPCs no local: ${forcesText}`,
       `Efeitos ativos: ${statusText}`,
       `Flags de mundo ativas: ${activeFlagsText}`,
       '',
-      'Atualize o resumo canônico final sem perder continuidade útil e sem repetir detalhes irrelevantes.'
+      '=== RESUMO ANTERIOR (ponto de partida — substituir o que for contradito pelo estado atual) ===',
+      req.previousSummary || 'sem resumo anterior.',
+      '',
+      '=== MENSAGENS COMPACTADAS (mais recentes têm prioridade sobre mais antigas) ===',
+      messagesText,
+      '',
+      'Gere o novo resumo canônico. Descarte do resumo anterior tudo que já foi superado. Incorpore os novos fios narrativos das mensagens. Mantenha coerência com o ESTADO ATUAL acima.'
     ].filter(Boolean).join('\n')
 
     let lastError: Error | null = null
@@ -1663,7 +1678,7 @@ export class GeminiAdapter implements Narrator {
     summaryText?: string
     playerSkills?: Record<string, string>
     mode?: NarratorPromptMode
-    narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+    narrativeStyle?: 'concise' | 'balanced'
     simpleVocabulary?: boolean
   } = {}): string {
     const { world, campaign, rulesDigest, summaryText, playerSkills, mode = 'turn', narrativeStyle, simpleVocabulary } = opts
@@ -1671,13 +1686,11 @@ export class GeminiAdapter implements Narrator {
       'Você é o Narrador de uma história. Responda em português do Brasil, sempre em segunda pessoa do singular ("Você entra...", "Você vê...").',
       '',
       '━━━ REGRA PRINCIPAL DO CAMPO "narrative" ━━━',
-      'Narre a consequência da ação do jogador de forma direta e progressiva.',
-      'FOCO: o que mudou. Evite recapitulações, repetições de estado e conclusões editoriais.',
-      'TOM e VOCABULÁRIO devem seguir a atmosfera do universo (ver seção VOZ NARRATIVA mais abaixo, se presente).',
+      'Narre a consequência da ação do jogador de forma direta e progressiva, mas não se adiante a próxima ação do jogador — deixe ganchos abertos para que o jogador decida o que fazer a seguir. O campo "narrative" deve avançar a história, não apenas descrever o estado atual ou repetir o que já foi dito.',
+      'FOCO: o que mudou, o que aconteceu, Evite recapitulações, repetições de estado e conclusões editoriais.',
       '',
       'ELEMENTOS DISPONÍVEIS (use os que forem naturais para a cena e o estilo ativo):',
       '  • o que concretamente aconteceu como resultado direto da ação',
-      '  • como o ambiente imediato, NPCs ou a situação reagem',
       '  • referência a elemento já estabelecido (nomes, objetos, locais) — cria continuidade',
       '',
       'NÃO ESCREVA:',
@@ -1723,7 +1736,7 @@ export class GeminiAdapter implements Narrator {
       '    }',
       '  ],',
       '  "npcs": [',
-      '    { "id": "<uuid>", "name": "<nome>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false }',
+      '    { "id": "<uuid>", "name": "<nome>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false, "status": "active|incapacitated|defeated|dead" }',
       '  ],',
       '  "itemChanges": [',
       '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|money|vehicle|property|quest|misc" }',
@@ -1821,6 +1834,7 @@ export class GeminiAdapter implements Narrator {
       '- Para actionType "travel", inclua "to" no actionPayload.',
       '- Para actionType "custom", inclua "input" no actionPayload com a descrição da ação.',
       '- Itens ganhos devem ter nomes criativos e coerentes com a ambientação.',
+      '- 🔴 REGRA CRÍTICA: itemChanges (qualquer changeType: "gained", "lost", "used") SÓ deve ser incluído quando o RESULTADO MECÂNICO contém evidência EXPLÍCITA da mudança. Exemplos de evidência válida: [item_gained], [item_lost], [item_used], [ammunition_consumed], [damage_dealt]. SEM evidência mecânica explícita, NÃO registre itemChanges, mesmo se o jogador mencionar usar/dar/perder um item na ação. O engine mecânico é responsável por rastrear mudanças de inventário, não o narrador.',
       '- NUNCA repita itemChanges de itens que já estão no inventário do jogador. Se o jogador já possui um item, NÃO o inclua novamente em itemChanges com changeType "gained". Consulte a seção INVENTÁRIO no contexto do turno.',
       '- Cada item deve aparecer NO MÁXIMO UMA VEZ no array itemChanges de uma mesma resposta.',
       '- Armas à distância (arco, besta, pistola, rifle, escopeta, etc.) SEMPRE devem ter sua munição correspondente como item separado no inventário (flechas, virotes, balas, cartuchos, etc.).',
@@ -1839,11 +1853,6 @@ export class GeminiAdapter implements Narrator {
       lines.push(
         '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative": CONCISO ━━━',
         'MÁXIMO 3 frases CURTAS. 1 parágrafo único.',
-        'Narre apenas: (1) o que aconteceu, (2) o estado imediato resultante.',
-        'NÃO ESCREVA neste estilo:',
-        '  • detalhes sensoriais, atmosfera ou ambientação',
-        '  • callbacks a eventos anteriores',
-        '  • tension-building, ganchos ou suspense',
         'Frases devem ser CURTAS e DIRETAS — sem cláusulas encadeadas com vírgula.',
         'Qualquer resposta com mais de 3 frases viola esta instrução.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
@@ -1856,22 +1865,12 @@ export class GeminiAdapter implements Narrator {
         'Parágrafo 2: gancho ou tensão para o próximo turno.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
-    } else if (narrativeStyle === 'theatrical') {
-      lines.push(
-        '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative": TEATRAL ━━━',
-        'MÍNIMO 9 frases distribuídas em 3 a 4 parágrafos. Narração cinematográfica e literária.',
-        'Parágrafo 1 (abertura sensorial): comece com imagem, som, cheiro ou toque específico da cena — não com a ação em si.',
-        'Parágrafo 2 (ação + impacto): descreva a consequência concreta com detalhe visual e dinâmica. Mostre, não conte.',
-        'Parágrafo 3 (reação do mundo): como NPCs, ambiente ou atmosfera respondem — com personalidade, não apenas estado mecânico.',
-        'Parágrafo 4 (gancho): termine com um detalhe inesperado, uma pergunta em aberto ou uma tensão que prenda o jogador.',
-        'Qualquer resposta com menos de 9 frases viola esta instrução.',
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-      )
     } else {
       lines.push(
         '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative" (PADRÃO) ━━━',
-        'ENTRE 5 e 7 frases distribuídas em 2 a 3 parágrafos.',
-        'Inclua: consequência direta + reação do mundo + gancho final.',
+        'MÁXIMO 3 frases CURTAS. 1 parágrafo único.',
+        'Frases devem ser CURTAS e DIRETAS — sem cláusulas encadeadas com vírgula.',
+        'Qualquer resposta com mais de 3 frases viola esta instrução.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     }
@@ -1883,7 +1882,6 @@ export class GeminiAdapter implements Narrator {
         '━━━ VOCABULÁRIO SIMPLES (ATIVO) ━━━',
         'Use APENAS palavras simples e comuns. Evite termos arcaicos, poéticos ou complexos.',
         'Prefira: "rosto" em vez de "semblante"; "antigo" em vez de "outrora"; "medo" em vez de "pavor visceral".',
-        'Frases CURTAS e DIRETAS. Clareza sobre estilo literário.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     }
@@ -1909,9 +1907,7 @@ export class GeminiAdapter implements Narrator {
       ? 'A "narrative" tem NO MÁXIMO 3 frases (1 parágrafo)?'
       : narrativeStyle === 'balanced'
         ? 'A "narrative" tem ENTRE 4 e 6 frases (2 parágrafos)?'
-        : narrativeStyle === 'theatrical'
-          ? 'A "narrative" tem MÍNIMO 9 frases (3-4 parágrafos com abertura sensorial, ação, reação do mundo e gancho)?'
-          : 'A "narrative" tem ENTRE 5 e 7 frases (2-3 parágrafos)?'
+        : 'A "narrative" tem NO MÁXIMO 3 frases (1 parágrafo)?'
     lines.push(
       '',
       'CHECKLIST FINAL antes de enviar a resposta:',
@@ -1944,8 +1940,7 @@ export class GeminiAdapter implements Narrator {
         '=== VOZ NARRATIVA (leia antes de escrever qualquer "narrative") ===',
         'Antes de redigir o campo "narrative" de cada turno, faça internamente os seguintes passos:',
         '1. Releia as seções "## Em Poucas Palavras" e "## Origens e História" do universo acima.',
-        '2. Identifique: qual é o humor emocional dominante? Que tensão ou sensação o cenário evoca? Que tipo de imagens e palavras o definem?',
-        '3. Use essas referências ESPECÍFICAS — não estereótipos de gênero — para calibrar o vocabulário do turno atual.',
+        '2. Use essas referências ESPECÍFICAS — não estereótipos de gênero — para calibrar o vocabulário do turno atual.',
         '',
         'Restrições obrigatórias para o campo "narrative":',
         '- Tom neutro de livro de regras é PROIBIDO. A narrativa deve ter o sotaque deste universo.',
@@ -2000,6 +1995,24 @@ export class GeminiAdapter implements Narrator {
         '=== REGRAS DE TURNO CANÔNICO ===',
         '- No turno normal, use o array "npcs" para NPCs já listados em NPCs PRESENTES.',
         '- EXCEÇÃO: se sua narrativa DESTE turno introduz uma criatura/entidade hostil que ainda não estava listada, você DEVE registrá-la em "npcs" com newlyIntroduced: true, disposition: "hostile" e um UUID gerado por você como "id". Use o MESMO id no actionPayload.targetId de qualquer opção de ataque contra essa entidade.',
+        '',
+        '- QUANTIDADE OBRIGATÓRIA: Se a narrativa menciona um número específico de NPCs/criaturas/agentes ("dois agentes", "três guardas", "um grupo de cinco", "uma patrulha de quatro"), você DEVE criar exatamente esse número de entradas separadas no array "npcs". Cada entrada precisa ter: id único (UUID diferente), name diferenciado (ex: "Agente da UCT #1", "Agente da UCT #2"), e a mesma disposition. Quando mencionar grupo sem número explícito ("um grupo de", "vários", "alguns"), crie no mínimo 2-3 entradas para representar a ameaça múltipla.',
+        '',
+        '  EXEMPLO CORRETO:',
+        '  Narrativa: "Dois agentes da UCT entram na sala, verificando os tanques com lanternas."',
+        '  npcs: [',
+        '    { "id": "uct-agent-001", "name": "Agente da UCT #1", "disposition": "hostile", "newlyIntroduced": true },',
+        '    { "id": "uct-agent-002", "name": "Agente da UCT #2", "disposition": "hostile", "newlyIntroduced": true }',
+        '  ]',
+        '',
+        '  EXEMPLO INCORRETO (NÃO FAÇA ASSIM):',
+        '  Narrativa: "Dois agentes da UCT entram na sala."',
+        '  npcs: [',
+        '    { "id": "uct-agent-001", "name": "Agente da UCT", "disposition": "hostile", "newlyIntroduced": true }',
+        '  ]',
+        '',
+        '- Campo "status" em NPCs é OPCIONAL. Use-o APENAS quando sua narrativa DESTE turno indicar explicitamente que um NPC foi incapacitado, nocauteado, derrotado ou morto SEM passar por um ataque mecânico formal do sistema (se passou por ataque/dano do rule-engine, o status é gerenciado automaticamente). Valores possíveis: "active", "incapacitated" (nocauteado/desacordado), "defeated" (derrotado), "dead" (morto). Omita o campo se o status não mudou ou se o NPC foi atingido via sistema de ataque formal.',
+        '',
         '- No turno normal, NÃO crie itemChanges com changeType "gained" EXCETO nas situações abaixo:',
         '  (1) Qualquer categoria EXCETO "weapon" e "armor", quando a narrativa deste turno justificar (compra em loja, item encontrado, recompensa, herança, conquista).',
         '  (2) Um NPC PRESENTE NA CENA entrega explicitamente um item ao jogador NESTE turno (ex: passa uma chave, entrega um documento). Use changeType "gained" com a categoria correta do item.',
@@ -2038,11 +2051,11 @@ export class GeminiAdapter implements Narrator {
       '  • Nunca crie fato canônico, NPC, item, status ou mudança de local sem apoio no contexto estruturado; ganchos futuros devem aparecer como tensão, indício ou possibilidade narrativa.',
       '',
       'PROGRESSÃO NARRATIVA (adapte ao estilo ativo):',
-      '  • CONSTRUÇÃO (todos os estilos): quando natural, referencie elemento já estabelecido — NPC, objeto, local, frase dita.',
-      '  • DESENVOLVIMENTO (balanced/theatrical): mostre NPCs com personalidade consistente — eles reagem, questionam, demonstram emoção.',
-      '  • ESCALADA (balanced/theatrical): eleve stakes, adicione camadas ou revele algo novo a cada turno.',
-      '  • GANCHO (balanced/theatrical): termine com algo em aberto — uma sombra vista, uma palavra ouvida, um aliado que hesita.',
-      '  No estilo CONCISO, omitir desenvolvimento, escalada e gancho se não couberem nas 3 frases.',
+      '  • CONCISO: narre só consequência e estado imediato. Não use callbacks, desenvolvimento, escalada ou gancho.',
+      '  • EQUILIBRADO: quando natural, referencie elemento já estabelecido — NPC, objeto, local, frase dita.',
+      '  • EQUILIBRADO: mostre NPCs com personalidade consistente — eles reagem, questionam, demonstram emoção.',
+      '  • EQUILIBRADO: eleve stakes, adicione camadas ou revele algo novo a cada turno, sem contradizer o estado estruturado.',
+      '  • EQUILIBRADO: termine com algo em aberto — uma sombra vista, uma palavra ouvida, um aliado que hesita.',
       '',
       'Se houver conflito entre memória anterior e o estado estruturado desta chamada, o estado estruturado prevalece.',
       'Se a seção ÂNCORAS CANÔNICAS ESTRITAS estiver presente, não cite nomes fora dela no turno normal.',
@@ -2233,11 +2246,15 @@ export class GeminiAdapter implements Narrator {
     const rawNpcs = Array.isArray(raw.npcs) ? raw.npcs : []
     const npcs: NPCMention[] = rawNpcs.map((n: unknown) => {
       const npc = (n && typeof n === 'object' ? n : {}) as Record<string, unknown>
+      const status = ['active', 'incapacitated', 'defeated', 'dead'].includes(npc.status as string) 
+        ? (npc.status as NPCMention['status']) 
+        : undefined
       return {
         id: typeof npc.id === 'string' ? npc.id : randomUUID(),
         name: sanitizeInlineText(npc.name, 'Desconhecido'),
         disposition: (['hostile', 'neutral', 'friendly'].includes(npc.disposition as string) ? npc.disposition : 'neutral') as NPCMention['disposition'],
-        newlyIntroduced: typeof npc.newlyIntroduced === 'boolean' ? npc.newlyIntroduced : true
+        newlyIntroduced: typeof npc.newlyIntroduced === 'boolean' ? npc.newlyIntroduced : true,
+        ...(status ? { status } : {})
       }
     })
 
@@ -2250,6 +2267,16 @@ export class GeminiAdapter implements Narrator {
 
     const rawSegments = Array.isArray(raw.segments) ? raw.segments : []
     const segments: NarrativeSegment[] = []
+    const pushNarratorSegment = (text: string) => {
+      const previous = segments[segments.length - 1]
+      if (previous?.type === 'narrator') {
+        previous.text = `${previous.text}\n\n${text}`
+        return
+      }
+
+      segments.push({ type: 'narrator', text })
+    }
+
     for (const segment of rawSegments) {
       const source = (segment && typeof segment === 'object' ? segment : {}) as Record<string, unknown>
       const text = sanitizeInlineText(source.text, '')
@@ -2274,11 +2301,11 @@ export class GeminiAdapter implements Narrator {
         continue
       }
 
-      segments.push({ type: 'narrator', text })
+      pushNarratorSegment(text)
     }
 
     if (!segments.length && narrative) {
-      segments.push({ type: 'narrator', text: narrative })
+      pushNarratorSegment(narrative)
     }
 
     // Parse item changes
@@ -2415,7 +2442,7 @@ export class GeminiAdapter implements Narrator {
       summaryText?: string
       playerSkills?: Record<string, string>
       mode?: NarratorPromptMode
-      narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+      narrativeStyle?: 'concise' | 'balanced'
       simpleVocabulary?: boolean
     } = {}
   ): Promise<NarratorTurnResponse> {
@@ -2429,7 +2456,7 @@ export class GeminiAdapter implements Narrator {
     const attempts = [
       { temperature: baseTemperature, systemInstruction: systemPrompt },
       {
-        temperature: Math.max(0.05, baseTemperature - 0.05),
+        temperature: Math.max(0.10, baseTemperature - 0.05),
         systemInstruction: this.buildNarratorRetrySystemPrompt(systemPrompt)
       }
     ] as const
@@ -2752,7 +2779,7 @@ export class GeminiAdapter implements Narrator {
         world: req.world,
         campaign: req.campaign,
         mode: 'start',
-        narrativeStyle: req.narrativeStyle,
+        narrativeStyle: 'balanced', // Forçar 'balanced' para garantir abertura rica e imersiva
         simpleVocabulary: req.simpleVocabulary
       })
     } catch (error) {

@@ -27,8 +27,10 @@ function trimIncompleteSummaryText(text: string): string {
 }
 
 export class SummaryService {
-  /** Número de mensagens recentes mantidas fora do resumo canônico. */
-  private static readonly RECENT_MESSAGES_TO_KEEP = 20
+  /** Número de mensagens recentes mantidas fora do resumo canônico.
+   *  Deve ser igual a RECENT_LLM_MESSAGE_LIMIT em session.service.ts.
+   *  Use esta constante como fonte única da verdade. */
+  static readonly RECENT_MESSAGES_TO_KEEP = 20
 
   private isPersistedLegacySummary(message: {
     role: 'narrator' | 'player' | 'system'
@@ -53,26 +55,16 @@ export class SummaryService {
   }
 
   private buildMessagesForSummary(messages: ChatMessageRow[]) {
-    const nonSummaryMessages = messages.filter((m) => {
-      if (m.role === 'system') {
-        if (m.narrative && !m.engineEvents?.length) return false
-        if (m.engineEvents?.length) return true
-        return false
-      }
-      return true
-    })
-
-    // Garante ordem cronológica: seq é o critério primário (atribuído na inserção),
-    // turn é o fallback para mensagens legadas onde seq pode ser igual.
-    const sorted = [...nonSummaryMessages].sort((a, b) => a.seq - b.seq || a.turn - b.turn)
+    // Para resumo narrativo: apenas narrador e jogador.
+    // System messages com engineEvents contêm dados mecânicos em JSON que poluem
+    // o resumo — os resultados relevantes já estão refletidos na narrativa do narrador.
+    const sorted = [...messages]
+      .filter((m) => m.role === 'narrator' || m.role === 'player')
+      .sort((a, b) => a.seq - b.seq || a.turn - b.turn)
 
     return sorted.map((m) => {
-      if (m.role === 'narrator') return { role: m.role, text: m.narrative ?? '', turn: m.turn }
-      if (m.role === 'player') return { role: m.role, text: m.playerInput ?? '', turn: m.turn }
-      const eventsText = (m.engineEvents ?? [])
-        .map((ev) => `[${ev.type}] ${JSON.stringify(ev.payload)}`)
-        .join('; ')
-      return { role: m.role as 'narrator' | 'player', text: eventsText, turn: m.turn }
+      if (m.role === 'narrator') return { role: m.role as 'narrator', text: m.narrative ?? '', turn: m.turn }
+      return { role: m.role as 'player', text: m.playerInput ?? '', turn: m.turn }
     }).filter((m) => m.text.trim())
   }
 
@@ -108,7 +100,7 @@ export class SummaryService {
     return delta >= interval
   }
 
-  async maybeUpdateSummary(params: { state: GameState; hints?: SummaryDecisionHints }): Promise<void> {
+  private async updateIncrementalSummary(params: { state: GameState; stateForSummary?: GameState; hints?: SummaryDecisionHints }): Promise<void> {
     const sessionId = params.state.meta.sessionId
 
     const existing = await this.summaries.getSummary(sessionId)
@@ -145,7 +137,7 @@ export class SummaryService {
       previousSummary: existing?.summaryText ?? '',
       upToTurn: params.state.meta.turn,
       keyEvents,
-      currentState: params.state,
+      currentState: params.stateForSummary ?? params.state,
       maxTokensHint: 500,
       recentMessages
     }))
@@ -159,8 +151,8 @@ export class SummaryService {
   }
 
   /** Integra ao resumo apenas o excedente, preservando as 20 mensagens mais recentes. */
-  async maybeSummarizeHistory(params: { state: GameState }): Promise<void> {
-    const { state } = params
+  private async compactOldMessages(params: { state: GameState; stateForSummary?: GameState }): Promise<void> {
+    const { state, stateForSummary } = params
     const sessionId = state.meta.sessionId
     const totalMessages = await this.chatMessages.countBySession(sessionId)
     const messagesToCompact = totalMessages - SummaryService.RECENT_MESSAGES_TO_KEEP
@@ -197,7 +189,7 @@ export class SummaryService {
       nextSummaryText = trimIncompleteSummaryText(await this.narrator.summarizeHistory({
         previousSummary: summarySeed,
         messages: messagesForLlm,
-        currentState: state
+        currentState: stateForSummary ?? state
       }))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -218,6 +210,36 @@ export class SummaryService {
 
     await this.deleteCompactedMessages(sessionId, oldestMessages)
     log('summarizeHistory', `Done — summary updated with ${nextSummaryText.length} chars`)
+  }
+
+  /**
+   * Ponto de entrada único para gerenciamento de resumo após cada turno.
+   *
+   * Prioridade:
+   * 1. Compactação de storage (se excedente >= env.compactBatchMin) — chama LLM para comprimir msgs antigas e as deleta
+   * 2. Resumo incremental (se shouldSummarize) — atualiza o resumo canônico sem deletar msgs
+   * 3. Noop
+   *
+   * As duas operações nunca ocorrem no mesmo turno para evitar sobrescrever o resumo gerado.
+   */
+  async manageSummaryAfterTurn(params: { state: GameState; stateBeforeTurn?: GameState; hints?: SummaryDecisionHints }): Promise<void> {
+    const { state, stateBeforeTurn, hints } = params
+    const sessionId = state.meta.sessionId
+    const totalMessages = await this.chatMessages.countBySession(sessionId)
+    const messagesToCompact = totalMessages - SummaryService.RECENT_MESSAGES_TO_KEEP
+
+    if (messagesToCompact >= env.compactBatchMin) {
+      log('manageSummary', `Compacting ${messagesToCompact} old messages (threshold=${env.compactBatchMin})`)
+      await this.compactOldMessages({ state, stateForSummary: stateBeforeTurn })
+      return
+    }
+
+    const existing = await this.summaries.getSummary(sessionId)
+    const lastTurnIncluded = existing?.lastTurnIncluded ?? 0
+    if (this.shouldSummarize({ turn: state.meta.turn, lastTurnIncluded, hints })) {
+      log('manageSummary', `Updating incremental summary at turn=${state.meta.turn} (lastTurnIncluded=${lastTurnIncluded})`)
+      await this.updateIncrementalSummary({ state, stateForSummary: stateBeforeTurn, hints })
+    }
   }
 
   async rebuildSummary(params: { state: GameState }): Promise<string> {

@@ -18,6 +18,20 @@ function findNPC(state: GameState, targetId: string): NPCCombatant | undefined {
   return state.npcs.find((n) => n.id === targetId) ?? state.combat?.combatants.find((c) => c.id === targetId)
 }
 
+/**
+ * Determina o status (condição) de um NPC baseado em seus ferimentos.
+ * - 'active': NPC está ativo e pode agir normalmente
+ * - 'incapacitated': NPC está incapacitado (wounds > maxWounds)
+ * - 'defeated': NPC foi derrotado (mesmo que incapacitated, mas marcado como tal)
+ * - 'dead': NPC está morto (normalmente não usado em Savage Worlds, mas disponível)
+ */
+function determineNpcStatus(npc: NPCCombatant): NPCCombatant['status'] {
+  if (npc.wounds > npc.maxWounds) {
+    return 'incapacitated'
+  }
+  return npc.status ?? 'active'
+}
+
 function woundPenalty(wounds: number): number {
   return -Math.min(wounds, 3)
 }
@@ -265,8 +279,9 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
         }
       })
 
-      // NPC incapacitado: remove da lista de combatentes ativos e registra como derrotado
+      // NPC incapacitado: atualiza status, remove da lista de combatentes ativos e registra como derrotado
       if (isIncapacitated) {
+        target.status = 'incapacitated'
         nextState.npcs = nextState.npcs.filter((n) => n.id !== target.id)
         nextState.defeatedNpcIds = [...(nextState.defeatedNpcIds ?? []), target.id]
       }

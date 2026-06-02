@@ -2,7 +2,7 @@
 // Tipos para o sistema de chat narrativo do jogo.
 // Cada resposta da LLM segue o formato NarratorTurnResponse.
 
-import type { PlayerAction } from './gameState.js'
+import type { NarrativeStyle, PlayerAction } from './gameState.js'
 
 // ─── Inventário ───
 
@@ -56,6 +56,8 @@ export type NPCMention = {
   name: string
   disposition: 'hostile' | 'neutral' | 'friendly'
   newlyIntroduced: boolean
+  /** Status do NPC se houver mudança narrativa (ex: incapacitado, derrotado) */
+  status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
 }
 
 export type NarrativeSegment =
@@ -217,7 +219,7 @@ export type NarrateStartRequest = {
     edges: string[]
     hindrances: Array<{ name: string; severity: string }>
   }
-  narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+  narrativeStyle?: NarrativeStyle
   simpleVocabulary?: boolean
 }
 
@@ -270,6 +272,6 @@ export type NarrateTurnRequest = {
     rulesDigest?: string
   }
   recentMessages: Array<{ role: string; narrative?: string; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
-  narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+  narrativeStyle?: NarrativeStyle
   simpleVocabulary?: boolean
 }

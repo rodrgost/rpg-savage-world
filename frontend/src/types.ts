@@ -133,6 +133,8 @@ export type NPCMention = {
   name: string
   disposition: 'hostile' | 'neutral' | 'friendly'
   newlyIntroduced: boolean
+  /** Status do NPC se houver mudança narrativa (ex: incapacitado, derrotado) */
+  status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
 }
 
 export type NarrativeSegment =
@@ -210,7 +212,7 @@ export type ChatMessage = {
 
 // ─── Game State ───
 
-export type NarrativeStyle = 'concise' | 'balanced' | 'theatrical'
+export type NarrativeStyle = 'concise' | 'balanced'
 
 export type GameState = {
   meta: {
@@ -265,6 +267,8 @@ export type NPCCombatant = {
   statusEffects?: StatusEffect[]
   disposition?: 'hostile' | 'neutral' | 'friendly'
   location?: string
+  /** Condição atual do NPC */
+  status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
 }
 
 export type DiceRollDetail = {

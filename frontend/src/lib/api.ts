@@ -865,7 +865,7 @@ export async function chooseOption(
 
 export async function updateSessionSettings(
   sessionId: string,
-  settings: { narrativeStyle?: 'concise' | 'balanced' | 'theatrical'; simpleVocabulary?: boolean }
+  settings: { narrativeStyle?: 'concise' | 'balanced'; simpleVocabulary?: boolean }
 ): Promise<{ ok: boolean }> {
   return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/settings', {
     method: 'PATCH',

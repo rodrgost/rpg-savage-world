@@ -20,6 +20,11 @@ export const env = {
 
   summaryIntervalTurns: Number(process.env.SUMMARY_INTERVAL_TURNS ?? '20'),
 
+  /** Nº mínimo de mensagens excedentes para justificar uma chamada LLM de compactação.
+   *  Abaixo deste limiar, o excedente acumula até o próximo turno.
+   *  Default: 15 → compactação a cada ~7-8 turnos (dado RECENT_MESSAGES_TO_KEEP=20). */
+  compactBatchMin: Number(process.env.COMPACT_BATCH_MIN ?? '15'),
+
   // Origens adicionais permitidas no CORS (ex.: domínio customizado no Railway)
   allowedOrigins: (process.env.ALLOWED_ORIGIN ?? '').split(',').map(o => o.trim()).filter(Boolean)
 }

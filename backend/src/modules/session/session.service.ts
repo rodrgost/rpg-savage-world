@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { createInitialState } from '../../domain/defaults/initialState.js'
-import type { AttributeName, DieType, GameState, Hindrance, PlayerAction, SWAttributes } from '../../domain/types/gameState.js'
+import type { AttributeName, DieType, GameState, Hindrance, NarrativeStyle, PlayerAction, SWAttributes } from '../../domain/types/gameState.js'
 import type { NarratorTurnResponse, ValidateActionResponse } from '../../domain/types/narrative.js'
 import { applyAction, applyNpcAttack } from '../../core/rule-engine.js'
 import { SnapshotService } from '../../services/snapshot.service.js'
-import { SummaryService } from '../../services/summary.service.js'
+import { SummaryService, type SummaryDecisionHints } from '../../services/summary.service.js'
 import { InventoryService } from '../../services/inventory.service.js'
 import { StatusEffectService } from '../../services/statusEffect.service.js'
 import {
@@ -34,7 +34,14 @@ type ReusableSessionCandidate = {
   createdAtMillis: number
 }
 
-const RECENT_LLM_MESSAGE_LIMIT = 20
+/** Derivado de SummaryService: mesma janela usada para compactação de histórico. */
+const RECENT_LLM_MESSAGE_LIMIT = SummaryService.RECENT_MESSAGES_TO_KEEP
+
+function normalizeNarrativeStyle(value: unknown): NarrativeStyle | undefined {
+  if (value === 'concise' || value === 'balanced') return value
+  if (value === 'theatrical') return 'balanced'
+  return undefined
+}
 
 const ATTRIBUTE_ALIAS_TO_KEY: Readonly<Record<string, AttributeName>> = {
   agility: 'agility',
@@ -138,13 +145,18 @@ export class SessionService {
     const state = await this.snapshots.getLatestState(sessionId)
     if (!state) throw new NotFoundException('Sessão não encontrada')
 
+    const rawStateNarrativeStyle = (state.meta as Record<string, unknown>).narrativeStyle
+    const normalizedState = rawStateNarrativeStyle === 'theatrical'
+      ? { ...state, meta: { ...state.meta, narrativeStyle: 'balanced' as const } }
+      : state
+
     const summary = await this.summaryRepo.getSummary(sessionId)
     const recentMessages = await this.chatMessages.getRecent(sessionId, 20)
     const messages = await this.chatMessages.listBySession(sessionId)
     const events = await this.events.listSince({ sessionId, afterTurn: -1 })
-    const context = buildLlmContext({ state, summary, recentMessages })
+    const context = buildLlmContext({ state: normalizedState, summary, recentMessages })
 
-    return { state, summary, events, context, messages }
+    return { state: normalizedState, summary, events, context, messages }
   }
 
   private buildStrictRulesDigest(baseRulesDigest: string | undefined, anchors: CanonicalAnchors): string {
@@ -172,7 +184,8 @@ export class SessionService {
       bennies: 0,
       tags: ['narrative'],
       disposition: npc.disposition,
-      location
+      location,
+      status: 'active'
     }
   }
 
@@ -193,7 +206,13 @@ export class SessionService {
       const mention = mentionById.get(existingNpc.id)
       if (!mention) return existingNpc
 
-      if (existingNpc.name === mention.name && existingNpc.disposition === mention.disposition) {
+      // Verifica se há mudanças em name, disposition ou status
+      const hasChanges = 
+        existingNpc.name !== mention.name || 
+        existingNpc.disposition !== mention.disposition ||
+        (mention.status && existingNpc.status !== mention.status)
+
+      if (!hasChanges) {
         return existingNpc
       }
 
@@ -201,7 +220,9 @@ export class SessionService {
       return {
         ...existingNpc,
         name: mention.name,
-        disposition: mention.disposition
+        disposition: mention.disposition,
+        // Aplica o status se vier da IA (mudanças narrativas)
+        ...(mention.status ? { status: mention.status } : {})
       }
     })
 
@@ -630,12 +651,22 @@ export class SessionService {
     }
 
     const segments: NonNullable<NarratorTurnResponse['segments']> = []
+    const pushNarratorSegment = (text: string) => {
+      const previous = segments[segments.length - 1]
+      if (previous?.type === 'narrator') {
+        previous.text = `${previous.text}\n\n${text}`
+        return
+      }
+
+      segments.push({ type: 'narrator', text })
+    }
+
     for (const segment of params.segments) {
       const text = segment.text.trim()
       if (!text) continue
 
       if (segment.type === 'narrator') {
-        segments.push({ type: 'narrator', text })
+        pushNarratorSegment(text)
         continue
       }
 
@@ -648,7 +679,7 @@ export class SessionService {
 
       if (!canonicalNpc) {
         warn('validateNarrativeSegments', `Convertendo fala de NPC inválido para narrador: "${segment.npcName}"`)
-        segments.push({ type: 'narrator', text })
+        pushNarratorSegment(text)
         continue
       }
 
@@ -841,7 +872,7 @@ export class SessionService {
     return legacyCandidate.sessionId
   }
 
-  async createSession(params: { ownerId: string; campaignId: string; characterId: string; narrativeStyle?: 'concise' | 'balanced' | 'theatrical'; simpleVocabulary?: boolean }) {
+  async createSession(params: { ownerId: string; campaignId: string; characterId: string; narrativeStyle?: NarrativeStyle; simpleVocabulary?: boolean }) {
     const campaign = await this.campaigns.get(params.campaignId)
     if (!campaign) throw new NotFoundException('Campanha não encontrada')
     if (campaign.ownerId !== params.ownerId && campaign.visibility !== 'public') {
@@ -1041,7 +1072,7 @@ export class SessionService {
     const worldId = sessionData.worldId as string | undefined
     const campaignId = sessionData.campaignId as string
     const characterId = sessionData.characterId as string
-    const narrativeStyle = sessionData.narrativeStyle as 'concise' | 'balanced' | 'theatrical' | undefined
+    const narrativeStyle = normalizeNarrativeStyle(sessionData.narrativeStyle)
     const simpleVocabulary = typeof sessionData.simpleVocabulary === 'boolean' ? sessionData.simpleVocabulary : undefined
 
     // ── Apagar subcollections ──
@@ -1235,12 +1266,19 @@ export class SessionService {
     onEngineComplete?: (data: { state: import('../../domain/types/gameState.js').GameState; messages: ChatMessageRow[]; diceEvents: Array<{ type: string; payload: unknown }> }) => void
   ) {
     const sessionData = await this.requireOwnedSession(params.sessionId, params.ownerId)
-    const sessionNarrativeStyle = sessionData.narrativeStyle as 'concise' | 'balanced' | 'theatrical' | undefined
+    const sessionNarrativeStyle = normalizeNarrativeStyle(sessionData.narrativeStyle)
     const sessionSimpleVocabulary = typeof sessionData.simpleVocabulary === 'boolean' ? sessionData.simpleVocabulary : undefined
     const current = await this.snapshots.getLatestState(params.sessionId)
     if (!current) throw new NotFoundException('Sessão não encontrada')
     const recentMessagesBeforeTurn = await this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT)
     const currentWithSceneNpcs = this.hydrateSceneNpcsFromRecentNarration(current, recentMessagesBeforeTurn)
+
+    // Captura hostis presentes na cena ANTES do turno para detectar fim de combate
+    const hostileNpcIdsBefore = new Set(
+      currentWithSceneNpcs.npcs
+        .filter((npc) => (!npc.location || npc.location === currentWithSceneNpcs.worldState.activeLocation) && npc.disposition === 'hostile')
+        .map((npc) => npc.id)
+    )
 
     // 1. Aplicar mecânicas do rule-engine
     const normalizedAction = normalizePlayerAction(params.action)
@@ -1445,8 +1483,17 @@ export class SessionService {
       statusChanges: narratorResponse.statusChanges
     })
 
-    // 7. Resumir histórico incrementalmente, mantendo apenas as 20 mensagens recentes
-    await this.summaries.maybeSummarizeHistory({ state: finalState })
+    // 7. Gerenciar resumo: compactar storage ou atualizar resumo incremental (nunca os dois no mesmo turno)
+    const hasHostilesAfter = finalState.npcs.some(
+      (npc) => (!npc.location || npc.location === finalState.worldState.activeLocation)
+        && npc.disposition === 'hostile'
+        && !(finalState.defeatedNpcIds ?? []).includes(npc.id)
+    )
+    const summaryHints: SummaryDecisionHints = {
+      endedChapter: !!narratorResponse.chapterTitle,
+      endedCombat: hostileNpcIdsBefore.size > 0 && !hasHostilesAfter
+    }
+    await this.summaries.manageSummaryAfterTurn({ state: finalState, stateBeforeTurn: result.nextState, hints: summaryHints })
 
     const payload = await this.buildSessionPayload(params.sessionId)
     log(
@@ -1643,7 +1690,7 @@ export class SessionService {
   async updateSessionSettings(params: {
     ownerId: string
     sessionId: string
-    narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+    narrativeStyle?: NarrativeStyle
     simpleVocabulary?: boolean
   }): Promise<{ ok: boolean }> {
     await this.requireOwnedSession(params.sessionId, params.ownerId)

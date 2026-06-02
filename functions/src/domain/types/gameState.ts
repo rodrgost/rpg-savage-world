@@ -10,6 +10,8 @@ export type NPC = {
   tags?: string[]
   disposition?: 'hostile' | 'neutral' | 'friendly'
   location?: string
+  /** Condição atual do NPC */
+  status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
   state?: Record<string, unknown>
 }
 

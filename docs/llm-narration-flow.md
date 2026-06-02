@@ -373,14 +373,41 @@ História da aventura: <storyDescription>.
 
 | Operação | Gemini (padrão) | DeepSeek |
 |---|---|---|
-| `narrateStart` | 0.25 | 0.20 |
-| `narrateTurn` | 0.20 | 0.15 |
+| `narrateStart` | 0.25 | 0.25 |
+| `narrateTurn` | 0.20 | 0.20 |
 | `summarize` | 0.20 | 0.15 |
 | `summarizeHistory` | 0.15 | 0.10 |
 | `suggestCharacterFromWorld` | 1.0 | 1.0 |
 | `validateAction` | 0.20 | 0.20 |
 | `generateImageDescription` | 0.55 | 0.55 |
 | `expandWorld` / `expandWorldLore` | valor padrão | valor padrão |
+
+> **Nota de mudança (junho 2026)**: Temperaturas de narração foram reduzidas (narrateStart: 0.50→0.25, narrateTurn: 0.45→0.20) para aumentar determinismo e reduzir variabilidade em `itemChanges` especulativos. Temperatura de retry foi ajustada para mínimo 0.10 (antes: 0.05) para evitar respostas robóticas demais na segunda tentativa.
+
+---
+
+## Regras de `itemChanges` — Enfoque em Evidência Mecânica
+
+**🔴 Regra crítica**: O narrador (LLM) SÓ deve incluir `itemChanges` quando o **RESULTADO MECÂNICO** contém evidência **EXPLÍCITA** da mudança.
+
+### Evidências válidas que justificam `itemChanges`:
+
+- `[item_gained]` — Jogador recebeu item (encontrado, comprado, saqueado, entregue)
+- `[item_lost]` — Jogador perdeu item (morreu NPC que dava item, ação falhou e perdeu item comprometido)
+- `[item_used]` — Jogador usou consumível (poção, munição especial, item único)
+- `[ammunition_consumed]` — Munição foi consumida em ataque bem-sucedido
+- `[damage_dealt]` — Dano foi registrado (pode afetar armas com durabilidade)
+
+### Evidências **inválidas** (sem itemChanges):
+
+❌ Jogador apenas **menciona** que vai usar um item ("Vou oferecer 20 dólares") — sem evento mecânico  
+❌ Jogador fala de descartar algo — sem evento `[item_lost]` do engine  
+❌ Narrador especula sobre mudança de inventário — sem evidência no RESULTADO MECÂNICO  
+❌ NPC suggere transação — sem confirmação mecânica de sucesso
+
+### Consequência:
+
+Quando há dúvida, o narrador deixa `itemChanges` vazio `[]`. O engine mecânico é responsável por rastrear mudanças reais de inventário. O narrador apenas **relata** mudanças que já foram confirmadas mecanicamente.
 
 ---
 

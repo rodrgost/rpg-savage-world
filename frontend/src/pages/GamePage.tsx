@@ -64,15 +64,31 @@ function splitNarrativeParagraphs(narrative?: string): string[] {
     .filter(Boolean)
 }
 
+function mergeConsecutiveNarratorSegments(segments: NarrativeSegment[]): NarrativeSegment[] {
+  const merged: NarrativeSegment[] = []
+
+  for (const segment of segments) {
+    const previous = merged[merged.length - 1]
+    if (segment.type === 'narrator' && previous?.type === 'narrator') {
+      previous.text = `${previous.text}\n\n${segment.text}`
+      continue
+    }
+
+    merged.push({ ...segment })
+  }
+
+  return merged
+}
+
 function getNarrativeSegments(message: ChatMessage): NarrativeSegment[] {
   const segments = (message.segments ?? [])
     .map((segment) => ({ ...segment, text: normalizeEscapedText(segment.text) }))
     .filter((segment) => segment.text.length > 0)
 
-  if (segments.length > 0) return segments
+  if (segments.length > 0) return mergeConsecutiveNarratorSegments(segments)
 
   const fallbackText = normalizeEscapedText(message.narrative ?? '')
-  return fallbackText ? [{ type: 'narrator', text: fallbackText }] : []
+  return fallbackText ? mergeConsecutiveNarratorSegments([{ type: 'narrator', text: fallbackText }]) : []
 }
 
 function joinNarrativeSegments(segments: NarrativeSegment[]): string {
@@ -500,18 +516,55 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
         ))}
       </div>
 
-      {/* NPCs mencionados */}
+      {/* NPCs na cena com status detalhado */}
       {message.npcs && message.npcs.length > 0 && (
-        <div className="npcs-mentioned">
-          {message.npcs.map((npc) => (
-            <span
-              key={npc.id}
-              className={`npc-tag ${npc.disposition}`}
-              title={`${npc.disposition}${npc.newlyIntroduced ? ' (novo)' : ''}`}
-            >
-              {npc.name}
-            </span>
-          ))}
+        <div className="npcs-in-scene-compact">
+          {message.npcs.map((npcMention) => {
+            // Buscar dados completos do NPC no estado do jogo
+            const npcState = npcs.find((n) => n.id === npcMention.id)
+            if (!npcState) return null
+
+            const getStatusIcon = (status?: string) => {
+              switch (status) {
+                case 'incapacitated': return '💀'
+                case 'defeated': return '⚰️'
+                case 'dead': return '☠️'
+                case 'active': return '✓'
+                default: return '?'
+              }
+            }
+            
+            const getStatusLabel = (status?: string) => {
+              switch (status) {
+                case 'incapacitated': return 'Incapacitado'
+                case 'defeated': return 'Derrotado'
+                case 'dead': return 'Morto'
+                case 'active': return 'Ativo'
+                default: return ''
+              }
+            }
+
+            const statusClass = npcState.status === 'incapacitated' || npcState.status === 'defeated' || npcState.status === 'dead' 
+              ? 'npc-compact-inactive' 
+              : ''
+
+            return (
+              <div key={npcState.id} className={`npc-compact ${npcMention.disposition} ${statusClass}`}>
+                <div className="npc-compact-header">
+                  <span className="npc-compact-name">{npcMention.name}</span>
+                  <span className="npc-compact-status" title={getStatusLabel(npcState.status)}>
+                    {getStatusIcon(npcState.status)}
+                  </span>
+                </div>
+                <div className="npc-compact-stats">
+                  <span title="Ferimentos">❤️ {npcState.wounds}/{npcState.maxWounds}</span>
+                  {npcState.toughness && <span title="Resistência">🛡️ {npcState.toughness}</span>}
+                  {npcState.parry && <span title="Aparar">⚔️ {npcState.parry}</span>}
+                  {npcState.isShaken && <span className="shaken-indicator" title="Abalado">😵</span>}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -673,13 +726,33 @@ function NpcStatusEffectsPanel({ npcs }: { npcs: NonNullable<GameState['npcs']> 
   const affectedNpcs = npcs.filter((npc) => (npc.statusEffects ?? []).length > 0)
   if (!affectedNpcs.length) return null
 
+  const getStatusIcon = (status?: string) => {
+    switch (status) {
+      case 'incapacitated': return '💀'
+      case 'defeated': return '⚰️'
+      case 'dead': return '☠️'
+      case 'active': return '✓'
+      default: return ''
+    }
+  }
+
+  const getStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'incapacitated': return 'Incapacitado'
+      case 'defeated': return 'Derrotado'
+      case 'dead': return 'Morto'
+      case 'active': return 'Ativo'
+      default: return ''
+    }
+  }
+
   return (
     <div className="status-effects-panel">
       <h4>Inimigos afetados</h4>
       <div className="effects-list">
         {affectedNpcs.flatMap((npc) => (npc.statusEffects ?? []).map((effect) => (
-          <span key={`${npc.id}-${effect.id}`} className="effect-tag" title={npc.name}>
-            {npc.name}: {effect.name}
+          <span key={`${npc.id}-${effect.id}`} className="effect-tag" title={`${npc.name}${npc.status ? ` - ${getStatusLabel(npc.status)}` : ''}`}>
+            {getStatusIcon(npc.status)} {npc.name}: {effect.name}
             {effect.turnsRemaining !== undefined && ` (${effect.turnsRemaining}t)`}
           </span>
         )))}
@@ -1234,9 +1307,8 @@ function CharacterSidebar({
 }
 
 const NARRATIVE_STYLES: { key: NarrativeStyle; label: string; icon: string; desc: string }[] = [
-  { key: 'concise', label: 'Conciso', icon: '⚡', desc: '2–4 frases. Direto ao ponto, sem floreios.' },
-  { key: 'balanced', label: 'Equilibrado', icon: '⚖️', desc: '4–7 frases. Ação e atmosfera balanceadas.' },
-  { key: 'theatrical', label: 'Teatral', icon: '🎭', desc: '6–10 frases. Narração cinematográfica e imersiva.' },
+  { key: 'concise', label: 'Conciso', icon: '⚡', desc: 'Até 3 frases. Direto ao ponto, sem floreios.' },
+  { key: 'balanced', label: 'Equilibrado', icon: '⚖️', desc: '4–6 frases. Ação e atmosfera balanceadas.' },
 ]
 
 function SidebarNarration({
@@ -1765,6 +1837,9 @@ export function GamePage() {
     if (!sessionId) return
     const chosen = currentOptions.find((o) => o.id === optionId)
 
+    // Limpar o campo de texto manual
+    setInput('')
+
     // Se a opção tem dice check required, abrir modal de confirmação
     if (chosen?.diceCheck?.required) {
       setPendingDiceOption(chosen)
@@ -2167,6 +2242,7 @@ export function GamePage() {
               onChange={(e) => {
                 setSelectedSkill(e.target.value)
                 setSelectedAttribute('')
+                setInput('')
               }}
             >
               <option value="">-- Perícia --</option>
@@ -2181,6 +2257,7 @@ export function GamePage() {
               onChange={(e) => {
                 setSelectedAttribute(e.target.value)
                 setSelectedSkill('')
+                setInput('')
               }}
             >
               <option value="">-- Atributo --</option>

@@ -42,6 +42,8 @@ export type NPCCombatant = {
   statusEffects?: StatusEffect[]
   disposition?: 'hostile' | 'neutral' | 'friendly'
   location?: string
+  /** Condição atual do NPC */
+  status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
   /** Dado de ataque do NPC (ex: 6 = d6). Preenchido pelo LLM ao introduzir NPCs hostis. */
   attackSkillDie?: DieType
   /** Fórmula de dano do NPC (ex: "str+d6", "2d6"). Preenchido pelo LLM. */
@@ -57,6 +59,8 @@ export type CombatState = {
   combatants: NPCCombatant[]
 }
 
+export type NarrativeStyle = 'concise' | 'balanced'
+
 export interface GameState {
   meta: {
     sessionId: string
@@ -64,7 +68,7 @@ export interface GameState {
     worldId?: string
     turn: number
     chapter: number
-    narrativeStyle?: 'concise' | 'balanced' | 'theatrical'
+    narrativeStyle?: NarrativeStyle
     simpleVocabulary?: boolean
   }
 

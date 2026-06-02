@@ -8,7 +8,7 @@ import { error as logError } from '../../utils/file-logger.js'
 const StartSessionBody = z.object({
   campaignId: z.string().min(1),
   characterId: z.string().min(1),
-  narrativeStyle: z.enum(['concise', 'balanced', 'theatrical']).optional(),
+  narrativeStyle: z.enum(['concise', 'balanced']).optional(),
   simpleVocabulary: z.boolean().optional()
 })
 
@@ -205,7 +205,7 @@ export class SessionController {
     @Body() body: unknown
   ) {
     const parsed = z.object({
-      narrativeStyle: z.enum(['concise', 'balanced', 'theatrical']).optional(),
+      narrativeStyle: z.enum(['concise', 'balanced']).optional(),
       simpleVocabulary: z.boolean().optional()
     }).parse(body)
     return await this.sessions.updateSessionSettings({ ownerId: userId, sessionId, ...parsed })

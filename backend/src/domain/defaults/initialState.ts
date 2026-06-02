@@ -19,7 +19,7 @@ export type CharacterInput = {
   armor?: number
 }
 
-export function createInitialState(params: { sessionId: string; campaignId: string; worldId?: string; narrativeStyle?: 'concise' | 'balanced' | 'theatrical'; simpleVocabulary?: boolean; character?: CharacterInput }): GameState {
+export function createInitialState(params: { sessionId: string; campaignId: string; worldId?: string; narrativeStyle?: GameState['meta']['narrativeStyle']; simpleVocabulary?: boolean; character?: CharacterInput }): GameState {
   const char = params.character
   const attributes: SWAttributes = { ...defaultAttributes(), ...(char?.attributes ?? {}) }
   const skills: Record<string, DieType> = { ...(char?.skills ?? {}) }
