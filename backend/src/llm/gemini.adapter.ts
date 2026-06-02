@@ -1252,22 +1252,10 @@ export class GeminiAdapter implements Narrator {
     const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'Nenhuma flag ativa relevante.'
 
     const sysPrompt = [
-      'Você mantém o resumo canônico de continuidade de uma história.',
-      'PRIORIDADE DE FONTES (do mais para o menos autoritativo):',
-      '  1. ESTADO ATUAL ESTRUTURADO (âncora factual) — prevalece sobre qualquer dado no resumo anterior ou nas mensagens.',
-      '  2. Mensagens mais recentes — têm prioridade sobre mensagens mais antigas quando houver conflito narrativo.',
-      '  3. Resumo anterior — ponto de partida; substitua o que foi superado pelos eventos mais recentes.',
-      'Regras:',
-      '- NÃO preserve situações, objetivos ou estados que já foram explicitamente cumpridos, derrotados ou superados — mantê-los cria incoerência.',
-      '- Preserve posicão atual, ameaça ativa, forças em cena e problema imediato — sempre alinhados com o ESTADO ATUAL acima.',
-      '- TAMBÉM preserve fios narrativos abertos incorporados nas mensagens: mistérios, tensões, promessas, segredos, relações com NPCs.',
-      '- Preserve nome e traço de personalidade de NPCs relevantes que aparecem no histórico — não apenas disposição.',
-      '- Preserve descobertas de worldbuilding específicas: locais descritos, lore revelado, objetos significativos mencionados.',
-      '- Nunca liste itens do inventário no resumo — eles são rastreados separadamente.',
-      '- Escreva em parágrafos corridos, sem títulos, rótulos ou seções.',
-      '- Use 2 a 4 parágrafos — as informações que ainda importam para continuação e coerência.',
-      '- Preserve nomes próprios e contagens relevantes quando afetarem o próximo turno.',
-      '- Não use markdown, bullets, prefácio, saudação ou comentários metalinguísticos.'
+      'Você resume a história de uma aventura de RPG.',
+      'Leia as mensagens abaixo e gere um resumo em prosa (2 a 4 parágrafos) dos eventos importantes.',
+      'Preserve nomes de personagens, locais visitados, descobertas e mistérios ainda não resolvidos.',
+      'Não liste inventário. Não use markdown, títulos ou bullets. Apenas prosa corrida em português.'
     ].join('\n')
 
     const messagesText = req.messages
@@ -1275,22 +1263,12 @@ export class GeminiAdapter implements Narrator {
       .join('\n')
 
     const prompt = [
-      '=== ESTADO ATUAL (âncora factual — prevalece em qualquer conflito) ===',
-      `Local atual: ${state.worldState.activeLocation}.`,
-      combatText,
-      `Ferimentos: ${p.wounds}/${p.maxWounds}. Fadiga: ${p.fatigue}. Abalado: ${p.isShaken ? 'sim' : 'não'}. Bennies: ${p.bennies}.`,
-      `Ameaças visíveis: ${threatsText}`,
-      `Forças/NPCs no local: ${forcesText}`,
-      `Efeitos ativos: ${statusText}`,
-      `Flags de mundo ativas: ${activeFlagsText}`,
+      req.previousSummary ? '=== Resumo anterior ===\n' + req.previousSummary : '',
       '',
-      '=== RESUMO ANTERIOR (ponto de partida — substituir o que for contradito pelo estado atual) ===',
-      req.previousSummary || 'sem resumo anterior.',
-      '',
-      '=== MENSAGENS COMPACTADAS (mais recentes têm prioridade sobre mais antigas) ===',
+      '=== Novos eventos (ordem cronológica) ===',
       messagesText,
       '',
-      'Gere o novo resumo canônico. Descarte do resumo anterior tudo que já foi superado. Incorpore os novos fios narrativos das mensagens. Mantenha coerência com o ESTADO ATUAL acima.'
+      'Gere o resumo atualizado incorporando os novos eventos acima.'
     ].filter(Boolean).join('\n')
 
     let lastError: Error | null = null
@@ -1763,7 +1741,7 @@ export class GeminiAdapter implements Narrator {
       '  ("Tentar ajudar", "Procurar uma saída", "Verificar os arredores", "Se aproximar do NPC"),',
       '  prefira required: false — o narrador resolve o resultado narrativamente no próximo turno.',
       '',
-      '- Ações que NÃO exigem teste (qualquer personagem faz automaticamente):',
+     /*  '- Ações que NÃO exigem teste (qualquer personagem faz automaticamente):',
       '  • Atender o telefone / celular / chamada',
       '  • Abrir uma porta destrancada ou desimpedida',
       '  • Sentar, deitar, levantar-se',
@@ -1804,7 +1782,7 @@ export class GeminiAdapter implements Narrator {
       '  • Combate à distância → skill: "Tiro" (use actionType "attack")',
       '  ATENÇÃO: use actionType "trait_test" APENAS quando o teste é o FOCO PRINCIPAL da ação.',
       '  Ações custom quase sempre têm required: false — a narrativa resolve o resultado.',
-      '',
+      '', */
       '- REGRA ESPECIAL — actionType "travel": diceCheck.required deve ser SEMPRE false. Viagem é narrativa; descreva obstáculos na narrativa, não em diceCheck.',
       '- "modifier": ajuste situacional (-2 para dificuldade alta, -4 para quase impossível, +2 para vantagem). Default: 0.',
       '- "tn": target number. Default 4. Aumente para situações especialmente difíceis (6, 8).',
@@ -1818,7 +1796,7 @@ export class GeminiAdapter implements Narrator {
       '- Se não houver fala direta de NPC, retorne "segments" com um único bloco type="narrator" contendo a narrative completa.',
       '- O array "options" é OBRIGATÓRIO e NUNCA pode estar vazio. Sempre retorne EXATAMENTE 4 opções.',
       '- Se você retornar options vazio ou com menos de 4 itens, a resposta será considerada inválida.',
-      '- Se houver NPC hostil presente, inclua ao menos 1 opção de combate (actionType "attack").',
+      '- Se houver NPC hostil presente OU se sua narrativa deste turno introduziu NPCs hostis (que você DEVE ter registrado em "npcs" com newlyIntroduced: true), inclua ao menos 1 opção de combate (actionType "attack"). NUNCA use como targetId um NPC que conste em NPCs DERROTADOS — esses inimigos estão fora de combate.',
       '- O campo "feasible" deve ser false se o jogador não tiver os itens/condições necessárias.',
       '- Para actionType "trait_test", inclua "skill" ou "attribute" no actionPayload.',
       '- Para actionType "attack", inclua "targetId" e "damageFormula" no actionPayload.',
@@ -1827,7 +1805,7 @@ export class GeminiAdapter implements Narrator {
       '- ATAQUES DE NPC: quando um NPC hostil ataca o jogador neste turno, preencha o campo "npcAttacks" (array).',
       '  Cada entrada: { "npcId": "<id do NPC>", "skillDie": <6|8|10|12>, "damageFormula": "<fórmula>", "ap": 0 }.',
       '  skillDie: 6 = soldado comum, 8 = guerreiro treinado, 10 = campeão, 12 = elite.',
-      '  damageFormula: "str+d4" (punho/faca), "str+d6" (espada), "str+d8" (machadão), "2d6" (pistola), "2d8" (rifle).',
+      '  damageFormula: use as mesmas fórmulas de attack definidas acima.',
       '  Se o NPC não atacar neste turno, deixe "npcAttacks": [].',
       '- Ao narrar Extras abatidos (isWildCard=false): descreva-os saindo de combate/fugindo/caindo com 1 único ferimento.',
       '- Ao narrar Wild Cards feridos: acumule penalidades, eles continuam combatendo até 4+ ferimentos.',
@@ -1840,7 +1818,6 @@ export class GeminiAdapter implements Narrator {
       '- Armas à distância (arco, besta, pistola, rifle, escopeta, etc.) SEMPRE devem ter sua munição correspondente como item separado no inventário (flechas, virotes, balas, cartuchos, etc.).',
       '- Munição (category "ammunition") SÓ deve aparecer em itemChanges com changeType "used" quando a AÇÃO DO JOGADOR deste turno for do tipo "attack" (disparo efetivamente efetuado). NUNCA registre consumo de munição em turnos de trait_test, custom, travel ou qualquer outro tipo que não seja attack — mesmo que NPCs hostis tenham sido introduzidos na narrativa.',
       '- Todo item DEVE ter o campo "category". Use: weapon (armas), armor (armaduras), consumable (consumíveis como poções/ração), ammunition (munição), money (dinheiro/moedas/recursos monetários — o campo "quantity" representa a quantidade exata de moedas/créditos/gold), vehicle (veículos: carro, moto, avião, barco, nave, etc.), property (propriedades: casa, apartamento, fazenda, escritório, etc.), quest (item narrativo/missão), misc (outros itens).',
-      '- Qualquer item pode ser adicionado com changeType "gained" quando comprado, encontrado, saqueado ou entregue por um NPC neste turno. Isso inclui armas ("weapon"), armaduras ("armor"), consumíveis, munição, veículos, propriedades, itens de missão e misc.',
       '- Nunca quebre a imersão. Nunca mencione regras, dados ou mecânicas no texto narrativo.',
       '- Não repita a mesma narrativa. Evolua a história a cada turno.',
       '- Textos de opções devem ter no máximo 1 frase curta cada.',
@@ -1861,7 +1838,7 @@ export class GeminiAdapter implements Narrator {
       lines.push(
         '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative": EQUILIBRADO ━━━',
         'ENTRE 4 e 6 frases distribuídas em 2 parágrafos.',
-        'Parágrafo 1: consequência concreta da ação + reação do ambiente ou NPC.',
+        'Parágrafo 1: consequência concreta da ação + reação do NPC.',
         'Parágrafo 2: gancho ou tensão para o próximo turno.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
@@ -1903,26 +1880,6 @@ export class GeminiAdapter implements Narrator {
       'NÃO ofereça ações normais de combate, exploração ou diálogo quando o personagem está incapacitado.'
     )
 
-    const styleCheck = narrativeStyle === 'concise'
-      ? 'A "narrative" tem NO MÁXIMO 3 frases (1 parágrafo)?'
-      : narrativeStyle === 'balanced'
-        ? 'A "narrative" tem ENTRE 4 e 6 frases (2 parágrafos)?'
-        : 'A "narrative" tem NO MÁXIMO 3 frases (1 parágrafo)?'
-    lines.push(
-      '',
-      'CHECKLIST FINAL antes de enviar a resposta:',
-      `1. ${styleCheck} ✓`,
-      ...(narrativeStyle !== 'concise' ? [
-        '2. A "narrative" inclui ao menos 1 referência a elemento já estabelecido (callback)? ✓',
-        '3. A "narrative" finaliza com gancho, tensão ou detalhe inesperado? ✓',
-        '4. O campo "options" tem EXATAMENTE 4 objetos com texto descritivo e motivante? ✓',
-        '5. Cada opção tem id, text, actionType, actionPayload, feasible e diceCheck? ✓',
-      ] : [
-        '2. O campo "options" tem EXATAMENTE 4 objetos com texto descritivo e motivante? ✓',
-        '3. Cada opção tem id, text, actionType, actionPayload, feasible e diceCheck? ✓',
-      ])
-    )
-
     // Injetar contexto do universo (lore macro — fixo durante toda a sessão)
     if (world && (world.description || world.lore)) {
       lines.push(
@@ -1937,14 +1894,9 @@ export class GeminiAdapter implements Narrator {
       // Instrução de voz narrativa baseada no lore do universo
       lines.push(
         '',
-        '=== VOZ NARRATIVA (leia antes de escrever qualquer "narrative") ===',
-        'Antes de redigir o campo "narrative" de cada turno, faça internamente os seguintes passos:',
-        '1. Releia as seções "## Em Poucas Palavras" e "## Origens e História" do universo acima.',
-        '2. Use essas referências ESPECÍFICAS — não estereótipos de gênero — para calibrar o vocabulário do turno atual.',
-        '',
-        'Restrições obrigatórias para o campo "narrative":',
+        '=== VOZ NARRATIVA ===',
+        'Use as seções do universo acima para calibrar o vocabulário e o tom. Nunca use linguagem genérica de RPG ("você avança corajosamente", "o inimigo é derrotado") — prefira imagens concretas do mundo.',
         '- Tom neutro de livro de regras é PROIBIDO. A narrativa deve ter o sotaque deste universo.',
-        '- Nunca use linguagem genérica de RPG ("você avança corajosamente", "o inimigo é derrotado"). Prefira imagens concretas do mundo.',
         '- Se o universo tem atmosfera de decadência, use decadência — palavras gastas, ferrugem, silêncios. Se tem grandiosidade, use grandiosidade — escala, mito, peso.',
         '- A voz narrativa deve ser sentida na escolha de palavras e metáforas, nunca declarada.'
       )
@@ -1994,7 +1946,7 @@ export class GeminiAdapter implements Narrator {
         '',
         '=== REGRAS DE TURNO CANÔNICO ===',
         '- No turno normal, use o array "npcs" para NPCs já listados em NPCs PRESENTES.',
-        '- EXCEÇÃO: se sua narrativa DESTE turno introduz uma criatura/entidade hostil que ainda não estava listada, você DEVE registrá-la em "npcs" com newlyIntroduced: true, disposition: "hostile" e um UUID gerado por você como "id". Use o MESMO id no actionPayload.targetId de qualquer opção de ataque contra essa entidade.',
+        '- REGRA CRÍTICA — NPCs INTRODUZIDOS NA NARRATIVA: Se sua narrativa deste turno menciona qualquer NPC, agente, criatura ou inimigo que NÃO estava em NPCs PRESENTES, você OBRIGATORIAMENTE deve registrá-lo em "npcs" com newlyIntroduced: true, disposition adequada e um UUID gerado por você como "id". Use o MESMO id no actionPayload.targetId de qualquer opção de ataque contra essa entidade. Sem esse registro, você não terá targetId válido para gerar opções de combate.',
         '',
         '- QUANTIDADE OBRIGATÓRIA: Se a narrativa menciona um número específico de NPCs/criaturas/agentes ("dois agentes", "três guardas", "um grupo de cinco", "uma patrulha de quatro"), você DEVE criar exatamente esse número de entradas separadas no array "npcs". Cada entrada precisa ter: id único (UUID diferente), name diferenciado (ex: "Agente da UCT #1", "Agente da UCT #2"), e a mesma disposition. Quando mencionar grupo sem número explícito ("um grupo de", "vários", "alguns"), crie no mínimo 2-3 entradas para representar a ameaça múltipla.',
         '',
@@ -2016,7 +1968,6 @@ export class GeminiAdapter implements Narrator {
         '- No turno normal, NÃO crie itemChanges com changeType "gained" EXCETO nas situações abaixo:',
         '  (1) Qualquer categoria EXCETO "weapon" e "armor", quando a narrativa deste turno justificar (compra em loja, item encontrado, recompensa, herança, conquista).',
         '  (2) Um NPC PRESENTE NA CENA entrega explicitamente um item ao jogador NESTE turno (ex: passa uma chave, entrega um documento). Use changeType "gained" com a categoria correta do item.',
-        '  Jamais use "gained" com categories "weapon" ou "armor" em turno normal.',
         '- No turno normal, use itemChanges apenas para "lost", "used" ou "gained" (conforme regras acima) de itens relevantes à ação deste turno.',
         '- No turno normal, NÃO aplique statusChanges novos sem evidência direta no RESULTADO MECÂNICO ou em EFEITOS ATIVOS já existentes.',
         '- Se a ação ou narrativa estabelecer descanso seguro, hospitalização, internação, alta médica, tratamento prolongado ou passagem de semanas/meses, remova em statusChanges os efeitos temporários que tenham sido curados, expirado ou deixado de fazer sentido.',
@@ -2035,8 +1986,6 @@ export class GeminiAdapter implements Narrator {
     lines.push(
       '',
       '=== INSTRUÇÕES DE NARRAÇÃO ===',
-      'Aplique a REGRA PRINCIPAL do campo "narrative" definida no início deste prompt.',
-      '',
       'RESULTADO DA AÇÃO:',
       '  • Sucesso: descreva a consequência positiva concreta + seu impacto imediato no mundo ou nos NPCs presentes.',
       '  • Falha: descreva o que especificamente falhou + uma nova complicação ou risco que emerge do fracasso (falha nunca é neutra — ela muda algo).',
@@ -2049,19 +1998,6 @@ export class GeminiAdapter implements Narrator {
       '  • Em falha, preserve uma consequência negativa real, mas você pode revelar uma pista, abrir uma alternativa pior, plantar uma suspeita ou mostrar algo útil com preço narrativo.',
       '  • Use sucessos e falhas para semear futuras tramas quando natural: dívida social, inimigo alertado, recurso comprometido, pista incompleta, rumor, marca deixada ou consequência que possa voltar depois.',
       '  • Nunca crie fato canônico, NPC, item, status ou mudança de local sem apoio no contexto estruturado; ganchos futuros devem aparecer como tensão, indício ou possibilidade narrativa.',
-      '',
-      'PROGRESSÃO NARRATIVA (adapte ao estilo ativo):',
-      '  • CONCISO: narre só consequência e estado imediato. Não use callbacks, desenvolvimento, escalada ou gancho.',
-      '  • EQUILIBRADO: quando natural, referencie elemento já estabelecido — NPC, objeto, local, frase dita.',
-      '  • EQUILIBRADO: mostre NPCs com personalidade consistente — eles reagem, questionam, demonstram emoção.',
-      '  • EQUILIBRADO: eleve stakes, adicione camadas ou revele algo novo a cada turno, sem contradizer o estado estruturado.',
-      '  • EQUILIBRADO: termine com algo em aberto — uma sombra vista, uma palavra ouvida, um aliado que hesita.',
-      '',
-      'Se houver conflito entre memória anterior e o estado estruturado desta chamada, o estado estruturado prevalece.',
-      'Se a seção ÂNCORAS CANÔNICAS ESTRITAS estiver presente, não cite nomes fora dela no turno normal.',
-      'Avalie se cada opção é viável considerando o inventário e estado do jogador.',
-      'Inclua mudanças de itens ou status SOMENTE quando houver evidência canônica suficiente.',
-      'Inclua um NPC em "npcs" somente se ele estiver canonicamente presente nesta cena.'
     )
 
     return lines.join('\n')
@@ -2756,12 +2692,11 @@ export class GeminiAdapter implements Narrator {
       'Descreva a cena inicial com detalhes sensoriais concretos — cheiros, sons, temperatura, visão — que sejam específicos deste universo, não genéricos.',
       'Apresente um gancho narrativo claro: uma tensão palpável, um problema imediato ou uma oportunidade que exige decisão agora.',
       'Estabeleça ao menos 1 detalhe de worldbuilding específico (um nome de lugar, uma facção, um costume local, um objeto estranho) que o jogador possa explorar.',
-      'Inclua pelo menos 1 NPC com traço de personalidade visível — não apenas "um mercador", mas alguém com urgência, nervosismo, arrogância ou curiosidade perceptíveis.',
       'Ofereça 4 opções variadas de ação para o jogador começar sua aventura — cada opção deve sentir-se como uma escolha de história, não um botão de menu.',
       'Para CADA opção, avalie se ela exige um teste de dados (diceCheck) conforme as regras de Savage Worlds.',
       '',
       'ITENS INICIAIS (OBRIGATÓRIO):',
-      'Retorne em "itemChanges" de 3 a 6 itens iniciais com changeType "gained" que o personagem já possui ao começar a aventura.',
+      'Retorne em "itemChanges" de 3 a 10 itens iniciais com changeType "gained" que o personagem já possui ao começar a aventura.',
       'Escolha itens coerentes com a profissão, raça e ambientação do mundo. Exemplos de categorias:',
       '- Arma principal adequada à profissão (espada, arco, cajado, adaga, pistola, rifle, etc.)',
       '- Se a arma for à distância (arco, besta, pistola, rifle, escopeta, etc.), inclua OBRIGATORIAMENTE a munição correspondente como item separado (flechas, virotes, balas, cartuchos, etc.) com quantidade adequada ao contexto',
@@ -2811,13 +2746,10 @@ export class GeminiAdapter implements Narrator {
         contents.push({ role: 'model', text: msg.narrative })
       } else if (msg.role === 'player' && msg.playerInput) {
         contents.push({ role: 'user', text: msg.playerInput })
-      } else if (msg.role === 'system' && Array.isArray(msg.engineEvents) && msg.engineEvents.length) {
-        contents.push({
-          role: 'user',
-          text: `Resultado mecânico anterior:\n${formatEngineEventsForPrompt(msg.engineEvents)}`
-        })
       }
-      // system summaries ficam de fora; o resumo consolidado ja entra em summaryText
+      // engineEvents históricos ficam de fora: o texto narrativo já captura o que aconteceu,
+      // e incluir JSON mecânico de turnos passados confunde o LLM a recriar npcs/itemChanges já processados.
+      // Os eventos do turno ATUAL entram em ── RESULTADO MECÂNICO ── no currentTurnPrompt.
     }
 
     // Compatibilidade com Gemini: garantir que contents comece com user.
@@ -2869,7 +2801,6 @@ export class GeminiAdapter implements Narrator {
 
     const currentTurnPrompt = [
       'TURNO DO JOGO — Narre a consequência da ação do jogador.',
-      'Se houver conflito entre memória anterior e este estado estruturado do turno, este estado estruturado prevalece.',
       '',
       '── ESTADO ATUAL ──',
       `Local: ${req.context.location}`,

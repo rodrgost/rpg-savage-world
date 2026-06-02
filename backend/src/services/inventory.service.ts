@@ -108,7 +108,10 @@ export class InventoryService {
     const inventory = [...(state.player.inventory ?? [])].map((item) => ({ ...item }))
 
     for (const change of changes) {
-      const existing = this.findMatchingItemInList(inventory, [change.itemId, change.name])
+      const existingById = change.itemId
+        ? inventory.find((i) => i.quantity > 0 && normalizeInventoryLookup(i.id) === normalizeInventoryLookup(change.itemId))
+        : undefined
+      const existing = existingById ?? this.findMatchingItemInList(inventory, [change.name])
 
       if (change.changeType === 'gained') {
         if (existing) {
