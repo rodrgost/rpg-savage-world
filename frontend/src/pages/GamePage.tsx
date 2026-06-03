@@ -520,12 +520,12 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
       {message.npcs && message.npcs.length > 0 && (
         <div className="npcs-in-scene-compact">
           {message.npcs.map((npcMention) => {
-            // Buscar dados completos do NPC no estado do jogo
             const npcState = npcs.find((n) => n.id === npcMention.id)
-            if (!npcState) return null
+            // Use snapshot status from the message; fall back to current state only if absent
+            const status = npcMention.status ?? npcState?.status
 
-            const getStatusIcon = (status?: string) => {
-              switch (status) {
+            const getStatusIcon = (s?: string) => {
+              switch (s) {
                 case 'incapacitated': return '💀'
                 case 'defeated': return '⚰️'
                 case 'dead': return '☠️'
@@ -533,9 +533,9 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
                 default: return '?'
               }
             }
-            
-            const getStatusLabel = (status?: string) => {
-              switch (status) {
+
+            const getStatusLabel = (s?: string) => {
+              switch (s) {
                 case 'incapacitated': return 'Incapacitado'
                 case 'defeated': return 'Derrotado'
                 case 'dead': return 'Morto'
@@ -544,23 +544,23 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
               }
             }
 
-            const statusClass = npcState.status === 'incapacitated' || npcState.status === 'defeated' || npcState.status === 'dead' 
-              ? 'npc-compact-inactive' 
+            const statusClass = status === 'incapacitated' || status === 'defeated' || status === 'dead'
+              ? 'npc-compact-inactive'
               : ''
 
             return (
-              <div key={npcState.id} className={`npc-compact ${npcMention.disposition} ${statusClass}`}>
+              <div key={npcMention.id} className={`npc-compact ${npcMention.disposition} ${statusClass}`}>
                 <div className="npc-compact-header">
                   <span className="npc-compact-name">{npcMention.name}</span>
-                  <span className="npc-compact-status" title={getStatusLabel(npcState.status)}>
-                    {getStatusIcon(npcState.status)}
+                  <span className="npc-compact-status" title={getStatusLabel(status)}>
+                    {getStatusIcon(status)}
                   </span>
                 </div>
                 <div className="npc-compact-stats">
-                  <span title="Ferimentos">❤️ {npcState.wounds}/{npcState.maxWounds}</span>
-                  {npcState.toughness && <span title="Resistência">🛡️ {npcState.toughness}</span>}
-                  {npcState.parry && <span title="Aparar">⚔️ {npcState.parry}</span>}
-                  {npcState.isShaken && <span className="shaken-indicator" title="Abalado">😵</span>}
+                  <span title="Ferimentos">❤️ {npcState?.wounds ?? '?'}/{npcState?.maxWounds ?? '?'}</span>
+                  {npcState?.toughness && <span title="Resistência">🛡️ {npcState.toughness}</span>}
+                  {npcState?.parry && <span title="Aparar">⚔️ {npcState.parry}</span>}
+                  {npcState?.isShaken && <span className="shaken-indicator" title="Abalado">😵</span>}
                 </div>
               </div>
             )

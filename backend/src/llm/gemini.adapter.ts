@@ -568,9 +568,9 @@ function buildRecentSuggestionAvoidanceLines(recent: RecentSuggestedCharacter[])
   if (!recent.length) return []
 
   return [
-    'Evite repetir sugestões recentes para esta mesma aventura:',
+    'Avoid repeating recent suggestions for this same adventure:',
     ...recent.slice(0, 5).map((character) => `  - ${character.name} / ${character.profession}`),
-    'Crie uma combinação nova de nome, profissão, papel narrativo e motivação.'
+    'Create a new combination of name, profession, narrative role, and motivation.'
   ]
 }
 
@@ -1141,70 +1141,69 @@ export class GeminiAdapter implements Narrator {
       .map(([key]) => key)
 
     const combatText = state.combat
-      ? `Combate ativo na rodada ${state.combat.round} com ${state.combat.combatants.length} combatentes.`
-      : 'Sem combate formal em andamento.'
+      ? `Active combat in round ${state.combat.round} with ${state.combat.combatants.length} combatants.`
+      : 'No formal combat in progress.'
     const threatsText = hostileNpcs.length
       ? hostileNpcs
         .slice(0, 6)
-        .map((npc) => `${npc.name}${npc.wounds > 0 ? ` ferido ${npc.wounds}/${npc.maxWounds}` : ''}`)
+        .map((npc) => `${npc.name}${npc.wounds > 0 ? ` wounded ${npc.wounds}/${npc.maxWounds}` : ''}`)
         .join(', ')
-      : 'Sem ameaça imediata confirmada.'
+      : 'No immediate threat confirmed.'
     const resourcesText = p.inventory.length
       ? p.inventory.slice(0, 8).map((item) => `${item.name} x${item.quantity}`).join(', ')
-      : 'Nenhum recurso relevante carregado.'
+      : 'No relevant resources carried.'
     const forcesText = npcsAtLocation.length
       ? npcsAtLocation
         .slice(0, 8)
         .map((npc) => `${npc.name}${npc.disposition ? ` (${npc.disposition})` : ''}`)
         .join(', ')
-      : 'Ninguém relevante visível no local.'
+      : 'No one relevant visible at location.'
     const statusText = p.statusEffects.length
       ? p.statusEffects.map((effect) => `${effect.name}${effect.turnsRemaining != null ? ` (${effect.turnsRemaining}t)` : ''}`).join(', ')
-      : 'Nenhum efeito ativo.'
-    const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'Nenhuma flag ativa relevante.'
+      : 'No active effects.'
+    const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'No relevant active flags.'
 
     const sysPrompt = [
-      'Você mantém o resumo canônico de continuidade de uma história.',
-      'Objetivo: gerar um resumo que preserva TANTO a continuidade mecânica QUANTO os fios narrativos abertos — permitindo que o narrador construa sobre o que já foi estabelecido.',
-      'PRIORIDADE DE FONTES (do mais para o menos autoritativo):',
-      '  1. ESTADO ATUAL ESTRUTURADO (âncora factual) — prevalece sobre qualquer dado no resumo anterior ou nas mensagens.',
-      '  2. Mensagens mais recentes — têm prioridade sobre mensagens mais antigas quando houver conflito narrativo.',
-      '  3. Resumo anterior — ponto de partida; substitua o que foi superado pelos eventos recentes.',
-      'Regras:',
-      '- Escreva em parágrafos corridos, sem títulos, rótulos ou seções.',
-      '- Use 2 a 4 parágrafos — as informações que importam para a continuação imediata e para a coerência narrativa.',
-      '- Preserve fatos que afetam a situação atual: posição, ameaças, objetivos pendentes, problemas não resolvidos.',
-      '- NÃO preserve situações, objetivos ou estados que já foram explicitamente cumpridos, derrotados ou superados — mantê-los cria incoerência.',
-      '- TAMBÉM preserve fios narrativos abertos: mistérios levantados, promessas feitas, segredos revelados, perguntas sem resposta, tensões não resolvidas.',
-      '- Preserve nome e pelo menos 1 traço de personalidade ou motivação de NPCs relevantes que apareceram — não apenas disposição.',
-      '- Preserve descobertas de worldbuilding que podem ser referenciadas: detalhes específicos de locais, lore revelado, facções mencionadas, objetos significativos.',
-      '- Não reconte a ação passo a passo. Não descreva golpes, quedas ou mortes antigas a menos que continuem ativas como consequência.',
-      '- Nunca liste itens do inventário no resumo — eles são rastreados separadamente.',
-      '- Preserve nomes próprios e contagens relevantes quando afetarem a próxima decisão.',
-      '- Não use markdown, bullets, prefácio, saudação ou comentários metalinguísticos.'
+      'You maintain the canonical continuity summary of a story.',
+      'Objective: generate a summary that preserves BOTH mechanical continuity AND open narrative threads — allowing the narrator to build on what has already been established.',
+      'SOURCE PRIORITY (most to least authoritative):',
+      '  1. CURRENT STRUCTURED STATE (factual anchor) — overrides any data in the previous summary or messages.',
+      '  2. Most recent messages — take priority over older messages when there is a narrative conflict.',
+      '  3. Previous summary — starting point; replace what has been superseded by recent events.',
+      'Rules:',
+      '- Write in flowing paragraphs, without titles, labels, or sections.',
+      '- Use 2 to 4 paragraphs — the information that matters for immediate continuation and narrative coherence.',
+      '- Preserve facts that affect the current situation: position, threats, pending objectives, unresolved problems.',
+      '- DO NOT preserve situations, objectives, or states that have been explicitly fulfilled, defeated, or superseded — keeping them creates incoherence.',
+      '- ALSO preserve open narrative threads: raised mysteries, promises made, revealed secrets, unanswered questions, unresolved tensions.',
+      '- Preserve the name and at least 1 personality trait or motivation of relevant NPCs that appeared — not just disposition.',
+      '- Preserve worldbuilding discoveries that can be referenced: specific location details, revealed lore, mentioned factions, significant objects.',
+      '- Do not recount the action step by step. Do not describe old blows, falls, or deaths unless they continue as active consequences.',
+      '- Never list inventory items in the summary — they are tracked separately.',
+      '- Preserve proper names and relevant counts when they affect the next decision.',
+      '- Do not use markdown, bullets, preamble, greetings, or metalinguistic comments.'
     ].join('\n')
 
     const narrativeBlock = req.recentMessages?.length
-      ? `Mensagens da sessão (abertura e recentes, ordem cronológica):\n${req.recentMessages.map((m) => `[${m.role === 'narrator' ? 'Narrador' : 'Jogador'} T${m.turn}] ${m.text}`).join('\n')}`
+      ? `Session messages (opening and recent, chronological order):\n${req.recentMessages.map((m) => `[${m.role === 'narrator' ? 'Narrator' : 'Player'} T${m.turn}] ${m.text}`).join('\n')}`
       : null
 
     const prompt = [
-      `=== ESTADO ATUAL (âncora factual — prevalece em qualquer conflito) ===`,
-      `Turno: ${req.upToTurn}. Local: ${state.worldState.activeLocation}.`,
+      `=== CURRENT STATE (factual anchor — prevails in any conflict) ===`,
+      `Turn: ${req.upToTurn}. Location: ${state.worldState.activeLocation}.`,
       combatText,
-      `Ferimentos: ${p.wounds}/${p.maxWounds}. Fadiga: ${p.fatigue}. Abalado: ${p.isShaken ? 'sim' : 'não'}. Bennies: ${p.bennies}.`,
-      `Ameaças visíveis: ${threatsText}`,
-      `Forças/NPCs no local: ${forcesText}`,
-      `Efeitos ativos: ${statusText}`,
-      `Flags de mundo ativas: ${activeFlagsText}`,
-      `Eventos recentes: ${JSON.stringify(req.keyEvents)}.`,
+      `Wounds: ${p.wounds}/${p.maxWounds}. Fatigue: ${p.fatigue}. Shaken: ${p.isShaken ? 'yes' : 'no'}. Bennies: ${p.bennies}.`,
+      `Visible threats: ${threatsText}`,
+      `Forces/NPCs at location: ${forcesText}`,
+      `Active effects: ${statusText}`,
+      `Active world flags: ${activeFlagsText}`,
       '',
-      `=== RESUMO ANTERIOR (ponto de partida — substituir o que foi superado) ===`,
-      req.previousSummary || 'sem resumo anterior.',
+      `=== PREVIOUS SUMMARY (starting point — replace what has been superseded) ===`,
+      req.previousSummary || 'no previous summary.',
       narrativeBlock ? '' : null,
       narrativeBlock,
       '',
-      'Gere o resumo atualizado. Descarte do resumo anterior tudo que já foi superado. Não repita fatos que o estado atual torna obsoletos.'
+      'Generate the updated summary. Discard from the previous summary everything that has been superseded. Do not repeat facts that the current state renders obsolete.'
     ].filter((line) => line !== null).join('\n')
 
     try {
@@ -1215,9 +1214,9 @@ export class GeminiAdapter implements Narrator {
       return sanitizeNarrativeOutput(generated)
     } catch {
       const parts: string[] = []
-      parts.push(`O personagem está em ${state.worldState.activeLocation}. ${combatText}`)
-      if (threatsText !== 'Sem ameaça imediata confirmada.') parts.push(threatsText)
-      if (resourcesText !== 'Nenhum recurso relevante carregado.') parts.push(`Recursos disponíveis: ${resourcesText}.`)
+      parts.push(`The character is at ${state.worldState.activeLocation}. ${combatText}`)
+      if (threatsText !== 'No immediate threat confirmed.') parts.push(threatsText)
+      if (resourcesText !== 'No relevant resources carried.') parts.push(`Available resources: ${resourcesText}.`)
       return parts.join(' ')
     }
   }
@@ -1232,43 +1231,43 @@ export class GeminiAdapter implements Narrator {
       .map(([key]) => key)
 
     const combatText = state.combat
-      ? `Combate ativo na rodada ${state.combat.round} com ${state.combat.combatants.length} combatentes.`
-      : 'Sem combate formal em andamento.'
+      ? `Active combat in round ${state.combat.round} with ${state.combat.combatants.length} combatants.`
+      : 'No formal combat in progress.'
     const threatsText = hostileNpcs.length
       ? hostileNpcs
         .slice(0, 6)
-        .map((npc) => `${npc.name}${npc.wounds > 0 ? ` ferido ${npc.wounds}/${npc.maxWounds}` : ''}`)
+        .map((npc) => `${npc.name}${npc.wounds > 0 ? ` wounded ${npc.wounds}/${npc.maxWounds}` : ''}`)
         .join(', ')
-      : 'Sem ameaça imediata confirmada.'
+      : 'No immediate threat confirmed.'
     const forcesText = npcsAtLocation.length
       ? npcsAtLocation
         .slice(0, 8)
         .map((npc) => `${npc.name}${npc.disposition ? ` (${npc.disposition})` : ''}`)
         .join(', ')
-      : 'Ninguém relevante visível no local.'
+      : 'No one relevant visible at location.'
     const statusText = p.statusEffects.length
       ? p.statusEffects.map((effect) => `${effect.name}${effect.turnsRemaining != null ? ` (${effect.turnsRemaining}t)` : ''}`).join(', ')
-      : 'Nenhum efeito ativo.'
-    const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'Nenhuma flag ativa relevante.'
+      : 'No active effects.'
+    const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'No relevant active flags.'
 
     const sysPrompt = [
-      'Você resume a história de uma aventura de RPG.',
-      'Leia as mensagens abaixo e gere um resumo em prosa (2 a 4 parágrafos) dos eventos importantes.',
-      'Preserve nomes de personagens, locais visitados, descobertas e mistérios ainda não resolvidos.',
-      'Não liste inventário. Não use markdown, títulos ou bullets. Apenas prosa corrida em português.'
+      'You summarize the story of an RPG adventure.',
+      'Read the messages below and generate a prose summary (2 to 4 paragraphs) of the important events.',
+      'Preserve character names, visited locations, discoveries, and mysteries not yet resolved.',
+      'Do not list inventory. Do not use markdown, titles, or bullets. Prose only in Brazilian Portuguese.'
     ].join('\n')
 
     const messagesText = req.messages
-      .map((m) => `[Turno ${m.turn}] ${m.role === 'narrator' ? 'Narrador' : 'Jogador'}: ${m.text}`)
+      .map((m) => `[Turn ${m.turn}] ${m.role === 'narrator' ? 'Narrator' : 'Player'}: ${m.text}`)
       .join('\n')
 
     const prompt = [
-      req.previousSummary ? '=== Resumo anterior ===\n' + req.previousSummary : '',
+      req.previousSummary ? '=== Previous summary ===\n' + req.previousSummary : '',
       '',
-      '=== Novos eventos (ordem cronológica) ===',
+      '=== New events (chronological order) ===',
       messagesText,
       '',
-      'Gere o resumo atualizado incorporando os novos eventos acima.'
+      'Generate the updated summary incorporating the new events above.'
     ].filter(Boolean).join('\n')
 
     let lastError: Error | null = null
@@ -1313,26 +1312,26 @@ export class GeminiAdapter implements Narrator {
 
   async expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult> {
     const sysPrompt = [
-      'Você é um adventurebuilder. Escreva em português do Brasil.',
-      'Objetivo: criar do zero uma história completa a partir de um contexto mínimo.',
-      'Saída esperada: um JSON válido com os seguintes campos:',
-      '  "name": título curto e evocativo para a história (3-8 palavras).',
-      '  "thematic": temática resumida da história (1 frase curta, ex: "Império em colapso e magia proibida").',
-      '  "storyDescription": 3-6 parágrafos com contexto, conflitos, facções, locais e 2-4 ganchos de aventura.',
-      '  "storyCharacters": array de 3 a 7 NPCs do mundo relevantes para a narrativa, cada um com:',
-      '    - "name": nome do personagem',
-      '    - "role": papel na história (ex: antagonista, mentor, aliado, líder de facção, neutro)',
-      '    - "description": descrição breve do personagem (1-2 frases)',
-      '    - "status": situação atual na história (ex: ativo, foragido, morto, desconhecido)',
-      'Restrições: retorne SOMENTE o JSON, sem prefácio, saudação, comentários ou separadores.',,
-      'Mesmo quando houver temática fornecida, gere um título, uma temática refinada, uma história e NPCs como uma nova criação completa.',
-      'Comece diretamente com { e termine com }.'
+      'You are an adventure builder. Write in Brazilian Portuguese.',
+      'Objective: create from scratch a complete story from minimal context.',
+      'Expected output: a valid JSON with the following fields:',
+      '  "name": short and evocative title for the story (3-8 words).',
+      '  "thematic": summarized thematic of the story (1 short sentence, e.g.: "Collapsing empire and forbidden magic").',
+      '  "storyDescription": 3-6 paragraphs with context, conflicts, factions, locations, and 2-4 adventure hooks.',
+      '  "storyCharacters": array of 3 to 7 world NPCs relevant to the narrative, each with:',
+      '    - "name": character name',
+      '    - "role": role in the story (e.g.: antagonist, mentor, ally, faction leader, neutral)',
+      '    - "description": brief character description (1-2 sentences)',
+      '    - "status": current situation in the story (e.g.: active, fugitive, dead, unknown)',
+      'Constraints: return ONLY the JSON, without preamble, greeting, comments, or separators.',
+      'Even when a thematic is provided, generate a title, refined thematic, story, and NPCs as a complete new creation.',
+      'Start directly with { and end with }.'
     ].join('\n')
 
     const prompt = [
-      `Nome/contexto da campanha: ${req.campaignName || 'livre'}.`,
-      `Temática (se informada): ${req.thematic?.trim() || 'a definir pelo LLM'}.`,
-      'Descrição atual: ignorar; gere do zero.'
+      `Campaign name/context: ${req.campaignName || 'free'}.`,
+      `Thematic (if provided): ${req.thematic?.trim() || 'to be defined by the LLM'}.`,
+      'Current description: ignore; generate from scratch.'
     ].join('\n')
 
     try {
@@ -1383,12 +1382,12 @@ export class GeminiAdapter implements Narrator {
 
   async expandWorldLore(req: ExpandWorldLoreRequest): Promise<string> {
     const sysPrompt = [
-      'Você é um worldbuilder sênior especializado em história. Escreva exclusivamente em português do Brasil.',
+      'You are a senior worldbuilder specialized in history. Write exclusively in Brazilian Portuguese.',
       '',
-      'Escreva com clareza e precisão — o texto serve tanto para quem nunca ouviu falar deste universo quanto para quem vai jogar nele.',
-      'Ao introduzir pela primeira vez qualquer nome próprio, facção, tecnologia ou conceito exclusivo do universo, explique-o brevemente em linha — uma frase é suficiente.',
-      'Crie coerência interna: nomes próprios, locais e facções mencionados em uma seção devem reaparecer e se reforçar nas demais.',
-      'A escrita pode ser atmosférica e literária, mas nunca pressuponha que o leitor já conhece o cenário.'
+      'Write with clarity and precision — the text serves both those who have never heard of this universe and those who will play in it.',
+      'When introducing for the first time any proper name, faction, technology, or concept exclusive to the universe, briefly explain it inline — one sentence is enough.',
+      'Create internal coherence: proper names, locations, and factions mentioned in one section must reappear and reinforce each other in the others.',
+      'The writing can be atmospheric and literary, but never assume the reader already knows the setting.'
     ].join('\n')
 
     const tema = [
@@ -1400,66 +1399,66 @@ export class GeminiAdapter implements Narrator {
     const prompt = [
       `Tema: ${tema}`,
       '',
-      'Construa o lore completo deste universo. Use OBRIGATORIAMENTE os cabeçalhos abaixo, nesta ordem e sem alterar o texto dos cabeçalhos.',
-      'Seções marcadas com (se aplicável) devem ser incluídas apenas se forem relevantes ao tema fornecido.',
+      'Build the complete lore of this universe. MANDATORILY use the headings below, in this order and without altering the heading text.',
+      'Sections marked with (if applicable) should be included only if relevant to the provided theme.',
       '',
       '## Em Poucas Palavras',
-      'Explique este universo para alguém que nunca ouviu falar dele. Use linguagem direta, sem jargão.',
-      'Responda em 5 a 7frases:',
-      '  • O que é este mundo? (uma frase-âncora: "É um mundo onde...", "Imagine X, mas Y")',
-      '  • O que o distingue de outros universos do mesmo gênero? (o diferencial real, não o óbvio)',
-      '  • O que qualquer jogador vê, ouve e sente no primeiro dia neste mundo? (realidade cotidiana concreta)',
+      'Explain this universe to someone who has never heard of it. Use direct language, without jargon.',
+      'Answer in 5 to 7 sentences:',
+      '  • What is this world? (an anchor sentence: "It is a world where...", "Imagine X, but Y")',
+      '  • What distinguishes it from other universes of the same genre? (the real differentiator, not the obvious)',
+      '  • What does any player see, hear, and feel on the first day in this world? (concrete everyday reality)',
       '',
       '## Origens e História',
-      'Apresente as eras ou fases históricas que moldaram o presente, do macro (cosmologia, criação) ao micro (evento catalisador recente).',
-      '3 parágrafos densos.',
+      'Present the eras or historical phases that shaped the present, from macro (cosmology, creation) to micro (recent catalyst event).',
+      '3 dense paragraphs.',
       '',
       '## Doenças, Pragas e Contaminações (se aplicável)',
-      'Se existirem doenças, vírus, pragas ou contaminações relevantes neste universo, defina:',
-      '- **Origem:** natural, manufaturada, alienígena, mágica ou desconhecida.',
-      '- **Vetor e progressão:** como se transmite, quais os estágios e quanto tempo cada um dura.',
-      '- **Efeitos nos personagens:** consequências físicas, psicológicas e sociais — como a sociedade trata os infectados (isolamento, cura forçada, sacrifício, estigma)?',
-      '- **Dilema narrativo:** existe cura? Quem a controla e por quê? A cura tem um custo moral?',
-      '- **Impacto sistêmico:** a doença alterou estruturas políticas, religiosas ou econômicas do mundo?',
-      '2 a 3 parágrafos densos.',
+      'If diseases, viruses, plagues, or contaminations exist in this universe, define:',
+      '- **Origem:** natural, manufactured, alien, magical, or unknown.',
+      '- **Vetor e progressão:** how it spreads, what the stages are, and how long each lasts.',
+      '- **Efeitos nos personagens:** physical, psychological, and social consequences — how society treats the infected (isolation, forced cure, sacrifice, stigma)?',
+      '- **Dilema narrativo:** is there a cure? Who controls it and why? Does the cure have a moral cost?',
+      '- **Impacto sistêmico:** did the disease alter political, religious, or economic structures of the world?',
+      '2 to 3 dense paragraphs.',
       '',
       '## Invasão e Presença Externa (se aplicável)',
-      'Se existir uma força invasora — alienígena, interdimensional, divina ou outra — defina:',
-      '- **Natureza da ameaça:** o que são, de onde vieram, o que querem. Eles comunicam? Negociam? São ininteligíveis?',
-      '- **Modo de operação:** atacam em ondas, infiltram silenciosamente, transformam o ambiente, corrompem mentes?',
-      '- **O que acontece com capturados ou expostos:** morte, transformação, escravidão, simbiose involuntária?',
-      '- **Estado atual da invasão:** é recente e caótica, ou estabelecida há gerações e normalizada pela população?',
-      '- **Resistência e adaptação:** como as facções responderam? Existe colaboração com os invasores?',
-      '3 parágrafos densos.',
+      'If an invading force exists — alien, interdimensional, divine, or other — define:',
+      '- **Natureza da ameaça:** what they are, where they came from, what they want. Do they communicate? Negotiate? Are they unintelligible?',
+      '- **Modo de operação:** do they attack in waves, infiltrate silently, transform the environment, corrupt minds?',
+      '- **O que acontece com capturados ou expostos:** death, transformation, enslavement, involuntary symbiosis?',
+      '- **Estado atual da invasão:** is it recent and chaotic, or established for generations and normalized by the population?',
+      '- **Resistência e adaptação:** how did factions respond? Is there collaboration with the invaders?',
+      '3 dense paragraphs.',
       '',
       '## Locais Marcantes',
-      'Liste exatamente 2-5 locais canônicos. Para cada um, use este formato:',
-      '*   **Nome do Local:** Descrição de 2 a 3 frases que capture sua função, atmosfera e por que é narrativamente relevante.',
+      'List exactly 2-5 canonical locations. For each, use this format:',
+      '*   **Nome do Local:** Description of 2 to 3 sentences capturing its function, atmosphere, and why it is narratively relevant.',
       '',
       '## Facções e Poder',
-      'Descreva 4 grupos com objetivos, filosofia e relações entre si. Cada facção deve ter uma tensão com pelo menos uma outra.',
-      '3 parágrafos densos.',
+      'Describe 4 groups with objectives, philosophy, and relations between them. Each faction must have tension with at least one other.',
+      '3 dense paragraphs.',
       '',
       '## Magia, Tecnologia e Regras do Mundo',
-      'Defina o que é possível neste universo: fontes de poder, limitações concretas e o que é proibido ou desconhecido.',
-      'Inclua como esse sistema de regras cria dilemas morais para os personagens.',
-      'Se personagens puderem ter poderes ou habilidades além do humano comum, inclua também:',
-      '- **Origem dos poderes:** nascença, acidente, ritual, tecnologia, infecção, escolha divina?',
-      '- **Custo e limitações concretas:** cansaço físico, perda de sanidade, redução de tempo de vida, dependência de recurso externo?',
-      '- **Como a sociedade enxerga quem tem poderes:** reverenciados, perseguidos, recrutados à força, escondidos?',
-      '- **Poderes proibidos ou desconhecidos:** existe algo que poderia ser feito mas que ninguém ousou ou sobreviveu para contar?',
-      '- **Progressão e perda:** poderes podem crescer? Podem ser roubados, corrompidos ou perdidos permanentemente?',
-      '3 a 5 parágrafos densos.',
+      'Define what is possible in this universe: sources of power, concrete limitations, and what is forbidden or unknown.',
+      'Include how this rule system creates moral dilemmas for characters.',
+      'If characters can have powers or abilities beyond the common human, also include:',
+      '- **Origem dos poderes:** birth, accident, ritual, technology, infection, divine choice?',
+      '- **Custo e limitações concretas:** physical exhaustion, sanity loss, reduced lifespan, dependence on external resource?',
+      '- **Como a sociedade enxerga quem tem poderes:** revered, persecuted, forcibly recruited, hidden?',
+      '- **Poderes proibidos ou desconhecidos:** is there something that could be done but that no one dared or survived to tell?',
+      '- **Progressão e perda:** can powers grow? Can they be stolen, corrupted, or permanently lost?',
+      '3 to 5 dense paragraphs.',
       '',
       '## Impacto nos Personagens',
-      'Traduza as forças do mundo em consequências concretas para quem vive nele:',
-      '- **Traumas e marcas do cenário:** que bagagem emocional ou física a maioria dos personagens carrega por existir neste mundo?',
-      '- **Escolhas recorrentes:** que dilemas o cenário força repetidamente — lealdade vs. sobrevivência, poder vs. custo humano?',
-      '- **O que os personagens não sabem:** quais verdades são sistematicamente ocultadas da população comum?',
-      '- **Pontos de virada pessoal:** que eventos podem mudar permanentemente um personagem — exposição a doença, contato com invasores, manifestação de poder, revelação histórica?',
-      '2 parágrafos densos.',
+      'Translate the world\'s forces into concrete consequences for those who live in it:',
+      '- **Traumas e marcas do cenário:** what emotional or physical baggage do most characters carry from existing in this world?',
+      '- **Escolhas recorrentes:** what dilemmas does the setting repeatedly force — loyalty vs. survival, power vs. human cost?',
+      '- **O que os personagens não sabem:** what truths are systematically hidden from the common population?',
+      '- **Pontos de virada pessoal:** what events can permanently change a character — exposure to disease, contact with invaders, power manifestation, historical revelation?',
+      '2 dense paragraphs.',
       '',
-      'Restrições absolutas: nenhum comentário fora do lore, nenhuma saudação, elogio, prefácio ou separador (***). Omita seções marcadas como (se aplicável) se não forem pertinentes ao tema. Comece imediatamente com ## Em Poucas Palavras.'
+      'Absolute constraints: no comments outside the lore, no greeting, praise, preamble, or separator (***). Omit sections marked as (if applicable) if not pertinent to the theme. Start immediately with ## Em Poucas Palavras.'
     ].join('\n')
 
     try {
@@ -1477,35 +1476,35 @@ export class GeminiAdapter implements Narrator {
 
   async generateImageDescription(req: GenerateImageDescriptionRequest): Promise<string> {
     const sysPrompt = [
-      'Você cria descrições visuais curtas para geração de imagem fotográfica.',
-      'Saída esperada: um único parágrafo curto, com 1 ou 2 frases, focado em atmosfera, composição, cenário e detalhes visuais memoráveis.',
-      'Se o título remeter a um filme, série, game, HQ ou livro conhecido, inspire-se na estética da arte de capa ou pôster oficial dessa obra: paleta de cores predominante, composição, enquadramento e atmosfera visual — mas sem reproduzir personagens protegidos, atores reais, rostos reconhecíveis, logotipos, títulos ou marcas.',
-      'Caso o título não remeta a nenhuma obra conhecida, descreva uma cena épica e original coerente com o nome.',
-      'Entregue somente a descrição visual final, sem listas, sem markdown, sem comentários sobre o pedido e sem instruções negativas.'
+      'You create short visual descriptions for photographic image generation.',
+      'Expected output: a single short paragraph, with 1 or 2 sentences, focused on atmosphere, composition, setting, and memorable visual details.',
+      'If the title refers to a well-known film, series, game, comic, or book, draw inspiration from the aesthetic of that work\'s official cover art or poster: predominant color palette, composition, framing, and visual atmosphere — but without reproducing protected characters, real actors, recognizable faces, logos, titles, or brands.',
+      'If the title does not refer to any known work, describe an epic and original scene coherent with the name.',
+      'Deliver only the final visual description, without lists, markdown, comments about the request, or negative instructions.'
     ].join('\n')
 
     let prompt = ''
 
     if (req.entityType === 'world') {
       prompt = [
-        `Título do universo: ${req.title}.`,
-        'Se esse título remeter a um filme, série, game, HQ ou livro famoso, baseie TODA a descrição na estética visual característica dessa obra: paleta de cores, composição, atmosfera, iluminação e estilo visual — sem copiar personagens protegidos, atores reais, logotipos ou marcas. O tema da referência deve guiar cada elemento visual da imagem.',
-        'Caso contrário, descreva uma cena épica e original com identidade visual forte e coerente com o nome e o tema do universo, capturando a essência temática de modo que toda a imagem reflita esse universo.',
+        `Universe title: ${req.title}.`,
+        'If this title refers to a famous film, series, game, comic, or book, base THE ENTIRE description on the characteristic visual aesthetic of that work: color palette, composition, atmosphere, lighting, and visual style — without copying protected characters, real actors, logos, or brands. The reference theme must guide every visual element of the image.',
+        'Otherwise, describe an epic and original scene with strong visual identity coherent with the name and theme of the universe, capturing the thematic essence so that the entire image reflects that universe.',
       ].join('\n')
     } else if (req.entityType === 'campaign') {
       prompt = [
-        `Título da campanha: ${req.title}.`,
-        'Descreva uma imagem ampla que traduza a atmosfera da campanha como uma arte ilustrada marcante e cinematográfica.'
+        `Campaign title: ${req.title}.`,
+        'Describe a wide image that translates the campaign\'s atmosphere as striking and cinematic illustrated art.'
       ].join('\n')
     } else {
       prompt = [
-        `Mundo: ${req.worldName}.`,
-        `Campanha: ${req.campaignTitle}.`,
-        ...(req.gender?.trim() ? [`Gênero: ${req.gender}.`] : []),
-        ...(req.race?.trim() ? [`Raça ou espécie: ${req.race}.`] : []),
-        `Profissão: ${req.profession}.`,
-        ...(req.additionalDescription?.trim() ? [`Detalhes fornecidos: ${req.additionalDescription}.`] : []),
-        'Descreva um retrato de personagem coerente com esse contexto, destacando silhueta, vestimenta, expressão, postura e traços visuais marcantes.'
+        `World: ${req.worldName}.`,
+        `Campaign: ${req.campaignTitle}.`,
+        ...(req.gender?.trim() ? [`Gender: ${req.gender}.`] : []),
+        ...(req.race?.trim() ? [`Race or species: ${req.race}.`] : []),
+        `Profession: ${req.profession}.`,
+        ...(req.additionalDescription?.trim() ? [`Provided details: ${req.additionalDescription}.`] : []),
+        'Describe a character portrait coherent with this context, highlighting silhouette, clothing, expression, posture, and striking visual traits.'
       ].join('\n')
     }
 
@@ -1536,7 +1535,7 @@ export class GeminiAdapter implements Narrator {
     const existingLines: string[] = []
     if (hasExisting) {
       existingLines.push(
-        'O jogador já preencheu os seguintes campos — MANTENHA esses valores exatamente como estão e preencha apenas os campos faltantes:'
+        'The player has already filled in the following fields — KEEP these values exactly as they are and fill in only the missing fields:'
       )
       if (existing.name) existingLines.push(`  name: "${existing.name}"`)
       if (existing.gender) existingLines.push(`  gender: "${existing.gender}"`)
@@ -1547,21 +1546,21 @@ export class GeminiAdapter implements Narrator {
     }
 
     const sysPrompt = [
-      'Você é um designer de personagens.',
-      'Leia o nome do mundo, a lore do universo e a história da aventura. Crie um personagem cujo papel e profissão emergem NATURALMENTE desses dados, sem usar arquétipos pré-definidos pelo sistema.',
-      'Responda SOMENTE em JSON válido, sem markdown e sem comentários.',
-      'Retorne sempre as 6 chaves; gender e race podem ser string vazia quando o contexto não sustentar uma inferência.',
+      'You are a character designer.',
+      'Read the world name, universe lore, and adventure story. Create a character whose role and profession emerge NATURALLY from that data, without using pre-defined archetypes from the system.',
+      'Respond ONLY in valid JSON, without markdown or comments.',
+      'Always return the 6 keys; gender and race can be empty string when the context does not support an inference.',
       '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"..."}',
       '',
-      'Instruções por campo:',
-      '  name: nome coerente com o contexto; se o jogador forneceu um name, preserve esse valor exatamente e trate-o apenas como âncora de identidade',
-      '  gender: Masculino, Feminino ou Outro somente quando houver pista contextual; caso contrário, string vazia',
-      '  race: raça/espécie somente quando houver pista contextual; caso contrário, string vazia',
-      '  profession: ofício ou papel social derivado exclusivamente do nome do mundo, da lore e da história; máx 60 chars',
-      '  description: 2-3 frases derivadas principalmente da história da aventura e da lore, descrevendo aparência física (cabelo, olhos, compleição ou cicatriz marcante), vestimenta ou equipamento coerente com a profissão, e traço de personalidade com motivação. Mín 80 chars, máx 280 chars.',
-      '  campaignRole: o que este personagem está fazendo nesta aventura específica, qual sua missão ou como se conecta ao enredo. Derive da história/lore, seja concreto e não genérico. Máx 300 chars.',
-      'Se houver name fornecido, não invente a descrição a partir do som do nome; use o nome somente para preservar a identidade e derive todo o restante da história da aventura e da lore.',
-      'Em chamadas repetidas para o mesmo enredo, varie nome, profissão, função narrativa, motivação, aparência e ponto de entrada na aventura.',
+      'Field instructions:',
+      '  name: name coherent with the context; if the player provided a name, preserve that value exactly and treat it only as an identity anchor',
+      '  gender: Masculine, Feminine, or Other only when there is a contextual clue; otherwise empty string',
+      '  race: race/species only when there is a contextual clue; otherwise empty string',
+      '  profession: trade or social role derived exclusively from the world name, lore, and story; max 60 chars',
+      '  description: 2-3 sentences derived primarily from the adventure story and lore, describing physical appearance (hair, eyes, build, or notable scar), clothing or equipment coherent with the profession, and personality trait with motivation. Min 80 chars, max 280 chars.',
+      '  campaignRole: what this character is doing in this specific adventure, their mission, or how they connect to the plot. Derive from story/lore, be concrete and not generic. Max 300 chars.',
+      'If a name is provided, do not invent the description from the sound of the name; use the name only to preserve identity and derive everything else from the adventure story and lore.',
+      'In repeated calls for the same plot, vary the name, profession, narrative function, motivation, appearance, and entry point into the adventure.',
     ].join('\n')
 
     const buildPrompt = (attempt: number): string => {
@@ -1570,13 +1569,13 @@ export class GeminiAdapter implements Narrator {
       return [
         ...(existingLines.length > 0 ? [...existingLines, ''] : []),
         ...(avoidanceLines.length > 0 ? [...avoidanceLines, ''] : []),
-        `Tentativa de variação: ${attempt}.`,
+        `Variation attempt: ${attempt}.`,
         '',
-        ...(worldName ? [`Nome do mundo/universo: ${worldName}.`] : []),
-        ...(promptWorldLore ? [`Lore do universo: ${promptWorldLore}.`, ''] : []),
-        `História da aventura: ${promptStoryDescription || 'não informada'}.`,
+        ...(worldName ? [`World/universe name: ${worldName}.`] : []),
+        ...(promptWorldLore ? [`Universe lore: ${promptWorldLore}.`, ''] : []),
+        `Adventure story: ${promptStoryDescription || 'not provided'}.`,
         '',
-        'Derive a profissão e o papel somente do mundo/universo, da lore e da história da aventura.'
+        'Derive the profession and role solely from the world/universe, the lore, and the adventure story.'
       ].join('\n')
     }
 
@@ -1661,85 +1660,85 @@ export class GeminiAdapter implements Narrator {
   } = {}): string {
     const { world, campaign, rulesDigest, summaryText, playerSkills, mode = 'turn', narrativeStyle, simpleVocabulary } = opts
     const lines = [
-      'Você é o Narrador de uma história. Responda em português do Brasil, sempre em segunda pessoa do singular ("Você entra...", "Você vê...").',
+      'You are the Narrator of a story. Respond in Brazilian Portuguese, always in second person singular ("Você entra...", "Você vê...").',
       '',
-      '━━━ REGRA PRINCIPAL DO CAMPO "narrative" ━━━',
-      'Narre a consequência da ação do jogador de forma direta e progressiva, mas não se adiante a próxima ação do jogador — deixe ganchos abertos para que o jogador decida o que fazer a seguir. O campo "narrative" deve avançar a história, não apenas descrever o estado atual ou repetir o que já foi dito.',
-      'FOCO: o que mudou, o que aconteceu, Evite recapitulações, repetições de estado e conclusões editoriais.',
+      '━━━ PRIMARY RULE FOR THE "narrative" FIELD ━━━',
+      'Narrate the consequence of the player\'s action in a direct and progressive manner, but do not jump ahead to the player\'s next action — leave open hooks so the player can decide what to do next. The "narrative" field must advance the story, not merely describe the current state or repeat what has already been said.',
+      'FOCUS: what changed, what happened. Avoid recaps, state repetitions, and editorial conclusions.',
       '',
-      'ELEMENTOS DISPONÍVEIS (use os que forem naturais para a cena e o estilo ativo):',
-      '  • o que concretamente aconteceu como resultado direto da ação',
-      '  • referência a elemento já estabelecido (nomes, objetos, locais) — cria continuidade',
+      'AVAILABLE ELEMENTS (use those that feel natural for the scene and active style):',
+      '  • what concretely happened as a direct result of the action',
+      '  • reference to an already established element (names, objects, locations) — creates continuity',
       '',
-      'NÃO ESCREVA:',
-      '  • estados inalterados repetidos: "tudo continua quieto", "nada mudou", "a noite segue escura igual antes"',
-      '  • ausência de coisas como fato narrativo: "sem ameaças à vista", "nenhum som suspeito"',
-      '  • filler genérico sem conexão com a cena: "o tempo passa", "o destino aguarda", "o mundo gira"',
-      '  • termos mecânicos literais: "Abalado", "Ferido", "Fadiga" — narre em vez disso: "o braço cede", "a visão embaça"',
-      '  • NPCs tomando decisões autônomas além da reação imediata à ação do jogador',
-      '  • conclusões editoriais que tiram a agência: "a prioridade agora é...", "o próximo passo é...", "vocês dois precisam..."',
+      'DO NOT WRITE:',
+      '  • repeated unchanged states: "everything stays quiet", "nothing changed", "the night remains as dark as before"',
+      '  • absence of things as narrative fact: "no threats in sight", "no suspicious sounds"',
+      '  • generic filler with no connection to the scene: "time passes", "fate awaits", "the world turns"',
+      '  • literal mechanical terms: "Shaken", "Wounded", "Fatigue" — narrate instead: "the arm gives out", "vision blurs"',
+      '  • NPCs making autonomous decisions beyond immediate reaction to the player\'s action',
+      '  • editorial conclusions that remove agency: "the priority now is...", "the next step is...", "you two need to..."',
       '',
-      'AGÊNCIA: situações em aberto (o que fazer com NPC, para onde ir) viram OPÇÕES — nunca sejam resolvidas na narrativa.',
+      'AGENCY: open situations (what to do with an NPC, where to go) become OPTIONS — never resolved in the narrative.',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
-      'O contexto estruturado desta chamada é a única fonte canônica para os campos JSON.',
-      'Se um NPC, item, efeito, perícia, destino, condição ou recurso não estiver no contexto estruturado, ele NÃO pode ser criado nos campos do JSON.',
-      'Se houver uma seção "ÂNCORAS CANÔNICAS ESTRITAS" no contexto, trate essa seção como lista fechada para opções, interpretação da ação e narrativa do turno normal.',
-      'Em caso de dúvida, prefira manter npcs, itemChanges, statusChanges e locationChange vazios/null e preserve a continuidade apenas na narrative e nas options.',
+      'The structured context of this call is the only canonical source for JSON fields.',
+      'If an NPC, item, effect, skill, destination, condition, or resource is not in the structured context, it CANNOT be created in the JSON fields.',
+      'If there is a "STRICT CANONICAL ANCHORS" section in the context, treat that section as a closed list for options, action interpretation, and the normal turn narrative.',
+      'When in doubt, prefer to keep npcs, itemChanges, statusChanges, and locationChange empty/null and preserve continuity only in narrative and options.',
       '',
-      'Você DEVE retornar SOMENTE um JSON válido (sem markdown, sem comentários) com a seguinte estrutura:',
+      'You MUST return ONLY a valid JSON (no markdown, no comments) with the following structure:',
       '{',
-      '  "narrative": "<texto narrativo do passo da história, 2-3 parágrafos curtos>",',
+      '  "narrative": "<narrative text for this story step>",',
       '  "segments": [',
-      '    { "type": "narrator", "text": "<narração, descrição de contexto ou consequência>" },',
-      '    { "type": "npc", "npcId": "<id do NPC presente>", "npcName": "<nome do NPC>", "disposition": "hostile|neutral|friendly", "text": "<fala direta do NPC>" }',
+      '    { "type": "narrator", "text": "<narration, context description, or consequence>" },',
+      '    { "type": "npc", "npcId": "<id of the present NPC>", "npcName": "<NPC name>", "disposition": "hostile|neutral|friendly", "text": "<NPC direct speech>" }',
       '  ],',
       '  "options": [',
       '    {',
       '      "id": "<uuid>",',
-      '      "text": "<descrição narrativa da opção>",',
-      '      "actionType": "<tipo da ação mecânica: custom|trait_test|attack|travel|flag>",',
-      '      "actionPayload": { <campos parciais para montar a ação mecânica> },',
-      '      "requiredItems": ["<nome do item do inventário, se necessário para a ação>"],',
+      '      "text": "<narrative description of the option>",',
+      '      "actionType": "<mechanical action type: custom|trait_test|attack|travel|flag>",',
+      '      "actionPayload": { <partial fields to build the mechanical action> },',
+      '      "requiredItems": ["<inventory item name, if required for the action>"],',
       '      "feasible": true,',
-      '      "feasibilityReason": "<motivo se feasible=false>",',
+      '      "feasibilityReason": "<reason if feasible=false>",',
       '      "diceCheck": {',
       '        "required": true,',
-      '        "skill": "<nome da perícia em PT-BR, ex: Percepção, Furtividade, Luta>",',
-      '        "attribute": "<nome do atributo se não for perícia, ex: vigor, spirit>",',
+      '        "skill": "<skill name in Brazilian Portuguese, e.g.: Percepção, Furtividade, Luta>",',
+      '        "attribute": "<attribute name if not a skill, e.g.: vigor, spirit>",',
       '        "modifier": 0,',
       '        "tn": 4,',
-      '        "reason": "<justificativa narrativa para o teste>"',
+      '        "reason": "<narrative justification for the roll>"',
       '      }',
       '    }',
       '  ],',
       '  "npcs": [',
-      '    { "id": "<uuid>", "name": "<nome>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false, "status": "active|incapacitated|defeated|dead" }',
+      '    { "id": "<uuid>", "name": "<name>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false, "status": "active|incapacitated|defeated|dead" }',
       '  ],',
       '  "itemChanges": [',
-      '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|money|vehicle|property|quest|misc" }',
+      '    { "itemId": "<uuid>", "name": "<item name>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|money|vehicle|property|quest|misc" }',
       '  ],',
       '  "statusChanges": [',
-      '    { "effectId": "<uuid>", "name": "<nome do efeito>", "changeType": "applied|removed", "turnsRemaining": 3, "description": "<desc>", "targetType": "player|npc", "targetId": "<id do NPC quando targetType=npc ou null>" }',
+      '    { "effectId": "<uuid>", "name": "<effect name>", "changeType": "applied|removed", "turnsRemaining": 3, "description": "<desc>", "targetType": "player|npc", "targetId": "<NPC id when targetType=npc, or null>" }',
       '  ],',
       '  "npcAttacks": [',
-      '    { "npcId": "<id do NPC que ataca>", "skillDie": <6|8|10|12>, "damageFormula": "<str+d6 ou 2d6 etc>", "ap": 0 }',
+      '    { "npcId": "<id of the attacking NPC>", "skillDie": <6|8|10|12>, "damageFormula": "<str+d6 or 2d6 etc>", "ap": 0 }',
       '  ],',
-      '  "locationChange": "<nova localização ou null>",',
-      '  "chapterTitle": "<título do capítulo se mudou ou null>"',
+      '  "locationChange": "<new location or null>",',
+      '  "chapterTitle": "<chapter title if it changed, or null>"',
       '}',
       '',
-      'REGRAS DO CAMPO diceCheck (OBRIGATÓRIO em TODA opção):',
-      '- Avalie para CADA opção se a ação exige um teste de dados com base nas regras de Savage Worlds.',
-      '- PRINCÍPIO FUNDAMENTAL: Só exija teste quando AMBAS as condições forem verdadeiras:',
-      '  (1) o resultado da ação é genuinamente incerto neste contexto, E',
-      '  (2) a falha teria consequências narrativas interessantes.',
-      '  Se qualquer uma dessas condições for falsa, "required" deve ser false.',
-      '- REGRA DE DESEMPATE: NA DÚVIDA, use "required": false. Teste de dados é EXCEÇÃO, não regra.',
-      '  Um dado pedido desnecessariamente interrompe o fluxo da história e frustra o jogador.',
-      '  Se a opção descreve a INTENÇÃO do personagem mas não um esforço ou risco concreto',
-      '  ("Tentar ajudar", "Procurar uma saída", "Verificar os arredores", "Se aproximar do NPC"),',
-      '  prefira required: false — o narrador resolve o resultado narrativamente no próximo turno.',
+      'diceCheck FIELD RULES (REQUIRED in EVERY option):',
+      '- Evaluate for EACH option whether the action requires a dice roll based on Savage Worlds rules.',
+      '- FUNDAMENTAL PRINCIPLE: Only require a roll when BOTH conditions are true:',
+      '  (1) the outcome of the action is genuinely uncertain in this context, AND',
+      '  (2) failure would have interesting narrative consequences.',
+      '  If either condition is false, "required" must be false.',
+      '- TIEBREAKER RULE: WHEN IN DOUBT, use "required": false. Dice rolls are the EXCEPTION, not the rule.',
+      '  An unnecessary roll interrupts the story flow and frustrates the player.',
+      '  If the option describes the character\'s INTENTION but not a concrete effort or risk',
+      '  ("Try to help", "Look for a way out", "Check the surroundings", "Approach the NPC"),',
+      '  prefer required: false — the narrator resolves the outcome narratively on the next turn.',
       '',
      /*  '- Ações que NÃO exigem teste (qualquer personagem faz automaticamente):',
       '  • Atender o telefone / celular / chamada',
@@ -1783,221 +1782,225 @@ export class GeminiAdapter implements Narrator {
       '  ATENÇÃO: use actionType "trait_test" APENAS quando o teste é o FOCO PRINCIPAL da ação.',
       '  Ações custom quase sempre têm required: false — a narrativa resolve o resultado.',
       '', */
-      '- REGRA ESPECIAL — actionType "travel": diceCheck.required deve ser SEMPRE false. Viagem é narrativa; descreva obstáculos na narrativa, não em diceCheck.',
-      '- "modifier": ajuste situacional (-2 para dificuldade alta, -4 para quase impossível, +2 para vantagem). Default: 0.',
-      '- "tn": target number. Default 4. Aumente para situações especialmente difíceis (6, 8).',
-      '- "reason": SEMPRE preencha com uma justificativa narrativa curta.',
-      '- Use os nomes das perícias em português do Brasil conforme listado nas PERÍCIAS DO JOGADOR no contexto.',
+      '- SPECIAL RULE — actionType "travel": diceCheck.required must ALWAYS be false. Travel is narrative; describe obstacles in the narrative, not in diceCheck.',
+      '- "modifier": situational adjustment (-2 for high difficulty, -4 for near-impossible, +2 for advantage). Default: 0.',
+      '- "tn": target number. Default 4. Increase for especially difficult situations (6, 8).',
+      '- "reason": ALWAYS fill with a short narrative justification.',
+      '- Use skill names in Brazilian Portuguese as listed in the PLAYER SKILLS section of the context.',
       '',
-      'REGRAS GERAIS:',
-      '- O campo "narrative" continua obrigatório e deve conter o texto completo do turno em ordem, incluindo narração e falas diretas.',
-      '- Use "segments" para separar visualmente narração e fala direta de NPC. Contexto, descrição, ação e consequências ficam em segmentos type="narrator"; falas diretas de NPC ficam em segmentos type="npc".',
-      '- Quando type="npc", use npcId de um NPC presente em NPCs PRESENTES ou de um NPC introduzido neste mesmo retorno em "npcs". Use o mesmo nome e disposition desse NPC.',
-      '- Se não houver fala direta de NPC, retorne "segments" com um único bloco type="narrator" contendo a narrative completa.',
-      '- O array "options" é OBRIGATÓRIO e NUNCA pode estar vazio. Sempre retorne EXATAMENTE 4 opções.',
-      '- Se você retornar options vazio ou com menos de 4 itens, a resposta será considerada inválida.',
-      '- Se houver NPC hostil presente OU se sua narrativa deste turno introduziu NPCs hostis (que você DEVE ter registrado em "npcs" com newlyIntroduced: true), inclua ao menos 1 opção de combate (actionType "attack"). NUNCA use como targetId um NPC que conste em NPCs DERROTADOS — esses inimigos estão fora de combate.',
-      '- O campo "feasible" deve ser false se o jogador não tiver os itens/condições necessárias.',
-      '- Para actionType "trait_test", inclua "skill" ou "attribute" no actionPayload.',
-      '- Para actionType "attack", inclua "targetId" e "damageFormula" no actionPayload.',
-      '  Exemplos de damageFormula: "str" (soco/desarmado), "str+d4" (faca/canivete), "str+d6" (espada curta/clava/machado leve), "str+d8" (espada longa/machado pesado), "str+d10" (montante/arma duas mãos), "2d6" (pistola), "2d8" (rifle).',
-      '- Para actionType "heal": inclua actionPayload: {} (cura o próprio jogador) ou actionPayload: { targetId: "<id do NPC aliado>" }.',
-      '- ATAQUES DE NPC: quando um NPC hostil ataca o jogador neste turno, preencha o campo "npcAttacks" (array).',
-      '  Cada entrada: { "npcId": "<id do NPC>", "skillDie": <6|8|10|12>, "damageFormula": "<fórmula>", "ap": 0 }.',
-      '  skillDie: 6 = soldado comum, 8 = guerreiro treinado, 10 = campeão, 12 = elite.',
-      '  damageFormula: use as mesmas fórmulas de attack definidas acima.',
-      '  Se o NPC não atacar neste turno, deixe "npcAttacks": [].',
-      '- Ao narrar Extras abatidos (isWildCard=false): descreva-os saindo de combate/fugindo/caindo com 1 único ferimento.',
-      '- Ao narrar Wild Cards feridos: acumule penalidades, eles continuam combatendo até 4+ ferimentos.',
-      '- Para actionType "travel", inclua "to" no actionPayload.',
-      '- Para actionType "custom", inclua "input" no actionPayload com a descrição da ação.',
-      '- Itens ganhos devem ter nomes criativos e coerentes com a ambientação.',
-      '- 🔴 REGRA CRÍTICA: itemChanges (qualquer changeType: "gained", "lost", "used") SÓ deve ser incluído quando o RESULTADO MECÂNICO contém evidência EXPLÍCITA da mudança. Exemplos de evidência válida: [item_gained], [item_lost], [item_used], [ammunition_consumed], [damage_dealt]. SEM evidência mecânica explícita, NÃO registre itemChanges, mesmo se o jogador mencionar usar/dar/perder um item na ação. O engine mecânico é responsável por rastrear mudanças de inventário, não o narrador.',
-      '- NUNCA repita itemChanges de itens que já estão no inventário do jogador. Se o jogador já possui um item, NÃO o inclua novamente em itemChanges com changeType "gained". Consulte a seção INVENTÁRIO no contexto do turno.',
-      '- Cada item deve aparecer NO MÁXIMO UMA VEZ no array itemChanges de uma mesma resposta.',
-      '- Armas à distância (arco, besta, pistola, rifle, escopeta, etc.) SEMPRE devem ter sua munição correspondente como item separado no inventário (flechas, virotes, balas, cartuchos, etc.).',
-      '- Munição (category "ammunition") SÓ deve aparecer em itemChanges com changeType "used" quando a AÇÃO DO JOGADOR deste turno for do tipo "attack" (disparo efetivamente efetuado). NUNCA registre consumo de munição em turnos de trait_test, custom, travel ou qualquer outro tipo que não seja attack — mesmo que NPCs hostis tenham sido introduzidos na narrativa.',
-      '- Todo item DEVE ter o campo "category". Use: weapon (armas), armor (armaduras), consumable (consumíveis como poções/ração), ammunition (munição), money (dinheiro/moedas/recursos monetários — o campo "quantity" representa a quantidade exata de moedas/créditos/gold), vehicle (veículos: carro, moto, avião, barco, nave, etc.), property (propriedades: casa, apartamento, fazenda, escritório, etc.), quest (item narrativo/missão), misc (outros itens).',
-      '- Nunca quebre a imersão. Nunca mencione regras, dados ou mecânicas no texto narrativo.',
-      '- Não repita a mesma narrativa. Evolua a história a cada turno.',
-      '- Textos de opções devem ter no máximo 1 frase curta cada.',
-      '- Não adicione campos extras além dos especificados acima.'
+      'GENERAL RULES:',
+      '- The "narrative" field is mandatory and must contain the complete turn text in order, including narration and direct speech.',
+      '- Use "segments" to visually separate narration from NPC direct speech. Context, description, action, and consequences go in type="narrator" segments; NPC direct speech goes in type="npc" segments.',
+      '- When type="npc", use the npcId of an NPC present in PRESENT NPCS or of an NPC introduced in this same response in "npcs". Use that NPC\'s same name and disposition.',
+      '- If there is no NPC direct speech, return "segments" with a single type="narrator" block containing the full narrative.',
+      '- The "options" array is MANDATORY and can NEVER be empty. Always return EXACTLY 4 options.',
+      '- If you return empty options or fewer than 4 items, the response will be considered invalid.',
+      '- If a hostile NPC is present OR if your narrative this turn introduced hostile NPCs (which you MUST have registered in "npcs" with newlyIntroduced: true), include at least 1 combat option (actionType "attack"). NEVER use as targetId an NPC listed in DEFEATED NPCS — those enemies are out of combat.',
+      '- The "feasible" field must be false if the player lacks the required items/conditions.',
+      '- For actionType "trait_test", include "skill" or "attribute" in the actionPayload.',
+      '- For actionType "attack", include "targetId" and "damageFormula" in the actionPayload.',
+      '  damageFormula examples: "str" (punch/unarmed), "str+d4" (knife/dagger), "str+d6" (short sword/club/light axe), "str+d8" (long sword/heavy axe), "str+d10" (great sword/two-handed weapon), "2d6" (pistol), "2d8" (rifle).',
+      '- For actionType "heal": include actionPayload: {} (heals the player) or actionPayload: { targetId: "<allied NPC id>" }.',
+      '- NPC ATTACKS: when a hostile NPC attacks the player this turn, fill the "npcAttacks" field (array).',
+      '  Each entry: { "npcId": "<NPC id>", "skillDie": <6|8|10|12>, "damageFormula": "<formula>", "ap": 0 }.',
+      '  skillDie: 6 = common soldier, 8 = trained warrior, 10 = champion, 12 = elite.',
+      '  damageFormula: use the same attack formulas defined above.',
+      '  If the NPC does not attack this turn, leave "npcAttacks": [].',
+      '- When narrating downed Extras (isWildCard=false): describe them leaving combat/fleeing/falling with 1 single wound.',
+      '- When narrating wounded Wild Cards: accumulate penalties, they keep fighting until 4+ wounds.',
+      '- For actionType "travel", include "to" in the actionPayload.',
+      '- For actionType "custom", include "input" in the actionPayload with the action description.',
+      '- Gained items must have creative names coherent with the setting.',
+      '- 🔴 CRITICAL RULE: itemChanges (any changeType: "gained", "lost", "used") should ONLY be included when the MECHANICAL RESULT contains EXPLICIT evidence of the change. Valid evidence examples: [item_gained], [item_lost], [item_used], [ammunition_consumed], [damage_dealt]. WITHOUT explicit mechanical evidence, do NOT register itemChanges, even if the player mentions using/giving/losing an item in the action. The mechanical engine is responsible for tracking inventory changes, not the narrator.',
+      '- NEVER repeat itemChanges for items already in the player\'s inventory. If the player already has an item, do NOT include it again in itemChanges with changeType "gained". Consult the INVENTORY section in the turn context.',
+      '- Each item must appear AT MOST ONCE in the itemChanges array of a single response.',
+      '- Ranged weapons (bow, crossbow, pistol, rifle, shotgun, etc.) must ALWAYS have their corresponding ammunition as a separate inventory item (arrows, bolts, bullets, cartridges, etc.).',
+      '- Ammunition (category "ammunition") should ONLY appear in itemChanges with changeType "used" when the PLAYER\'S ACTION this turn is of type "attack" (shot actually fired). NEVER register ammunition consumption on trait_test, custom, travel, or any other type that is not attack — even if hostile NPCs were introduced in the narrative.',
+      '- Every item MUST have the "category" field. Use: weapon (weapons), armor (armor), consumable (consumables like potions/rations), ammunition (ammo), money (money/coins/monetary resources — the "quantity" field represents the exact amount of coins/credits/gold), vehicle (vehicles: car, motorcycle, plane, boat, ship, etc.), property (properties: house, apartment, farm, office, etc.), quest (narrative/quest item), misc (other items).',
+      '- Never break immersion. Never mention rules, dice, or mechanics in the narrative text.',
+      '- Do not repeat the same narrative. Advance the story each turn.',
+      '- Option texts must be at most 1 short sentence each.',
+      '- Do not add extra fields beyond those specified above.'
     ]
 
-    // ─── ESTILO DE NARRATIVA (definido aqui, antes do contexto, para ter peso máximo) ───
+    // ─── NARRATIVE STYLE (defined here, before the context, for maximum weight) ───
     lines.push('')
     if (narrativeStyle === 'concise') {
       lines.push(
-        '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative": CONCISO ━━━',
-        'MÁXIMO 3 frases CURTAS. 1 parágrafo único.',
-        'Frases devem ser CURTAS e DIRETAS — sem cláusulas encadeadas com vírgula.',
-        'Qualquer resposta com mais de 3 frases viola esta instrução.',
+        '━━━ MANDATORY "narrative" LENGTH: CONCISE ━━━',
+        'MAXIMUM 3 SHORT sentences. 1 single paragraph.',
+        'Sentences must be SHORT and DIRECT — no comma-chained clauses.',
+        'Any response with more than 3 sentences violates this instruction.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     } else if (narrativeStyle === 'balanced') {
       lines.push(
-        '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative": EQUILIBRADO ━━━',
-        'ENTRE 4 e 6 frases distribuídas em 2 parágrafos.',
-        'Parágrafo 1: consequência concreta da ação + reação do NPC.',
-        'Parágrafo 2: gancho ou tensão para o próximo turno.',
+        '━━━ MANDATORY "narrative" LENGTH: BALANCED ━━━',
+        'BETWEEN 4 and 6 sentences distributed in 2 paragraphs.',
+        'Paragraph 1: concrete consequence of the action + NPC reaction.',
+        'Paragraph 2: hook or tension for the next turn.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     } else {
       lines.push(
-        '━━━ COMPRIMENTO OBRIGATÓRIO DO "narrative" (PADRÃO) ━━━',
-        'MÁXIMO 3 frases CURTAS. 1 parágrafo único.',
-        'Frases devem ser CURTAS e DIRETAS — sem cláusulas encadeadas com vírgula.',
-        'Qualquer resposta com mais de 3 frases viola esta instrução.',
+        '━━━ MANDATORY "narrative" LENGTH (DEFAULT) ━━━',
+        'MAXIMUM 3 SHORT sentences. 1 single paragraph.',
+        'Sentences must be SHORT and DIRECT — no comma-chained clauses.',
+        'Any response with more than 3 sentences violates this instruction.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     }
 
-    // ─── VOCABULÁRIO SIMPLES ───
+    // ─── SIMPLE VOCABULARY ───
     if (simpleVocabulary === true) {
       lines.push(
         '',
-        '━━━ VOCABULÁRIO SIMPLES (ATIVO) ━━━',
-        'Use APENAS palavras simples e comuns. Evite termos arcaicos, poéticos ou complexos.',
-        'Prefira: "rosto" em vez de "semblante"; "antigo" em vez de "outrora"; "medo" em vez de "pavor visceral".',
+        '━━━ SIMPLE VOCABULARY (ACTIVE) ━━━',
+        'Use ONLY simple and common words. Avoid archaic, poetic, or complex terms.',
+        'Prefer: "rosto" instead of "semblante"; "antigo" instead of "outrora"; "medo" instead of "pavor visceral".',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     }
 
-    // ─── REGRA: INVENTÁRIO NA NARRATIVA ───
+    // ─── RULE: ITEMS IN NARRATIVE ───
     lines.push(
       '',
-      '⚠️ ITENS NA NARRATIVA: NUNCA mencione na narrativa (campo "narrative") itens, objetos, armas ou ferramentas que o jogador NÃO possua no INVENTÁRIO listado no contexto do turno.',
-      'Se o jogador tentar usar um item que não possui, narre que ele procura pelo objeto mas não o encontra.',
-      'Esta regra se aplica APENAS ao texto narrativo — não afeta os campos JSON de mecânica.'
+      '⚠️ ITEMS IN THE NARRATIVE — GOLDEN RULE: Every item, object, weapon, or tool mentioned in the narrative must be anchorable to ONE of the three canonical sources of the turn:',
+      '  (1) CHARACTER INVENTORY — listed in the "── INVENTORY ──" section of the context.',
+      '  (2) PRESENT NPC ITEM — equipment or object the NPC brought with them and that has already been narratively established (in the session summary or recent messages). NPCs do not appear with new items without prior establishment in the narrative.',
+      '  (3) SCENE OBJECT — physical item described in the session summary or in previous turns for the current location.',
+      'If the player tries to use an item they do not have (source 1), narrate that they search for the object but cannot find it.',
+      'If you need to introduce a new NPC or scene item, establish it explicitly in the narrative of THIS turn before referencing it as existing.',
+      'This rule applies ONLY to the narrative text — it does not affect the JSON mechanics fields.'
     )
 
-    // ─── REGRA: NARRAÇÃO DE INCAPACITAÇÃO ───
+    // ─── RULE: INCAPACITATION NARRATION ───
     lines.push(
       '',
-      '🔴 INCAPACITAÇÃO: Se o personagem estiver Incapacitado (wounds >= maxWounds, ou seja, 4+ ferimentos),',
-      'a narrativa DEVE refletir isso explicitamente: descreva o colapso, a escuridão, a luta pela consciência.',
-      'As opções devem ser condizentes com a condição (ex: "Lutar pela sobrevivência", "Perder a consciência", "Pedir ajuda").',
-      'NÃO ofereça ações normais de combate, exploração ou diálogo quando o personagem está incapacitado.'
+      '🔴 INCAPACITATION: If the character is Incapacitated (wounds >= maxWounds, i.e., 4+ wounds),',
+      'the narrative MUST reflect this explicitly: describe the collapse, the darkness, the struggle for consciousness.',
+      'Options must be consistent with the condition (e.g.: "Fight for survival", "Lose consciousness", "Call for help").',
+      'DO NOT offer normal combat, exploration, or dialogue actions when the character is incapacitated.'
     )
 
-    // Injetar contexto do universo (lore macro — fixo durante toda a sessão)
+    // Inject universe context (macro lore — fixed throughout the session)
     if (world && (world.description || world.lore)) {
       lines.push(
         '',
-        '=== UNIVERSO ===',
-        'As seções abaixo são a bíblia canônica deste universo. Use os locais, facções, tecnologias e ameaças listados ao construir narrativas, opções e NPCs. Não invente elementos que contradigam essas seções.',
-        `Nome: ${world.name ?? 'Sem nome'}`,
-        ...(world.description ? [`Descrição: ${world.description}`] : []),
+        '=== UNIVERSE ===',
+        'The sections below are the canonical bible of this universe. Use the locations, factions, technologies, and threats listed when building narratives, options, and NPCs. Do not invent elements that contradict these sections.',
+        `Name: ${world.name ?? 'Unnamed'}`,
+        ...(world.description ? [`Description: ${world.description}`] : []),
         ...(world.lore ? ['', world.lore] : [])
       )
 
-      // Instrução de voz narrativa baseada no lore do universo
+      // Narrative voice instruction based on universe lore
       lines.push(
         '',
-        '=== VOZ NARRATIVA ===',
-        'Use as seções do universo acima para calibrar o vocabulário e o tom. Nunca use linguagem genérica de RPG ("você avança corajosamente", "o inimigo é derrotado") — prefira imagens concretas do mundo.',
-        '- Tom neutro de livro de regras é PROIBIDO. A narrativa deve ter o sotaque deste universo.',
-        '- Se o universo tem atmosfera de decadência, use decadência — palavras gastas, ferrugem, silêncios. Se tem grandiosidade, use grandiosidade — escala, mito, peso.',
-        '- A voz narrativa deve ser sentida na escolha de palavras e metáforas, nunca declarada.'
+        '=== NARRATIVE VOICE ===',
+        'Use the universe sections above to calibrate vocabulary and tone. Never use generic RPG language ("you advance courageously", "the enemy is defeated") — prefer concrete images from this world.',
+        '- Neutral rulebook tone is FORBIDDEN. The narrative must carry the accent of this universe.',
+        '- If the universe has an atmosphere of decay, use decay — worn-out words, rust, silences. If it has grandeur, use grandeur — scale, myth, weight.',
+        '- The narrative voice must be felt in word choices and metaphors, never declared.'
       )
     }
 
-    // Injetar contexto da campanha (temática e história específica)
+    // Inject campaign context (thematic and specific story)
     if (campaign && (campaign.thematic || campaign.storyDescription)) {
       lines.push(
         '',
-        '=== CAMPANHA ===',
-        `Nome: ${campaign.name ?? 'Sem nome'}`,
-        `Temática: ${campaign.thematic ?? ''}`,
-        `História: ${campaign.storyDescription ?? ''}`
+        '=== CAMPAIGN ===',
+        `Name: ${campaign.name ?? 'Unnamed'}`,
+        `Thematic: ${campaign.thematic ?? ''}`,
+        `Story: ${campaign.storyDescription ?? ''}`
       )
     }
 
-    // Injetar digest de regras Savage Worlds (quase estático — só muda se edges/hindrances mudarem)
+    // Inject Savage Worlds rules digest (nearly static — only changes if edges/hindrances change)
     if (rulesDigest) {
       lines.push('', rulesDigest)
     }
 
-    // Perícias do jogador (nomes que a LLM deve usar no diceCheck)
+    // Player skills (names the LLM must use in diceCheck)
     if (playerSkills && Object.keys(playerSkills).length > 0) {
       lines.push(
         '',
-        '=== PERÍCIAS DO JOGADOR (use estes nomes exatos no diceCheck.skill) ===',
+        '=== PLAYER SKILLS (use these exact names in diceCheck.skill) ===',
         ...Object.entries(playerSkills).map(([name, die]) => `- ${name}: ${die}`)
       )
     }
 
-    // Resumo da aventura até agora
+    // Adventure summary so far
     if (summaryText) {
-      lines.push('', '=== RESUMO DA AVENTURA ===', summaryText)
+      lines.push('', '=== ADVENTURE SUMMARY ===', summaryText)
     }
 
     if (mode === 'start') {
       lines.push(
         '',
-        '=== REGRAS DE INÍCIO DE SESSÃO ===',
-        '- Você PODE introduzir 1 NPC inicial coerente com a cena.',
-        '- Você PODE adicionar de 3 a 9 itens iniciais em itemChanges com changeType "gained".',
-        '- Os itens iniciais devem representar pertences que o personagem já possui ao começar a aventura.',
-        '- Mesmo no início, não invente perícias, ids mecânicos ou destinos fora da ambientação fornecida.'
+        '=== SESSION START RULES ===',
+        '- You MAY introduce 1 initial NPC coherent with the scene.',
+        '- You MAY add 3 to 9 initial items in itemChanges with changeType "gained".',
+        '- Initial items must represent belongings the character already has at the start of the adventure.',
+        '- Even at the start, do not invent skills, mechanical ids, or destinations outside the provided setting.'
       )
     } else {
       lines.push(
         '',
-        '=== REGRAS DE TURNO CANÔNICO ===',
-        '- No turno normal, use o array "npcs" para NPCs já listados em NPCs PRESENTES.',
-        '- REGRA CRÍTICA — NPCs INTRODUZIDOS NA NARRATIVA: Se sua narrativa deste turno menciona qualquer NPC, agente, criatura ou inimigo que NÃO estava em NPCs PRESENTES, você OBRIGATORIAMENTE deve registrá-lo em "npcs" com newlyIntroduced: true, disposition adequada e um UUID gerado por você como "id". Use o MESMO id no actionPayload.targetId de qualquer opção de ataque contra essa entidade. Sem esse registro, você não terá targetId válido para gerar opções de combate.',
+        '=== CANONICAL TURN RULES ===',
+        '- On a normal turn, use the "npcs" array for NPCs already listed in PRESENT NPCS.',
+        '- CRITICAL RULE — NPCS INTRODUCED IN THE NARRATIVE: If your narrative this turn mentions any NPC, agent, creature, or enemy that was NOT in PRESENT NPCS, you MUST register them in "npcs" with newlyIntroduced: true, appropriate disposition, and a UUID you generate as "id". Use that SAME id in the actionPayload.targetId of any attack option against that entity. Without this registration, you will have no valid targetId to generate combat options.',
         '',
-        '- QUANTIDADE OBRIGATÓRIA: Se a narrativa menciona um número específico de NPCs/criaturas/agentes ("dois agentes", "três guardas", "um grupo de cinco", "uma patrulha de quatro"), você DEVE criar exatamente esse número de entradas separadas no array "npcs". Cada entrada precisa ter: id único (UUID diferente), name diferenciado (ex: "Agente da UCT #1", "Agente da UCT #2"), e a mesma disposition. Quando mencionar grupo sem número explícito ("um grupo de", "vários", "alguns"), crie no mínimo 2-3 entradas para representar a ameaça múltipla.',
+        '- MANDATORY COUNT: If the narrative mentions a specific number of NPCs/creatures/agents ("two agents", "three guards", "a group of five", "a patrol of four"), you MUST create exactly that number of separate entries in the "npcs" array. Each entry needs: unique id (different UUID), differentiated name (e.g.: "UCT Agent #1", "UCT Agent #2"), and the same disposition. When mentioning a group without explicit number ("a group of", "several", "some"), create at least 2-3 entries to represent the multiple threat.',
         '',
-        '  EXEMPLO CORRETO:',
-        '  Narrativa: "Dois agentes da UCT entram na sala, verificando os tanques com lanternas."',
+        '  CORRECT EXAMPLE:',
+        '  Narrative: "Two UCT agents enter the room, checking the tanks with flashlights."',
         '  npcs: [',
-        '    { "id": "uct-agent-001", "name": "Agente da UCT #1", "disposition": "hostile", "newlyIntroduced": true },',
-        '    { "id": "uct-agent-002", "name": "Agente da UCT #2", "disposition": "hostile", "newlyIntroduced": true }',
+        '    { "id": "uct-agent-001", "name": "UCT Agent #1", "disposition": "hostile", "newlyIntroduced": true },',
+        '    { "id": "uct-agent-002", "name": "UCT Agent #2", "disposition": "hostile", "newlyIntroduced": true }',
         '  ]',
         '',
-        '  EXEMPLO INCORRETO (NÃO FAÇA ASSIM):',
-        '  Narrativa: "Dois agentes da UCT entram na sala."',
+        '  INCORRECT EXAMPLE (DO NOT DO THIS):',
+        '  Narrative: "Two UCT agents enter the room."',
         '  npcs: [',
-        '    { "id": "uct-agent-001", "name": "Agente da UCT", "disposition": "hostile", "newlyIntroduced": true }',
+        '    { "id": "uct-agent-001", "name": "UCT Agent", "disposition": "hostile", "newlyIntroduced": true }',
         '  ]',
         '',
-        '- Campo "status" em NPCs é OPCIONAL. Use-o APENAS quando sua narrativa DESTE turno indicar explicitamente que um NPC foi incapacitado, nocauteado, derrotado ou morto SEM passar por um ataque mecânico formal do sistema (se passou por ataque/dano do rule-engine, o status é gerenciado automaticamente). Valores possíveis: "active", "incapacitated" (nocauteado/desacordado), "defeated" (derrotado), "dead" (morto). Omita o campo se o status não mudou ou se o NPC foi atingido via sistema de ataque formal.',
+        '- The "status" field in NPCs is OPTIONAL. Use it ONLY when your narrative THIS turn explicitly indicates that an NPC was incapacitated, knocked out, defeated, or killed WITHOUT going through a formal mechanical attack from the system (if they went through a rule-engine attack/damage, the status is managed automatically). Possible values: "active", "incapacitated" (knocked out/unconscious), "defeated" (defeated), "dead" (dead). Omit the field if the status did not change or if the NPC was hit via the formal attack system.',
         '',
-        '- No turno normal, NÃO crie itemChanges com changeType "gained" EXCETO nas situações abaixo:',
-        '  (1) Qualquer categoria EXCETO "weapon" e "armor", quando a narrativa deste turno justificar (compra em loja, item encontrado, recompensa, herança, conquista).',
-        '  (2) Um NPC PRESENTE NA CENA entrega explicitamente um item ao jogador NESTE turno (ex: passa uma chave, entrega um documento). Use changeType "gained" com a categoria correta do item.',
-        '- No turno normal, use itemChanges apenas para "lost", "used" ou "gained" (conforme regras acima) de itens relevantes à ação deste turno.',
-        '- No turno normal, NÃO aplique statusChanges novos sem evidência direta no RESULTADO MECÂNICO ou em EFEITOS ATIVOS já existentes.',
-        '- Se a ação ou narrativa estabelecer descanso seguro, hospitalização, internação, alta médica, tratamento prolongado ou passagem de semanas/meses, remova em statusChanges os efeitos temporários que tenham sido curados, expirado ou deixado de fazer sentido.',
-        '- Para remover status temporário, use changeType "removed" com o effectId/name exato do efeito ativo. Para status do jogador use targetType "player"; para status de NPC use targetType "npc" e targetId do NPC afetado.',
-        '- turnsRemaining representa apenas duração curta em turnos narrativos. Quando houver salto temporal longo, não dependa de turnsRemaining: registre remoções explícitas em statusChanges.',
-        '- Não remova status permanentes, complicações, sequelas ou condições de personagem sem evidência narrativa direta de cura ou resolução.',
-        '- Em statusChanges, sempre indique targetType. Use targetType "npc" e targetId do NPC atingido quando o efeito decorre de ataque, dano, veneno, queimadura, medo ou condição aplicada ao inimigo. Use targetType "player" apenas para efeitos no personagem do jogador.',
-        '- No turno normal, só preencha locationChange se a ação do jogador for travel ou se o RESULTADO MECÂNICO trouxer location_change.',
-        '- Use apenas IDs de NPC já listados em NPCs PRESENTES (ou do novo NPC hostil desta narrativa) para actionPayload.targetId.',
-        '- Se faltar evidência canônica para mutação de estado, deixe os campos mutáveis vazios/null.',
-        '- Se algum NPC for abatido, não o inclua em turnos subsequentes. Descreva-os como abatidos, fugindo ou caindo, mas não os mantenha como alvo de ações futuras.'
+        '- On a normal turn, do NOT create itemChanges with changeType "gained" EXCEPT in the situations below:',
+        '  (1) Any category EXCEPT "weapon" and "armor", when the narrative this turn justifies it (store purchase, found item, reward, inheritance, conquest).',
+        '  (2) A NPC PRESENT IN THE SCENE explicitly gives an item to the player THIS turn (e.g.: passes a key, hands over a document). Use changeType "gained" with the correct item category.',
+        '- On a normal turn, use itemChanges only for "lost", "used", or "gained" (per rules above) for items relevant to this turn\'s action.',
+        '- On a normal turn, do NOT apply new statusChanges without direct evidence in the MECHANICAL RESULT or in ALREADY EXISTING ACTIVE EFFECTS.',
+        '- If the action or narrative establishes safe rest, hospitalization, admission, medical discharge, prolonged treatment, or the passage of weeks/months, remove in statusChanges the temporary effects that have been healed, expired, or no longer make sense.',
+        '- To remove a temporary status, use changeType "removed" with the exact effectId/name of the active effect. For player status use targetType "player"; for NPC status use targetType "npc" and the affected NPC\'s targetId.',
+        '- turnsRemaining represents only short duration in narrative turns. When there is a long time skip, do not rely on turnsRemaining: register explicit removals in statusChanges.',
+        '- Do not remove permanent statuses, complications, sequelae, or character conditions without direct narrative evidence of healing or resolution.',
+        '- In statusChanges, always indicate targetType. Use targetType "npc" and the targetId of the affected NPC when the effect results from attack, damage, poison, burn, fear, or condition applied to the enemy. Use targetType "player" only for effects on the player character.',
+        '- On a normal turn, only fill locationChange if the player\'s action is travel or if the MECHANICAL RESULT brings a location_change.',
+        '- Use only NPC ids already listed in PRESENT NPCS (or the new hostile NPC from this narrative) for actionPayload.targetId.',
+        '- If canonical evidence is missing for a state mutation, leave the mutable fields empty/null.',
+        '- If any NPC is taken down, do not include them in subsequent turns. Describe them as taken down, fleeing, or falling, but do not keep them as targets of future actions.'
       )
     }
 
-    // Instruções estáticas de narração
+    // Static narration instructions
     lines.push(
       '',
-      '=== INSTRUÇÕES DE NARRAÇÃO ===',
-      'RESULTADO DA AÇÃO:',
-      '  • Sucesso: descreva a consequência positiva concreta + seu impacto imediato no mundo ou nos NPCs presentes.',
-      '  • Falha: descreva o que especificamente falhou + uma nova complicação ou risco que emerge do fracasso (falha nunca é neutra — ela muda algo).',
-      '  • Sucesso com Raise: narre um benefício extra inesperado além do esperado.',
+      '=== NARRATION INSTRUCTIONS ===',
+      'ACTION RESULT:',
+      '  • Success: describe the concrete positive consequence + its immediate impact on the world or present NPCs.',
+      '  • Failure: describe what specifically failed + a new complication or risk that emerges from the failure (failure is never neutral — it changes something).',
+      '  • Success with Raise: narrate an unexpected extra benefit beyond what was expected.',
       '',
-      'PLAUSIBILIDADE NARRATIVA:',
-      '  • Antes de narrar, avalie internamente se o resultado mecânico faz sentido dentro da história, do contexto atual, do universo, da campanha, do local, dos NPCs presentes, do inventário, dos ferimentos/status e do resumo da aventura.',
-      '  • O RESULTADO MECÂNICO é obrigatório e não pode ser anulado: sucesso nunca vira fracasso, falha nunca vira sucesso limpo.',
-      '  • Em sucesso, preserve uma consequência positiva real, mas você pode acrescentar custo, atrito, atenção indesejada, dilema ou detalhe inquietante se isso for plausível no contexto.',
-      '  • Em falha, preserve uma consequência negativa real, mas você pode revelar uma pista, abrir uma alternativa pior, plantar uma suspeita ou mostrar algo útil com preço narrativo.',
-      '  • Use sucessos e falhas para semear futuras tramas quando natural: dívida social, inimigo alertado, recurso comprometido, pista incompleta, rumor, marca deixada ou consequência que possa voltar depois.',
-      '  • Nunca crie fato canônico, NPC, item, status ou mudança de local sem apoio no contexto estruturado; ganchos futuros devem aparecer como tensão, indício ou possibilidade narrativa.',
+      'NARRATIVE PLAUSIBILITY:',
+      '  • Before narrating, internally evaluate whether the mechanical result makes sense within the story, current context, universe, campaign, location, present NPCs, inventory, wounds/status, and adventure summary.',
+      '  • The MECHANICAL RESULT is mandatory and cannot be nullified: success never becomes failure, failure never becomes clean success.',
+      '  • On success, preserve a real positive consequence, but you may add cost, friction, unwanted attention, dilemma, or unsettling detail if plausible in context.',
+      '  • On failure, preserve a real negative consequence, but you may reveal a clue, open a worse alternative, plant a suspicion, or show something useful at a narrative price.',
+      '  • Use successes and failures to seed future plots when natural: social debt, alerted enemy, compromised resource, incomplete clue, rumor, mark left, or consequence that may return later.',
+      '  • Never create canonical facts, NPCs, items, statuses, or location changes without support in the structured context; future hooks must appear as narrative tension, hints, or possibilities.',
     )
 
     return lines.join('\n')
@@ -2355,12 +2358,12 @@ export class GeminiAdapter implements Narrator {
     return [
       basePrompt,
       '',
-      '=== CORREÇÃO OBRIGATÓRIA ===',
-      '- A resposta anterior foi rejeitada por estar incompleta, truncada ou não canônica.',
-      '- Retorne JSON completo e autoconsistente.',
-      '- Não use entidades fora do contexto estruturado.',
-      '- Não omita options, diceCheck ou actionPayload obrigatórios.',
-      '- Se tiver dúvida sobre mutações de estado, deixe npcs, itemChanges, statusChanges e locationChange vazios/null.'
+      '=== MANDATORY CORRECTION ===',
+      '- The previous response was rejected for being incomplete, truncated, or non-canonical.',
+      '- Return complete and self-consistent JSON.',
+      '- Do not use entities outside the structured context.',
+      '- Do not omit required options, diceCheck, or actionPayload.',
+      '- If in doubt about state mutations, leave npcs, itemChanges, statusChanges, and locationChange empty/null.'
     ].join('\n')
   }
 
@@ -2480,123 +2483,123 @@ export class GeminiAdapter implements Narrator {
     }
 
     const sysPrompt = [
-      'Você é o Narrador de uma história.',
-      'O jogador digitou uma ação livre. Sua tarefa é VALIDAR se a ação é possível no contexto atual.',
+      'You are the Narrator of a story.',
+      'The player typed a free action. Your task is to VALIDATE whether the action is possible in the current context.',
       '',
-      'Você DEVE retornar SOMENTE um JSON válido (sem markdown, sem comentários) com esta estrutura:',
+      'You MUST return ONLY a valid JSON (no markdown, no comments) with this structure:',
       '{',
       '  "feasible": true|false,',
-      '  "feasibilityReason": "<motivo se não for possível, ou vazio>",',
-      '  "actionType": "<tipo inferido: custom|trait_test|attack|travel>",',
-      '  "actionPayload": { <campos para montar a ação mecânica> },',
+      '  "feasibilityReason": "<reason if not possible, or empty>",',
+      '  "actionType": "<inferred type: custom|trait_test|attack|travel>",',
+      '  "actionPayload": { <fields to build the mechanical action> },',
       '  "diceCheck": {',
       '    "required": true|false,',
-      '    "skill": "<perícia necessária ou null>",',
-      '    "attribute": "<atributo necessário ou null>",',
+      '    "skill": "<required skill or null>",',
+      '    "attribute": "<required attribute or null>",',
       '    "modifier": 0,',
       '    "tn": 4,',
-      '    "reason": "<justificativa narrativa>"',
+      '    "reason": "<narrative justification>"',
       '  },',
-      '  "interpretation": "<breve descrição de como você interpretou a ação>"',
+      '  "interpretation": "<brief description of how you interpreted the action>"',
       '}',
       '',
-      'REGRAS DE VALIDAÇÃO:',
-      '- Se a ação é impossível no contexto (ex: usar item que não tem, atacar NPC que não está presente) → feasible: false.',
+      'VALIDATION RULES:',
+      '- If the action is impossible in the context (e.g.: use an item the player does not have, attack an NPC that is not present) → feasible: false.',
       '',
-      '- PRINCÍPIO FUNDAMENTAL do teste de dados:',
-      '  Só marque diceCheck.required: true quando AMBAS as condições forem verdadeiras:',
-      '  (1) o resultado é genuinamente incerto neste contexto, E',
-      '  (2) a falha teria consequências narrativas interessantes.',
-      '  Se qualquer uma dessas condições for falsa → diceCheck.required: false.',
+      '- FUNDAMENTAL PRINCIPLE of dice roll:',
+      '  Only mark diceCheck.required: true when BOTH conditions are true:',
+      '  (1) the outcome is genuinely uncertain in this context, AND',
+      '  (2) failure would have interesting narrative consequences.',
+      '  If either condition is false → diceCheck.required: false.',
       '',
-      '- Ações que NUNCA exigem teste (automáticas para qualquer personagem):',
-      '  • Atender o telefone/celular/chamada',
-      '  • Abrir uma porta destrancada ou desimpedida',
-      '  • Sentar, deitar, levantar-se',
-      '  • Ligar/desligar aparelho simples, pressionar botão óbvio',
-      '  • Acenar, gesticular, cumprimentar com gesto',
-      '  • Pular obstáculo claramente baixo e seguro (meio-fio, degrau)',
-      '  • Conversar sem intenção de persuadir',
-      '  • Andar por caminho seguro sem ameaças',
-      '  • Descansar, respirar, aguardar',
-      '  • Examinar item já em mãos / verificar inventário',
+      '- Actions that NEVER require a roll (automatic for any character):',
+      '  • Answer the phone/cell/call',
+      '  • Open an unlocked or unobstructed door',
+      '  • Sit, lie down, stand up',
+      '  • Turn on/off a simple device, press obvious button',
+      '  • Wave, gesture, greet with a gesture',
+      '  • Jump a clearly low and safe obstacle (curb, step)',
+      '  • Talk without intent to persuade',
+      '  • Walk along a safe path without threats',
+      '  • Rest, breathe, wait',
+      '  • Examine an item already in hand / check inventory',
       '',
-      '- Ações que EXIGEM teste:',
-      '  • Perceber algo oculto → skill: "Percepção"',
-      '  • Mover-se furtivamente → skill: "Furtividade"',
-      '  • Escalar, saltar abismo, correr sob pressão → skill: "Atletismo"',
-      '  • Convencer, enganar, barganhar → skill: "Persuasão"',
-      '  • Intimidar → skill: "Intimidação"',
-      '  • Curar ferimentos → actionType: "heal", actionPayload: {} (não use trait_test para cura)',
-      '  • Arrombar fechadura, desarmar armadilha → skill: "Ladinagem"',
-      '  • Investigar pistas → skill: "Pesquisa"',
-      '  • Resistir a veneno/doença → attribute: "vigor"',
-      '  • Resistir a medo → attribute: "spirit"',
-      '  • Combate → actionType "attack"',
+      '- Actions that REQUIRE a roll:',
+      '  • Perceive something hidden → skill: "Percepção"',
+      '  • Move stealthily → skill: "Furtividade"',
+      '  • Climb, jump across a chasm, run under pressure → skill: "Atletismo"',
+      '  • Convince, deceive, bargain → skill: "Persuasão"',
+      '  • Intimidate → skill: "Intimidação"',
+      '  • Heal wounds → actionType: "heal", actionPayload: {} (do not use trait_test for healing)',
+      '  • Pick a lock, disarm a trap → skill: "Ladinagem"',
+      '  • Investigate clues → skill: "Pesquisa"',
+      '  • Resist poison/disease → attribute: "vigor"',
+      '  • Resist fear → attribute: "spirit"',
+      '  • Combat → actionType "attack"',
       '',
-      '  ATENÇÃO contextual: "abrir a porta" pode exigir Ladinagem se o contexto indicar que está trancada;',
-      '  "pular" pode exigir Atletismo se for um abismo real.',
+      '  Contextual note: "open the door" may require Ladinagem if context indicates it is locked;',
+      '  "jump" may require Atletismo if it is a real chasm.',
       '',
-      '- Para combate → actionType: "attack", inclua targetId e damageFormula no actionPayload.',
-      '  Exemplos de damageFormula: "str" (soco/desarmado), "str+d4" (faca), "str+d6" (espada curta), "str+d8" (espada longa), "str+d10" (montante), "2d6" (pistola), "2d8" (rifle).',
-      '  Use a arma equipada pelo personagem se disponível no inventário, senão use "str" (desarmado).',
-      '- Para testes de habilidade → actionType: "trait_test", inclua skill ou attribute no actionPayload.',
-      '- Para deslocamento a um LOCAL DIFERENTE do atual → actionType: "travel", inclua "to" no actionPayload com o nome do local de destino.',
-      '  ATENÇÃO: mover-se em direção a um NPC que já está na cena (ex: "ir em direção ao homem", "se aproximar do estranho") NÃO é "travel" — use actionType: "custom".',
-      '- Para ações narrativas simples → actionType: "custom".',
-      '- Use os nomes das PERÍCIAS DO JOGADOR listadas no contexto.',
-      '- O campo "interpretation" deve ser 1 frase curta explicando o que o jogador quer fazer.'
+      '- For combat → actionType: "attack", include targetId and damageFormula in actionPayload.',
+      '  damageFormula examples: "str" (punch/unarmed), "str+d4" (knife), "str+d6" (short sword), "str+d8" (long sword), "str+d10" (great sword), "2d6" (pistol), "2d8" (rifle).',
+      '  Use the weapon equipped by the character if available in inventory, otherwise use "str" (unarmed).',
+      '- For skill tests → actionType: "trait_test", include skill or attribute in actionPayload.',
+      '- For movement to a DIFFERENT location from current → actionType: "travel", include "to" in actionPayload with the destination location name.',
+      '  NOTE: moving toward an NPC already in the scene (e.g.: "go toward the man", "approach the stranger") is NOT "travel" — use actionType: "custom".',
+      '- For simple narrative actions → actionType: "custom".',
+      '- Use the PLAYER SKILL names listed in the context.',
+      '- The "interpretation" field must be 1 short sentence explaining what the player wants to do.'
     ].join('\n')
 
     const ctx = req.context
     const inventoryText = ctx.inventory.length
       ? ctx.inventory.map((i) => `${i.name} (x${i.quantity})`).join(', ')
-      : 'vazio'
+      : 'empty'
     const npcsText = ctx.npcsPresent.length
       ? ctx.npcsPresent.map((n) => {
           const tipo = n.isWildCard ? 'Wild Card' : 'Extra'
           const disp = n.disposition ?? 'neutral'
-          const status = n.wounds > 0 ? ` ferido ${n.wounds}/${n.maxWounds}` : ''
+          const status = n.wounds > 0 ? ` wounded ${n.wounds}/${n.maxWounds}` : ''
           const effects = (n.statusEffects ?? []).length
-            ? `, efeitos: ${(n.statusEffects ?? []).map((effect) => `${effect.name}${effect.turnsRemaining != null ? ` (${effect.turnsRemaining}t)` : ''}`).join(', ')}`
+            ? `, effects: ${(n.statusEffects ?? []).map((effect) => `${effect.name}${effect.turnsRemaining != null ? ` (${effect.turnsRemaining}t)` : ''}`).join(', ')}`
             : ''
-          return `${n.name} (${n.id}) [${tipo}, ${disp}, Res ${n.toughness}, Aparar ${n.parry}${status}${effects}]`
+          return `${n.name} (${n.id}) [${tipo}, ${disp}, Toughness ${n.toughness}, Parry ${n.parry}${status}${effects}]`
         }).join(', ')
-      : 'nenhum'
+      : 'none'
     const defeatedText = (ctx.defeatedNpcIds ?? []).length
       ? (ctx.defeatedNpcIds ?? []).join(', ')
       : null
     const statusText = ctx.activeStatusEffects.length
-      ? ctx.activeStatusEffects.map((s) => `${s.name}${s.turnsRemaining ? ` (${s.turnsRemaining} turnos)` : ''}`).join(', ')
-      : 'nenhum'
+      ? ctx.activeStatusEffects.map((s) => `${s.name}${s.turnsRemaining ? ` (${s.turnsRemaining} turns)` : ''}`).join(', ')
+      : 'none'
     const skillsText = ctx.playerSkills
       ? Object.entries(ctx.playerSkills).map(([k, v]) => `${k}: ${v}`).join(', ')
-      : 'desconhecidas'
+      : 'unknown'
 
     const recentText = req.recentMessages
       .slice(-5)
-      .map((m) => m.role === 'narrator' ? `Narrador: ${(m.narrative ?? '').slice(0, 200)}` : `Jogador: ${m.playerInput ?? ''}`)
+      .map((m) => m.role === 'narrator' ? `Narrator: ${(m.narrative ?? '').slice(0, 200)}` : `Player: ${m.playerInput ?? ''}`)
       .filter(Boolean)
       .join('\n')
 
     const prompt = [
-      `AÇÃO DO JOGADOR: "${req.input}"`,
+      `PLAYER ACTION: "${req.input}"`,
       '',
-      '── CONTEXTO DA CENA ──',
-      `Local: ${ctx.location}`,
-      `Ferimentos: ${ctx.wounds} | Fadiga: ${ctx.fatigue} | Abalado: ${ctx.isShaken ? 'sim' : 'não'} | Bennies: ${ctx.bennies}`,
-      `NPCs presentes: ${npcsText}`,
-      defeatedText ? `NPCs derrotados (não são ameaças ativas): ${defeatedText}` : '',
-      `Inventário: ${inventoryText}`,
-      `Efeitos ativos: ${statusText}`,
-      `Perícias do jogador: ${skillsText}`,
-      ctx.rulesDigest ? `\nREGRAS:\n${ctx.rulesDigest}` : '',
-      ctx.summaryText ? `\nRESUMO:\n${ctx.summaryText}` : '',
+      '── SCENE CONTEXT ──',
+      `Location: ${ctx.location}`,
+      `Wounds: ${ctx.wounds} | Fatigue: ${ctx.fatigue} | Shaken: ${ctx.isShaken ? 'yes' : 'no'} | Bennies: ${ctx.bennies}`,
+      `Present NPCs: ${npcsText}`,
+      defeatedText ? `Defeated NPCs (not active threats): ${defeatedText}` : '',
+      `Inventory: ${inventoryText}`,
+      `Active effects: ${statusText}`,
+      `Player skills: ${skillsText}`,
+      ctx.rulesDigest ? `\nRULES:\n${ctx.rulesDigest}` : '',
+      ctx.summaryText ? `\nSUMMARY:\n${ctx.summaryText}` : '',
       '',
-      '── ÚLTIMAS MENSAGENS ──',
+      '── RECENT MESSAGES ──',
       recentText,
       '',
-      'Valide a ação e retorne o JSON.'
+      'Validate the action and return the JSON.'
     ].filter(Boolean).join('\n')
 
     try {
@@ -2675,38 +2678,38 @@ export class GeminiAdapter implements Narrator {
 
   async narrateStart(req: NarrateStartRequest): Promise<NarratorTurnResponse> {
     const characterTraits: string[] = []
-    if (req.character.edges.length) characterTraits.push(`Vantagens: ${req.character.edges.join(', ')}`)
-    if (req.character.hindrances.length) characterTraits.push(`Complicações: ${req.character.hindrances.map(h => `${h.name} (${h.severity})`).join(', ')}`)
+    if (req.character.edges.length) characterTraits.push(`Edges: ${req.character.edges.join(', ')}`)
+    if (req.character.hindrances.length) characterTraits.push(`Hindrances: ${req.character.hindrances.map(h => `${h.name} (${h.severity})`).join(', ')}`)
 
     const userPrompt = [
-      'INÍCIO DE SESSÃO — Narre a abertura desta história.',
+      'SESSION START — Narrate the opening of this story.',
       '',
-      `PERSONAGEM: ${req.character.name}`,
-      req.character.race ? `Raça: ${req.character.race}` : '',
-      req.character.gender ? `Gênero: ${req.character.gender}` : '',
-      req.character.profession ? `Profissão: ${req.character.profession}` : '',
-      req.character.description ? `Descrição: ${req.character.description}` : '',
+      `CHARACTER: ${req.character.name}`,
+      req.character.race ? `Race: ${req.character.race}` : '',
+      req.character.gender ? `Gender: ${req.character.gender}` : '',
+      req.character.profession ? `Profession: ${req.character.profession}` : '',
+      req.character.description ? `Description: ${req.character.description}` : '',
       ...characterTraits,
       '',
-      'Crie uma abertura rica, imersiva e específica que coloque o personagem no centro da ação.',
-      'Descreva a cena inicial com detalhes sensoriais concretos — cheiros, sons, temperatura, visão — que sejam específicos deste universo, não genéricos.',
-      'Apresente um gancho narrativo claro: uma tensão palpável, um problema imediato ou uma oportunidade que exige decisão agora.',
-      'Estabeleça ao menos 1 detalhe de worldbuilding específico (um nome de lugar, uma facção, um costume local, um objeto estranho) que o jogador possa explorar.',
-      'Ofereça 4 opções variadas de ação para o jogador começar sua aventura — cada opção deve sentir-se como uma escolha de história, não um botão de menu.',
-      'Para CADA opção, avalie se ela exige um teste de dados (diceCheck) conforme as regras de Savage Worlds.',
+      'Create a rich, immersive, and specific opening that places the character at the center of the action.',
+      'Describe the opening scene with concrete sensory details — smells, sounds, temperature, vision — that are specific to this universe, not generic.',
+      'Present a clear narrative hook: a palpable tension, an immediate problem, or an opportunity that requires a decision right now.',
+      'Establish at least 1 specific worldbuilding detail (a place name, a faction, a local custom, a strange object) that the player can explore.',
+      'Offer 4 varied action options for the player to start their adventure — each option must feel like a story choice, not a menu button.',
+      'For EACH option, evaluate whether it requires a dice roll (diceCheck) according to Savage Worlds rules.',
       '',
-      'ITENS INICIAIS (OBRIGATÓRIO):',
-      'Retorne em "itemChanges" de 3 a 10 itens iniciais com changeType "gained" que o personagem já possui ao começar a aventura.',
-      'Escolha itens coerentes com a profissão, raça e ambientação do mundo. Exemplos de categorias:',
-      '- Arma principal adequada à profissão (espada, arco, cajado, adaga, pistola, rifle, etc.)',
-      '- Se a arma for à distância (arco, besta, pistola, rifle, escopeta, etc.), inclua OBRIGATORIAMENTE a munição correspondente como item separado (flechas, virotes, balas, cartuchos, etc.) com quantidade adequada ao contexto',
-      '- Armadura ou vestimenta de proteção se aplicável',
-      '- Provisões básicas de viagem (ração, cantil, bolsa)',
-      '- 1 a 2 itens temáticos/narrativos que conectem o personagem ao mundo (amuleto de família, carta misteriosa, mapa antigo, diário, etc.)',
-      '- Dinheiro inicial OBRIGATÓRIO: inclua 1 item com category "money" e o nome adequado ao cenário (ex: "Moedas de Ouro", "Créditos", "Dólares", "Gil", etc.) e "quantity" com a quantidade exata numérica coerente com a ambientação e o contexto do personagem.',
-      '- Para ambientações modernas/futuristas: se o personagem tiver profissão ou contexto que justifique, inclua um veículo (category "vehicle": carro, moto, nave, etc.) ou propriedade (category "property": apartamento, base, etc.) como item inicial.',
-      'Mencione os itens naturalmente dentro da narrativa de abertura (ex: descreva o personagem conferindo seus pertences, ou um NPC entregando algo).',
-      'Use o mesmo formato itemChanges já definido no system prompt. Cada item DEVE ter o campo "category" preenchido corretamente.'
+      'STARTING ITEMS (MANDATORY):',
+      'Return in "itemChanges" 3 to 10 initial items with changeType "gained" that the character already has at the start of the adventure.',
+      'Choose items coherent with the profession, race, and world setting. Category examples:',
+      '- Main weapon appropriate to the profession (sword, bow, staff, dagger, pistol, rifle, etc.)',
+      '- If the weapon is ranged (bow, crossbow, pistol, rifle, shotgun, etc.), MANDATORILY include the corresponding ammunition as a separate item (arrows, bolts, bullets, cartridges, etc.) with quantity appropriate to the context',
+      '- Armor or protective clothing if applicable',
+      '- Basic travel supplies (rations, canteen, bag)',
+      '- 1 to 2 thematic/narrative items that connect the character to the world (family amulet, mysterious letter, old map, diary, etc.)',
+      '- MANDATORY starting money: include 1 item with category "money" and the name appropriate to the setting (e.g.: "Gold Coins", "Credits", "Dollars", "Gil", etc.) and "quantity" with the exact numerical amount coherent with the setting and character context.',
+      '- For modern/futuristic settings: if the character has a profession or context that justifies it, include a vehicle (category "vehicle": car, motorcycle, ship, etc.) or property (category "property": apartment, base, etc.) as a starting item.',
+      'Mention the items naturally within the opening narrative (e.g.: describe the character checking their belongings, or an NPC handing something over).',
+      'Use the same itemChanges format already defined in the system prompt. Each item MUST have the "category" field correctly filled.'
     ].filter(Boolean).join('\n')
 
     try {
@@ -2722,12 +2725,12 @@ export class GeminiAdapter implements Narrator {
       // Fallback mínimo para não bloquear a sessão
       return {
         isFallback: true,
-        narrative: `Você chega a um novo lugar. O ar carrega o peso de histórias não contadas. Ao seu redor, a paisagem de ${req.campaign.thematic} se estende até onde a vista alcança. Um caminho se abre à sua frente, e você sente que a aventura está prestes a começar.`,
+        narrative: `You arrive at a new place. The air carries the weight of untold stories. Around you, the landscape of ${req.campaign.thematic} stretches as far as the eye can see. A path opens before you, and you feel that adventure is about to begin.`,
         options: [
-          { id: randomUUID(), text: 'Explorar o caminho principal', actionType: 'custom', actionPayload: { input: 'Explorar o caminho principal' }, feasible: true, diceCheck: { required: false, reason: 'Caminho seguro e acessível' } },
-          { id: randomUUID(), text: 'Observar os arredores com atenção', actionType: 'trait_test', actionPayload: { skill: 'Percepção' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detectar detalhes ocultos no ambiente' } },
-          { id: randomUUID(), text: 'Procurar alguém para conversar', actionType: 'custom', actionPayload: { input: 'Procurar alguém para conversar' }, feasible: true, diceCheck: { required: false, reason: 'Ação social simples' } },
-          { id: randomUUID(), text: 'Verificar seus pertences e seguir adiante', actionType: 'custom', actionPayload: { input: 'Verificar pertences e seguir adiante' }, feasible: true, diceCheck: { required: false, reason: 'Ação trivial sem risco' } }
+          { id: randomUUID(), text: 'Explore the main path', actionType: 'custom', actionPayload: { input: 'Explore the main path' }, feasible: true, diceCheck: { required: false, reason: 'Safe and accessible path' } },
+          { id: randomUUID(), text: 'Observe the surroundings carefully', actionType: 'trait_test', actionPayload: { skill: 'Percepção' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detect hidden details in the environment' } },
+          { id: randomUUID(), text: 'Look for someone to talk to', actionType: 'custom', actionPayload: { input: 'Look for someone to talk to' }, feasible: true, diceCheck: { required: false, reason: 'Simple social action' } },
+          { id: randomUUID(), text: 'Check your belongings and move on', actionType: 'custom', actionPayload: { input: 'Check belongings and move on' }, feasible: true, diceCheck: { required: false, reason: 'Trivial action with no risk' } }
         ],
         npcs: [],
         itemChanges: [],
@@ -2773,23 +2776,23 @@ export class GeminiAdapter implements Narrator {
     // ── Montar a última mensagem user com contexto dinâmico do turno ──
     const inventoryList = req.context.inventory.length
       ? req.context.inventory.map(i => `- ${i.name} (x${i.quantity}): ${i.description}`).join('\n')
-      : 'Nenhum item'
+      : 'No items'
 
     const statusList = req.context.activeStatusEffects.length
-      ? req.context.activeStatusEffects.map(s => `- ${s.name}${s.turnsRemaining !== undefined ? ` (${s.turnsRemaining} turnos)` : ''}`).join('\n')
-      : 'Nenhum efeito ativo'
+      ? req.context.activeStatusEffects.map(s => `- ${s.name}${s.turnsRemaining !== undefined ? ` (${s.turnsRemaining} turns)` : ''}`).join('\n')
+      : 'No active effects'
 
     const npcList = req.context.npcsPresent.length
       ? req.context.npcsPresent.map(n => {
           const tipo = n.isWildCard ? 'Wild Card' : 'Extra'
           const disp = n.disposition ?? 'neutral'
-          const status = n.wounds > 0 ? ` | ferido ${n.wounds}/${n.maxWounds}` : ''
+          const status = n.wounds > 0 ? ` | wounded ${n.wounds}/${n.maxWounds}` : ''
           const effects = (n.statusEffects ?? []).length
-            ? ` | efeitos: ${(n.statusEffects ?? []).map(effect => `${effect.name}${effect.turnsRemaining !== undefined ? ` (${effect.turnsRemaining} turnos)` : ''}`).join(', ')}`
+            ? ` | effects: ${(n.statusEffects ?? []).map(effect => `${effect.name}${effect.turnsRemaining !== undefined ? ` (${effect.turnsRemaining} turns)` : ''}`).join(', ')}`
             : ''
-          return `- ${n.name} (${n.id}) [${tipo}, ${disp}, Res ${n.toughness}, Aparar ${n.parry}${status}${effects}]`
+          return `- ${n.name} (${n.id}) [${tipo}, ${disp}, Toughness ${n.toughness}, Parry ${n.parry}${status}${effects}]`
         }).join('\n')
-      : 'Nenhum NPC presente'
+      : 'No NPCs present'
 
     const defeatedNpcList = (req.context.defeatedNpcIds ?? []).length
       ? (req.context.defeatedNpcIds ?? []).join(', ')
@@ -2797,31 +2800,31 @@ export class GeminiAdapter implements Narrator {
 
     const engineResultText = req.engineEvents.length
       ? formatEngineEventsForPrompt(req.engineEvents)
-      : 'Sem resultado mecânico'
+      : 'No mechanical result'
 
     const currentTurnPrompt = [
-      'TURNO DO JOGO — Narre a consequência da ação do jogador.',
+      'GAME TURN — Narrate the consequence of the player\'s action.',
       '',
-      '── ESTADO ATUAL ──',
-      `Local: ${req.context.location}`,
-      `Ferimentos: ${req.context.wounds} | Fadiga: ${req.context.fatigue} | Abalado: ${req.context.isShaken ? 'Sim' : 'Não'} | Bennies: ${req.context.bennies}`,
+      '── CURRENT STATE ──',
+      `Location: ${req.context.location}`,
+      `Wounds: ${req.context.wounds} | Fatigue: ${req.context.fatigue} | Shaken: ${req.context.isShaken ? 'Yes' : 'No'} | Bennies: ${req.context.bennies}`,
       '',
-      '── INVENTÁRIO ──',
+      '── INVENTORY ──',
       inventoryList,
       '',
-      '── EFEITOS ATIVOS ──',
+      '── ACTIVE EFFECTS ──',
       statusList,
       '',
-      '── NPCs PRESENTES ──',
+      '── PRESENT NPCS ──',
       npcList,
-      ...(defeatedNpcList ? ['', '── NPCs DERROTADOS (já eliminados — NÃO referenciar como ameaças ativas) ──', defeatedNpcList] : []),
+      ...(defeatedNpcList ? ['', '── DEFEATED NPCS (already eliminated — DO NOT reference as active threats) ──', defeatedNpcList] : []),
       '',
-      '── AÇÃO DO JOGADOR ──',
-      `Tipo: ${req.playerAction.type}`,
-      `Descrição: ${req.playerAction.description}`,
+      '── PLAYER ACTION ──',
+      `Type: ${req.playerAction.type}`,
+      `Description: ${req.playerAction.description}`,
       '',
-      '── RESULTADO MECÂNICO ──',
-      'Use este bloco como âncora obrigatória: narre suas consequências sem contradizer sucesso, falha, dano, status ou mudanças nele descritos.',
+      '── MECHANICAL RESULT ──',
+      'Use this block as a mandatory anchor: narrate its consequences without contradicting any success, failure, damage, status, or changes described in it.',
       engineResultText
     ].join('\n')
 
@@ -2851,12 +2854,12 @@ export class GeminiAdapter implements Narrator {
       warn('narrateTurn', `Fallback ativado: ${error instanceof Error ? error.message : String(error)}`)
       return {
         isFallback: true,
-        narrative: `Sua ação ecoa no ambiente. As consequências ainda não são claras, mas o mundo ao redor reage de formas sutis. O que fará agora?`,
+        narrative: `Your action echoes through the environment. The consequences are not yet clear, but the world around you reacts in subtle ways. What will you do now?`,
         options: [
-          { id: randomUUID(), text: 'Investigar o resultado da ação', actionType: 'custom', actionPayload: { input: 'Investigar o que aconteceu' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Investigar requer atenção aos detalhes' } },
-          { id: randomUUID(), text: 'Seguir adiante com cautela', actionType: 'custom', actionPayload: { input: 'Seguir adiante com cautela' }, feasible: true, diceCheck: { required: false, reason: 'Movimento cauteloso sem ameaça imediata' } },
-          { id: randomUUID(), text: 'Observar os arredores', actionType: 'trait_test', actionPayload: { skill: 'Percepção' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detectar ameaças e oportunidades' } },
-          { id: randomUUID(), text: 'Descansar um momento', actionType: 'custom', actionPayload: { input: 'Descansar e recuperar forças' }, feasible: true, diceCheck: { required: false, reason: 'Descanso simples sem perigo' } }
+          { id: randomUUID(), text: 'Investigate the result of the action', actionType: 'custom', actionPayload: { input: 'Investigate what happened' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Investigation requires attention to detail' } },
+          { id: randomUUID(), text: 'Move forward with caution', actionType: 'custom', actionPayload: { input: 'Move forward with caution' }, feasible: true, diceCheck: { required: false, reason: 'Cautious movement with no immediate threat' } },
+          { id: randomUUID(), text: 'Observe the surroundings', actionType: 'trait_test', actionPayload: { skill: 'Percepção' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detect threats and opportunities' } },
+          { id: randomUUID(), text: 'Rest for a moment', actionType: 'custom', actionPayload: { input: 'Rest and recover strength' }, feasible: true, diceCheck: { required: false, reason: 'Simple rest with no danger' } }
         ],
         npcs: [],
         itemChanges: [],
