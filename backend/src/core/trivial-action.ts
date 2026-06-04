@@ -143,6 +143,16 @@ const TRIVIAL_PATTERNS: TrivialPattern[] = [
   {
     pattern: /\b(entrar no|sair do|sair de dentro do|entrar na|sair da)\b.{0,20}\b(carro|veiculo|veículo|quarto|motel|loja|restaurante)\b/,
     reason: 'Entrar ou sair de local acessível é automático'
+  },
+
+  // Distrair jogando/arremessando objeto para longe
+  {
+    pattern: /\b(arremessar|jogar|atirar|lancar|lançar|jogar fora|arremessar para)\b.{0,40}\b(objeto|pedra|pedaco|pedaço|item|garrafa|lata|tijolo|entulho|algo)\b.{0,30}\b(distrair|distracao|distração|desviar|longe|outro lado|outro lugar|para la|para lá)\b/,
+    reason: 'Distrair com objeto é resolvido narrativamente'
+  },
+  {
+    pattern: /\b(distrair|criar distração|criar distracao)\b.{0,35}\b(jogando|arremessando|atirando|lancando|lançando)\b/,
+    reason: 'Distrair com objeto é resolvido narrativamente'
   }
 ]
 

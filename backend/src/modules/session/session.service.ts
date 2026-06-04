@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { createInitialState } from '../../domain/defaults/initialState.js'
 import type { AttributeName, DieType, GameState, Hindrance, NarrativeStyle, PlayerAction, SWAttributes } from '../../domain/types/gameState.js'
-import type { NarratorTurnResponse, ValidateActionResponse } from '../../domain/types/narrative.js'
+import type { NarratorTurnResponse, ValidateActionResponse, NpcAttackEntry } from '../../domain/types/narrative.js'
 import { applyAction, applyNpcAttack } from '../../core/rule-engine.js'
 import { SnapshotService } from '../../services/snapshot.service.js'
 import { SummaryService, type SummaryDecisionHints } from '../../services/summary.service.js'
 import { InventoryService } from '../../services/inventory.service.js'
 import { StatusEffectService } from '../../services/statusEffect.service.js'
+import { NpcService } from '../../services/npc.service.js'
 import {
   buildCanonicalAnchors,
   buildCanonicalPromptSection,
@@ -130,6 +131,7 @@ export class SessionService {
   private readonly chatMessages = new ChatMessageRepo()
   private readonly inventory = new InventoryService()
   private readonly statusEffects = new StatusEffectService()
+  private readonly npcService = new NpcService()
   private readonly narrator: Narrator = new GeminiAdapter()
 
   private async requireOwnedSession(sessionId: string, ownerId: string): Promise<Record<string, unknown>> {
@@ -165,28 +167,14 @@ export class SessionService {
 
   private createNarrativeNpcStub(
     npc: NarratorTurnResponse['npcs'][number],
-    location: string
+    location: string,
+    catalog?: import('../../domain/types/gameState.js').NpcDefinition[]
   ): GameState['npcs'][number] {
-    return {
-      id: npc.id,
-      name: npc.name,
-      isWildCard: false,
-      attributes: {},
-      skills: {},
-      wounds: 0,
-      maxWounds: 1,
-      fatigue: 0,
-      isShaken: false,
-      toughness: 4,
-      parry: 4,
-      armor: 0,
-      pace: 6,
-      bennies: 0,
-      tags: ['narrative'],
-      disposition: npc.disposition,
-      location,
-      status: 'active'
+    if (catalog?.length) {
+      const fromCatalog = this.npcService.resolveNpcFromCatalog(catalog, npc, location)
+      if (fromCatalog) return fromCatalog
     }
+    return this.npcService.buildNpcStub(npc, location)
   }
 
   private syncNarratorNpcs(params: {
@@ -194,8 +182,9 @@ export class SessionService {
     npcs: NarratorTurnResponse['npcs']
     sceneLocation: string
     allowCreate: boolean
+    npcCatalog?: import('../../domain/types/gameState.js').NpcDefinition[]
   }): GameState {
-    const { state, npcs, sceneLocation, allowCreate } = params
+    const { state, npcs, sceneLocation, allowCreate, npcCatalog } = params
     if (!npcs.length) return state
 
     const mentionById = new Map(npcs.map((npc) => [npc.id, npc]))
@@ -230,7 +219,7 @@ export class SessionService {
       for (const npc of npcs) {
         if (knownNpcIds.has(npc.id)) continue
         if ((state.defeatedNpcIds ?? []).includes(npc.id)) continue
-        mergedNpcs.push(this.createNarrativeNpcStub(npc, sceneLocation))
+        mergedNpcs.push(this.createNarrativeNpcStub(npc, sceneLocation, npcCatalog))
         changed = true
       }
     }
@@ -493,6 +482,10 @@ export class SessionService {
           warn('validateNarratorOption', `Descartando travel sem destino válido: "${option.text}"`)
           return null
         }
+        if (normalizeLookupValue(destination) === normalizeLookupValue(state.worldState.activeLocation)) {
+          warn('validateNarratorOption', `Descartando travel com destino igual ao local atual: "${destination}"`)
+          return null
+        }
         actionPayload.to = destination
         break
       }
@@ -594,44 +587,6 @@ export class SessionService {
     })
   }
 
-  private validateNarratorLocationChange(params: {
-    locationChange?: string | null
-    state: GameState
-    mode: 'start' | 'turn'
-    action?: PlayerAction
-    engineEvents?: Array<{ type: string; payload: Record<string, unknown> }>
-  }): string | null {
-    const candidate = params.locationChange?.trim()
-    if (!candidate) return null
-
-    if (params.mode === 'start') {
-      return candidate
-    }
-
-    const locationEvent = params.engineEvents?.find((event) => event.type === 'location_change')
-    const locationFromEngine = typeof locationEvent?.payload.to === 'string'
-      ? locationEvent.payload.to.trim()
-      : ''
-
-    if (locationFromEngine) {
-      if (normalizeLookupValue(candidate) !== normalizeLookupValue(locationFromEngine)) {
-        warn('validateNarratorLocationChange', `Corrigindo locationChange para o valor canônico do engine: "${locationFromEngine}"`)
-      }
-      return locationFromEngine
-    }
-
-    if (params.action?.type !== 'travel') {
-      warn('validateNarratorLocationChange', `Descartando locationChange sem travel/location_change: "${candidate}"`)
-      return null
-    }
-
-    if (normalizeLookupValue(candidate) !== normalizeLookupValue(params.state.worldState.activeLocation)) {
-      warn('validateNarratorLocationChange', `Corrigindo locationChange para a localização atual canônica: "${params.state.worldState.activeLocation}"`)
-    }
-
-    return params.state.worldState.activeLocation
-  }
-
   private validateNarrativeSegments(params: {
     segments: NarratorTurnResponse['segments']
     narrative: string
@@ -708,26 +663,10 @@ export class SessionService {
     if (response.isFallback) {
       warn('validateNarratorResponse', `[isFallback] LLM falhou no modo "${mode}" — conteúdo genérico retornado ao jogador`)
     }
-    const locationChange = this.validateNarratorLocationChange({
-      locationChange: response.locationChange,
-      state,
-      mode,
-      action,
-      engineEvents
-    })
-    const stateAtResponseLocation = locationChange
-      ? {
-          ...state,
-          worldState: {
-            ...state.worldState,
-            activeLocation: locationChange
-          }
-        }
-      : state
     const canonicalNarrativeState = this.syncNarratorNpcs({
-      state: stateAtResponseLocation,
+      state,
       npcs: response.npcs,
-      sceneLocation: stateAtResponseLocation.worldState.activeLocation,
+      sceneLocation: state.worldState.activeLocation,
       allowCreate: true
     })
     const canonicalAnchors = buildCanonicalAnchors({
@@ -766,9 +705,7 @@ export class SessionService {
       options,
       npcs,
       itemChanges,
-      statusChanges: this.validateNarratorStatusChanges(response.statusChanges, canonicalNarrativeState, mode, action),
-      locationChange,
-      chapterTitle: locationChange ? response.chapterTitle ?? null : null
+      statusChanges: this.validateNarratorStatusChanges(response.statusChanges, canonicalNarrativeState, mode, action)
     }
   }
 
@@ -991,21 +928,12 @@ export class SessionService {
     state = this.inventory.applyItemChanges(state, narratorResponse.itemChanges)
     state = this.statusEffects.applyStatusChanges(state, narratorResponse.statusChanges)
 
-    // Aplicar mudança de localização se houver
-    if (narratorResponse.locationChange) {
-      state = {
-        ...state,
-        worldState: {
-          ...state.worldState,
-          activeLocation: narratorResponse.locationChange
-        }
-      }
-    }
     state = this.syncNarratorNpcs({
       state,
       npcs: narratorResponse.npcs,
       sceneLocation: state.worldState.activeLocation,
-      allowCreate: true
+      allowCreate: true,
+      npcCatalog: world?.npcCatalog
     })
 
     await this.snapshots.saveTurnState(state)
@@ -1168,20 +1096,12 @@ export class SessionService {
     state = this.inventory.applyItemChanges(state, narratorResponse.itemChanges)
     state = this.statusEffects.applyStatusChanges(state, narratorResponse.statusChanges)
 
-    if (narratorResponse.locationChange) {
-      state = {
-        ...state,
-        worldState: {
-          ...state.worldState,
-          activeLocation: narratorResponse.locationChange
-        }
-      }
-    }
     state = this.syncNarratorNpcs({
       state,
       npcs: narratorResponse.npcs,
       sceneLocation: state.worldState.activeLocation,
-      allowCreate: true
+      allowCreate: true,
+      npcCatalog: world?.npcCatalog
     })
 
     await this.snapshots.saveTurnState(state)
@@ -1219,14 +1139,20 @@ export class SessionService {
    * Retorna se é viável, se precisa de teste de dados, e a interpretação da ação.
    */
   async validateCustomAction(params: { ownerId: string; sessionId: string; input: string }) {
-    await this.requireOwnedSession(params.sessionId, params.ownerId)
+    const sessionData = await this.requireOwnedSession(params.sessionId, params.ownerId)
     const current = await this.snapshots.getLatestState(params.sessionId)
     if (!current) throw new NotFoundException('Sessão não encontrada')
 
-    const summary = await this.summaryRepo.getSummary(params.sessionId)
-    const recentMessages = await this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT)
+    const sessionWorldId = typeof sessionData.worldId === 'string' && sessionData.worldId
+      ? sessionData.worldId
+      : current.meta.worldId
+    const [summary, recentMessages, sessionWorld] = await Promise.all([
+      this.summaryRepo.getSummary(params.sessionId),
+      this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT),
+      sessionWorldId ? this.worlds.get(sessionWorldId) : Promise.resolve(null)
+    ])
     const currentWithSceneNpcs = this.hydrateSceneNpcsFromRecentNarration(current, recentMessages)
-    const context = buildLlmContext({ state: currentWithSceneNpcs, summary, recentMessages })
+    const context = buildLlmContext({ state: currentWithSceneNpcs, summary, recentMessages, npcCatalog: sessionWorld?.npcCatalog })
     const canonicalAnchors = buildCanonicalAnchors({
       state: currentWithSceneNpcs,
       recentMessages,
@@ -1333,23 +1259,23 @@ export class SessionService {
       })
     }
 
-    // 3. Buscar contexto para a LLM
-    const summary = await this.summaryRepo.getSummary(params.sessionId)
-    const recentMessages = await this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT)
-    const context = buildLlmContext({ state: result.nextState, summary, recentMessages })
+    // 3. Buscar contexto, campanha e mundo para a LLM (em paralelo para reduzir latência)
+    const [summary, recentMessages, campaignDoc] = await Promise.all([
+      this.summaryRepo.getSummary(params.sessionId),
+      this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT),
+      result.nextState.meta.campaignId
+        ? this.campaigns.get(result.nextState.meta.campaignId)
+        : Promise.resolve(null)
+    ])
+    const worldDoc = result.nextState.meta.worldId
+      ? await this.worlds.get(result.nextState.meta.worldId)
+      : (campaignDoc ? await this.worlds.get(campaignDoc.worldId) : null)
+    const context = buildLlmContext({ state: result.nextState, summary, recentMessages, npcCatalog: worldDoc?.npcCatalog })
     const canonicalAnchors = buildCanonicalAnchors({
       state: result.nextState,
       recentMessages,
       summaryText: context.summaryText
     })
-
-    // 3.5 Buscar dados da campanha e do mundo para injetar no systemInstruction
-    const campaignDoc = result.nextState.meta.campaignId
-      ? await this.campaigns.get(result.nextState.meta.campaignId)
-      : null
-    const worldDoc = result.nextState.meta.worldId
-      ? await this.worlds.get(result.nextState.meta.worldId)
-      : (campaignDoc ? await this.worlds.get(campaignDoc.worldId) : null)
 
     // 4. Chamar LLM para narrativa do turno
     let narratorResponse = this.validateNarratorResponse({
@@ -1415,7 +1341,29 @@ export class SessionService {
     // Verifica tanto o tipo da ação quanto os eventos emitidos para capturar todos os casos de ataque.
     const hasPlayerAttack = normalizedAction.type === 'attack' 
       || result.emittedEvents.some(ev => ev.type === 'attack_hit' || ev.type === 'attack_miss')
-    const pendingNpcAttacks = hasPlayerAttack ? [] : (narratorResponse.npcAttacks ?? [])
+    let pendingNpcAttacks: NpcAttackEntry[] = hasPlayerAttack ? [] : (narratorResponse.npcAttacks ?? [])
+    // Fase 3: se npcAttacks vazio e há NPCs hostis ativos na cena, auto-gerar ataques
+    if (!hasPlayerAttack && pendingNpcAttacks.length === 0) {
+      const defeatedIds = new Set(finalState.defeatedNpcIds ?? [])
+      const autoAttacks: NpcAttackEntry[] = finalState.npcs
+        .filter((n) =>
+          n.disposition === 'hostile' &&
+          (!n.location || n.location === finalState.worldState.activeLocation) &&
+          n.status !== 'incapacitated' && n.status !== 'defeated' && n.status !== 'dead' &&
+          !defeatedIds.has(n.id) &&
+          n.damageFormula
+        )
+        .map((n) => ({
+          npcId: n.id,
+          skillDie: (n.attackSkillDie ?? 6) as NpcAttackEntry['skillDie'],
+          damageFormula: n.damageFormula!,
+          ap: n.ap ?? 0
+        }))
+      if (autoAttacks.length > 0) {
+        warn('applyNpcAttack', `npcAttacks vazio com ${autoAttacks.length} NPC(s) hostil(is) ativo(s) — ataques auto-gerados`)
+        pendingNpcAttacks = autoAttacks
+      }
+    }
     const npcAttackEvents: Array<{ type: string; payload: unknown }> = []
     for (const entry of pendingNpcAttacks) {
       // Validar: NPC deve estar na cena, ser diferente do jogador, e skillDie deve ser DieType válido
@@ -1458,16 +1406,6 @@ export class SessionService {
       })
     }
 
-    if (narratorResponse.locationChange) {
-      finalState = {
-        ...finalState,
-        worldState: {
-          ...finalState.worldState,
-          activeLocation: narratorResponse.locationChange
-        }
-      }
-    }
-
     // 6. Salvar estado final e mensagem do narrador
     await this.snapshots.saveTurnState(finalState)
 
@@ -1490,7 +1428,6 @@ export class SessionService {
         && !(finalState.defeatedNpcIds ?? []).includes(npc.id)
     )
     const summaryHints: SummaryDecisionHints = {
-      endedChapter: !!narratorResponse.chapterTitle,
       endedCombat: hostileNpcIdsBefore.size > 0 && !hasHostilesAfter
     }
     await this.summaries.manageSummaryAfterTurn({ state: finalState, stateBeforeTurn: result.nextState, hints: summaryHints })

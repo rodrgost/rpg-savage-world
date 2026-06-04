@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Query } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Post, Put, Query } from '@nestjs/common'
 import { z } from 'zod'
 
 import { GameDataService } from './game-data.service.js'
@@ -156,7 +156,30 @@ const CharacterSuggestionBody = z
     }).optional()
   })
   .strict()
+// ─── NPC Catalog (catálogo de NPCs do mundo) ───────────────
 
+const NpcDefinitionBody = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  isWildCard: z.boolean().default(false),
+  dispositionDefault: z.enum(['hostile', 'neutral', 'friendly']),
+  toughness: z.number().int().min(1).max(30),
+  parry: z.number().int().min(1).max(30),
+  armor: z.number().int().min(0).max(20).optional(),
+  pace: z.number().int().min(1).max(20).optional(),
+  maxWounds: z.number().int().min(1).max(10).optional(),
+  bennies: z.number().int().min(0).max(10).optional(),
+  skills: z.record(z.string(), z.number().int()).optional(),
+  attributes: z.object({
+    agility: z.number().int().optional(),
+    smarts: z.number().int().optional(),
+    spirit: z.number().int().optional(),
+    strength: z.number().int().optional(),
+    vigor: z.number().int().optional()
+  }).optional(),
+  tags: z.array(z.string()).optional()
+})
 // ─── Controller ────────────────────────────────────────────────
 
 @Controller()
@@ -306,5 +329,43 @@ export class GameDataController {
   async suggestCharacterFromWorld(@CurrentUser('uid') userId: string, @Body() body: unknown) {
     const parsed = CharacterSuggestionBody.parse(body)
     return await this.gameData.suggestCharacterFromWorld({ userId, ...parsed })
+  }
+
+  // ── NPC Catalog ────────────────────────────
+
+  @Get('/worlds/:worldId/npcs')
+  async listWorldNpcs(@CurrentUser('uid') userId: string, @Param('worldId') worldId: string) {
+    return await this.gameData.listWorldNpcs({ userId, worldId })
+  }
+
+  @Post('/worlds/:worldId/npcs')
+  async createWorldNpc(
+    @CurrentUser('uid') userId: string,
+    @Param('worldId') worldId: string,
+    @Body() body: unknown
+  ) {
+    const npc = NpcDefinitionBody.parse(body)
+    return await this.gameData.upsertWorldNpc({ userId, worldId, npc: npc as import('../../domain/types/gameState.js').NpcDefinition })
+  }
+
+  @Put('/worlds/:worldId/npcs/:npcId')
+  async updateWorldNpc(
+    @CurrentUser('uid') userId: string,
+    @Param('worldId') worldId: string,
+    @Param('npcId') npcId: string,
+    @Body() body: unknown
+  ) {
+    const npc = NpcDefinitionBody.parse(body)
+    if (npc.id !== npcId) throw new BadRequestException('npcId no path deve corresponder ao id no body')
+    return await this.gameData.upsertWorldNpc({ userId, worldId, npc: npc as import('../../domain/types/gameState.js').NpcDefinition })
+  }
+
+  @Delete('/worlds/:worldId/npcs/:npcId')
+  async deleteWorldNpc(
+    @CurrentUser('uid') userId: string,
+    @Param('worldId') worldId: string,
+    @Param('npcId') npcId: string
+  ) {
+    return await this.gameData.deleteWorldNpc({ userId, worldId, npcId })
   }
 }

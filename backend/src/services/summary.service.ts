@@ -10,7 +10,6 @@ import { log, warn } from '../utils/file-logger.js'
 
 export type SummaryDecisionHints = {
   endedCombat?: boolean
-  endedChapter?: boolean
 }
 
 function trimIncompleteSummaryText(text: string): string {
@@ -91,7 +90,6 @@ export class SummaryService {
   shouldSummarize(params: { turn: number; lastTurnIncluded: number; hints?: SummaryDecisionHints }): boolean {
     const { turn, lastTurnIncluded, hints } = params
     if (hints?.endedCombat) return true
-    if (hints?.endedChapter) return true
 
     const interval = env.summaryIntervalTurns
     if (interval <= 0) return false
@@ -231,7 +229,8 @@ export class SummaryService {
     if (messagesToCompact >= env.compactBatchMin) {
       log('manageSummary', `Compacting ${messagesToCompact} old messages (threshold=${env.compactBatchMin})`)
       await this.compactOldMessages({ state, stateForSummary: stateBeforeTurn })
-      return
+      // Não retorna aqui: deixa o resumo incremental rodar no mesmo turno
+      // para que as mensagens recentes (não compactadas) também sejam incorporadas
     }
 
     const existing = await this.summaries.getSummary(sessionId)

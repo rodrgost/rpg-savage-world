@@ -1684,7 +1684,7 @@ export class GeminiAdapter implements Narrator {
       'The structured context of this call is the only canonical source for JSON fields.',
       'If an NPC, item, effect, skill, destination, condition, or resource is not in the structured context, it CANNOT be created in the JSON fields.',
       'If there is a "STRICT CANONICAL ANCHORS" section in the context, treat that section as a closed list for options, action interpretation, and the normal turn narrative.',
-      'When in doubt, prefer to keep npcs, itemChanges, statusChanges, and locationChange empty/null and preserve continuity only in narrative and options.',
+      'When in doubt, prefer to keep npcs, itemChanges, and statusChanges empty/null and preserve continuity only in narrative and options.',
       '',
       'You MUST return ONLY a valid JSON (no markdown, no comments) with the following structure:',
       '{',
@@ -1723,10 +1723,8 @@ export class GeminiAdapter implements Narrator {
       '  ],',
       '  "npcAttacks": [',
       '    { "npcId": "<id of the attacking NPC>", "skillDie": <6|8|10|12>, "damageFormula": "<str+d6 or 2d6 etc>", "ap": 0 }',
-      '  ],',
-      '  "locationChange": "<new location or null>",',
-      '  "chapterTitle": "<chapter title if it changed, or null>"',
-      '}',
+      '  ]',
+      '},',
       '',
       'diceCheck FIELD RULES (REQUIRED in EVERY option):',
       '- Evaluate for EACH option whether the action requires a dice roll based on Savage Worlds rules.',
@@ -1888,7 +1886,7 @@ export class GeminiAdapter implements Narrator {
       lines.push(
         '',
         '=== UNIVERSE ===',
-        'The sections below are the canonical bible of this universe. Use the locations, factions, technologies, and threats listed when building narratives, options, and NPCs. Do not invent elements that contradict these sections.',
+        'The sections below are the canonical bible of this universe.',
         `Name: ${world.name ?? 'Unnamed'}`,
         ...(world.description ? [`Description: ${world.description}`] : []),
         ...(world.lore ? ['', world.lore] : [])
@@ -1940,7 +1938,7 @@ export class GeminiAdapter implements Narrator {
         '',
         '=== SESSION START RULES ===',
         '- You MAY introduce 1 initial NPC coherent with the scene.',
-        '- You MAY add 3 to 9 initial items in itemChanges with changeType "gained".',
+        '- You MAY add x initial items in itemChanges with changeType "gained". be generous.',
         '- Initial items must represent belongings the character already has at the start of the adventure.',
         '- Even at the start, do not invent skills, mechanical ids, or destinations outside the provided setting.'
       )
@@ -1949,7 +1947,7 @@ export class GeminiAdapter implements Narrator {
         '',
         '=== CANONICAL TURN RULES ===',
         '- On a normal turn, use the "npcs" array for NPCs already listed in PRESENT NPCS.',
-        '- CRITICAL RULE — NPCS INTRODUCED IN THE NARRATIVE: If your narrative this turn mentions any NPC, agent, creature, or enemy that was NOT in PRESENT NPCS, you MUST register them in "npcs" with newlyIntroduced: true, appropriate disposition, and a UUID you generate as "id". Use that SAME id in the actionPayload.targetId of any attack option against that entity. Without this registration, you will have no valid targetId to generate combat options.',
+        '- CRITICAL RULE — NPCS INTRODUCED IN THE NARRATIVE: If your narrative this turn mentions any NPC, agent, creature, or enemy that was NOT in PRESENT NPCS, you MUST register them in "npcs" with newlyIntroduced: true, appropriate disposition, and a short readable "id" (format: npc-<slug>-N, e.g.: "npc-guard-1", "npc-agent-2", "npc-bandit-1"). Use that SAME id in segments and in the actionPayload.targetId of any attack option against that entity. Without this registration, you will have no valid targetId to generate combat options, and the NPC will not appear in subsequent turns.',
         '',
         '- MANDATORY COUNT: If the narrative mentions a specific number of NPCs/creatures/agents ("two agents", "three guards", "a group of five", "a patrol of four"), you MUST create exactly that number of separate entries in the "npcs" array. Each entry needs: unique id (different UUID), differentiated name (e.g.: "UCT Agent #1", "UCT Agent #2"), and the same disposition. When mentioning a group without explicit number ("a group of", "several", "some"), create at least 2-3 entries to represent the multiple threat.',
         '',
@@ -1968,17 +1966,16 @@ export class GeminiAdapter implements Narrator {
         '',
         '- The "status" field in NPCs is OPTIONAL. Use it ONLY when your narrative THIS turn explicitly indicates that an NPC was incapacitated, knocked out, defeated, or killed WITHOUT going through a formal mechanical attack from the system (if they went through a rule-engine attack/damage, the status is managed automatically). Possible values: "active", "incapacitated" (knocked out/unconscious), "defeated" (defeated), "dead" (dead). Omit the field if the status did not change or if the NPC was hit via the formal attack system.',
         '',
-        '- On a normal turn, do NOT create itemChanges with changeType "gained" EXCEPT in the situations below:',
+        /*'- On a normal turn, do NOT create itemChanges with changeType "gained" EXCEPT in the situations below:',
         '  (1) Any category EXCEPT "weapon" and "armor", when the narrative this turn justifies it (store purchase, found item, reward, inheritance, conquest).',
         '  (2) A NPC PRESENT IN THE SCENE explicitly gives an item to the player THIS turn (e.g.: passes a key, hands over a document). Use changeType "gained" with the correct item category.',
-        '- On a normal turn, use itemChanges only for "lost", "used", or "gained" (per rules above) for items relevant to this turn\'s action.',
+      */'- On a normal turn, use itemChanges only for "lost", "used", or "gained" (per rules above) for items relevant to this turn\'s action.',
         '- On a normal turn, do NOT apply new statusChanges without direct evidence in the MECHANICAL RESULT or in ALREADY EXISTING ACTIVE EFFECTS.',
         '- If the action or narrative establishes safe rest, hospitalization, admission, medical discharge, prolonged treatment, or the passage of weeks/months, remove in statusChanges the temporary effects that have been healed, expired, or no longer make sense.',
         '- To remove a temporary status, use changeType "removed" with the exact effectId/name of the active effect. For player status use targetType "player"; for NPC status use targetType "npc" and the affected NPC\'s targetId.',
         '- turnsRemaining represents only short duration in narrative turns. When there is a long time skip, do not rely on turnsRemaining: register explicit removals in statusChanges.',
         '- Do not remove permanent statuses, complications, sequelae, or character conditions without direct narrative evidence of healing or resolution.',
         '- In statusChanges, always indicate targetType. Use targetType "npc" and the targetId of the affected NPC when the effect results from attack, damage, poison, burn, fear, or condition applied to the enemy. Use targetType "player" only for effects on the player character.',
-        '- On a normal turn, only fill locationChange if the player\'s action is travel or if the MECHANICAL RESULT brings a location_change.',
         '- Use only NPC ids already listed in PRESENT NPCS (or the new hostile NPC from this narrative) for actionPayload.targetId.',
         '- If canonical evidence is missing for a state mutation, leave the mutable fields empty/null.',
         '- If any NPC is taken down, do not include them in subsequent turns. Describe them as taken down, fleeing, or falling, but do not keep them as targets of future actions.'
@@ -2000,7 +1997,8 @@ export class GeminiAdapter implements Narrator {
       '  • On success, preserve a real positive consequence, but you may add cost, friction, unwanted attention, dilemma, or unsettling detail if plausible in context.',
       '  • On failure, preserve a real negative consequence, but you may reveal a clue, open a worse alternative, plant a suspicion, or show something useful at a narrative price.',
       '  • Use successes and failures to seed future plots when natural: social debt, alerted enemy, compromised resource, incomplete clue, rumor, mark left, or consequence that may return later.',
-      '  • Never create canonical facts, NPCs, items, statuses, or location changes without support in the structured context; future hooks must appear as narrative tension, hints, or possibilities.',
+      '  • JSON FIELDS ONLY (npcs, itemChanges, statusChanges, locationChange): only register elements with explicit support in the structured context — do not invent new mechanical state.',
+      '  • NARRATIVE TEXT: you MAY freely introduce atmosphere, sensory details, passing NPCs, rumors, hints, and world flavor — as long as these do not appear in the JSON fields as canonical state changes. Future hooks belong in the narrative prose, not in the structured fields.',
     )
 
     return lines.join('\n')
@@ -2225,16 +2223,35 @@ export class GeminiAdapter implements Narrator {
         const rawNpcId = sanitizeNullableInlineText(source.npcId)
         const rawNpcName = sanitizeInlineText(source.npcName, '')
         const nameMatches = rawNpcName ? npcsByName.get(normalizeMentionKey(rawNpcName)) ?? [] : []
-        const matchedNpc = rawNpcId ? npcById.get(rawNpcId) : nameMatches.length === 1 ? nameMatches[0] : undefined
+        let matchedNpc = rawNpcId ? npcById.get(rawNpcId) : nameMatches.length === 1 ? nameMatches[0] : undefined
         const disposition = (['hostile', 'neutral', 'friendly'].includes(source.disposition as string)
           ? source.disposition
           : matchedNpc?.disposition ?? 'neutral') as NPCMention['disposition']
 
+        // Fix C: se o LLM escreveu fala de NPC mas esqueceu de registrá-lo em npcs[],
+        // auto-criar o NPCMention para que syncNarratorNpcs possa populá-lo no GameState.
+        if (!matchedNpc && (rawNpcId || rawNpcName)) {
+          const autoName = rawNpcName || rawNpcId || 'Desconhecido'
+          const autoId = rawNpcId ?? randomUUID()
+          matchedNpc = { id: autoId, name: autoName, disposition, newlyIntroduced: true }
+          npcs.push(matchedNpc)
+          npcById.set(autoId, matchedNpc)
+          const nameKey = normalizeMentionKey(autoName)
+          npcsByName.set(nameKey, [...(npcsByName.get(nameKey) ?? []), matchedNpc])
+          warn('sanitizeNarratorResponse', `NPC ausente em npcs[] auto-criado a partir de segmento: "${autoName}" (${autoId})`)
+        }
+
+        // Fix D: se ainda sem match (sem id e sem nome), degradar para narrator
+        if (!matchedNpc) {
+          pushNarratorSegment(text)
+          continue
+        }
+
         segments.push({
           type: 'npc',
-          npcId: matchedNpc?.id ?? rawNpcId,
-          npcName: (matchedNpc?.name ?? rawNpcName) || 'Desconhecido',
-          disposition,
+          npcId: matchedNpc.id,
+          npcName: matchedNpc.name,
+          disposition: matchedNpc.disposition,
           text
         })
         continue
@@ -2304,8 +2321,25 @@ export class GeminiAdapter implements Narrator {
       const skillDie = typeof e.skillDie === 'number' ? e.skillDie : 0
       const damageFormula = typeof e.damageFormula === 'string' ? e.damageFormula.trim() : ''
       if (!npcId || !damageFormula || ![4, 6, 8, 10, 12].includes(skillDie)) return []
+      // Fix F: descartar ataques de NPC cujo id não existe na cena ou na resposta
+      if (!npcById.has(npcId)) {
+        warn('sanitizeNarratorResponse', `npcAttacks: npcId desconhecido descartado: "${npcId}"`)
+        return []
+      }
       return [{ npcId, skillDie, damageFormula, ap: typeof e.ap === 'number' ? e.ap : 0 }]
     })
+
+    // Fix B: opções de ataque com targetId desconhecido → downgrade para custom
+    for (const option of options) {
+      if (option.actionType !== 'attack') continue
+      const targetId = sanitizeInlineText(option.actionPayload?.targetId, '')
+      if (targetId && !npcById.has(targetId)) {
+        warn('sanitizeNarratorResponse', `Opção de ataque com targetId desconhecido convertida para custom: "${option.text}" (targetId: ${targetId})`)
+        option.actionType = 'custom'
+        option.actionPayload = { input: option.text }
+        if (option.diceCheck) option.diceCheck = { ...option.diceCheck, required: false }
+      }
+    }
 
     return {
       narrative,
@@ -2314,9 +2348,7 @@ export class GeminiAdapter implements Narrator {
       npcs,
       itemChanges,
       statusChanges,
-      npcAttacks,
-      locationChange: sanitizeNullableInlineText(raw.locationChange),
-      chapterTitle: sanitizeNullableInlineText(raw.chapterTitle)
+      npcAttacks
     }
   }
 
@@ -2363,7 +2395,7 @@ export class GeminiAdapter implements Narrator {
       '- Return complete and self-consistent JSON.',
       '- Do not use entities outside the structured context.',
       '- Do not omit required options, diceCheck, or actionPayload.',
-      '- If in doubt about state mutations, leave npcs, itemChanges, statusChanges, and locationChange empty/null.'
+      '- If in doubt about state mutations, leave npcs, itemChanges, and statusChanges empty/null.'
     ].join('\n')
   }
 
@@ -2815,7 +2847,7 @@ export class GeminiAdapter implements Narrator {
       '── ACTIVE EFFECTS ──',
       statusList,
       '',
-      '── PRESENT NPCS ──',
+      '── PRESENT NPCS (copy IDs exactly — never modify them or reuse for new NPCs) ──',
       npcList,
       ...(defeatedNpcList ? ['', '── DEFEATED NPCS (already eliminated — DO NOT reference as active threats) ──', defeatedNpcList] : []),
       '',

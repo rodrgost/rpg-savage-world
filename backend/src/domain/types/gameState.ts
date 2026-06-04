@@ -23,6 +23,28 @@ export type StatusEffect = {
   targetId?: string
 }
 
+/**
+ * Definição canônica de um NPC no catálogo do mundo.
+ * Usado pelo NpcService para criar NPCCombatant com stats reais
+ * ao invés de stubs genéricos (toughness=4, parry=4).
+ */
+export type NpcDefinition = {
+  id: string
+  name: string
+  description?: string
+  isWildCard: boolean
+  dispositionDefault: 'hostile' | 'neutral' | 'friendly'
+  toughness: number
+  parry: number
+  armor?: number
+  pace?: number
+  maxWounds?: number
+  bennies?: number
+  skills?: Record<string, DieType>
+  attributes?: Partial<SWAttributes>
+  tags?: string[]
+}
+
 export type NPCCombatant = {
   id: string
   name: string

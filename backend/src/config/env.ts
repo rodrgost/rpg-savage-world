@@ -18,7 +18,7 @@ export const env = {
   firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? '',
   firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
 
-  summaryIntervalTurns: Number(process.env.SUMMARY_INTERVAL_TURNS ?? '20'),
+  summaryIntervalTurns: Number(process.env.SUMMARY_INTERVAL_TURNS ?? '5'),
 
   /** Nº mínimo de mensagens excedentes para justificar uma chamada LLM de compactação.
    *  Abaixo deste limiar, o excedente acumula até o próximo turno.

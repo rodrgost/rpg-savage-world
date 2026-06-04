@@ -8,7 +8,7 @@ import { GeminiAdapter } from '../../llm/gemini.adapter.js'
 import { GeminiImageGenerator } from '../../llm/gemini-image.generator.js'
 import { normalizeToWebp, type StoredImage } from '../../utils/image-normalize.js'
 import { isDieType, CHARACTER_CREATION, ATTRIBUTE_KEYS } from '../../domain/savage-worlds/constants.js'
-import type { DieType, Hindrance } from '../../domain/types/gameState.js'
+import type { DieType, Hindrance, NpcDefinition } from '../../domain/types/gameState.js'
 import { firebaseAuth, firestore } from '../../infrastructure/firebase.js'
 import { log, warn } from '../../utils/file-logger.js'
 
@@ -989,6 +989,45 @@ export class GameDataService {
       image: normalizedImage
     })
 
+    return { ok: true }
+  }
+
+  // ─── NPC Catalog (catálogo de NPCs do mundo) ───
+
+  async listWorldNpcs(params: { userId: string; worldId: string }) {
+    const world = await this.worlds.get(params.worldId)
+    if (!world) throw new NotFoundException('Mundo não encontrado')
+    if (!this.canReadResource({ ownerId: world.ownerId, visibility: world.visibility, userId: params.userId })) {
+      throw new ForbiddenException('Sem permissão para este mundo')
+    }
+    return { npcs: world.npcCatalog ?? [] }
+  }
+
+  async upsertWorldNpc(params: { userId: string; worldId: string; npc: NpcDefinition }) {
+    const world = await this.worlds.get(params.worldId)
+    if (!world) throw new NotFoundException('Mundo não encontrado')
+    if (world.ownerId !== params.userId) throw new ForbiddenException('Sem permissão para este mundo')
+
+    const catalog = [...(world.npcCatalog ?? [])]
+    const existingIndex = catalog.findIndex((n) => n.id === params.npc.id)
+    if (existingIndex >= 0) {
+      catalog[existingIndex] = params.npc
+    } else {
+      if (catalog.length >= 200) throw new BadRequestException('Limite de 200 NPCs por mundo atingido')
+      catalog.push(params.npc)
+    }
+
+    await this.worlds.updateNpcCatalog(params.worldId, catalog)
+    return { ok: true, npc: params.npc }
+  }
+
+  async deleteWorldNpc(params: { userId: string; worldId: string; npcId: string }) {
+    const world = await this.worlds.get(params.worldId)
+    if (!world) throw new NotFoundException('Mundo não encontrado')
+    if (world.ownerId !== params.userId) throw new ForbiddenException('Sem permissão para este mundo')
+
+    const catalog = (world.npcCatalog ?? []).filter((n) => n.id !== params.npcId)
+    await this.worlds.updateNpcCatalog(params.worldId, catalog)
     return { ok: true }
   }
 }

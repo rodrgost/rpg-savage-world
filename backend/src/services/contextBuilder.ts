@@ -1,4 +1,4 @@
-import type { GameState, DieType, Hindrance } from '../domain/types/gameState.js'
+import type { GameState, DieType, Hindrance, NpcDefinition } from '../domain/types/gameState.js'
 import type { SessionSummaryRow } from '../repositories/sessionSummary.repo.js'
 import type { InventoryItem } from '../domain/types/narrative.js'
 import type { ChatMessageRow } from '../repositories/chatMessage.repo.js'
@@ -54,68 +54,69 @@ function normalizeLlmText(text: string): string {
 function buildRulesDigest(state: GameState): string {
   const sections: string[] = []
 
-  // 1. Resumo mecânico
+  // 1. Mechanical summary
   sections.push([
-    '=== REGRAS SAVAGE WORLDS (resumo) ===',
-    'Testes: rola-se o dado da perícia/atributo + Wild Die (d6). Usa-se o MAIOR. Se tirar o máximo, o dado "explode" (re-rola e soma).',
-    'Sucesso: total >= 4 (TN padrão). Cada +4 acima do TN = 1 Raise (sucesso excepcional).',
-    'Combate: Ataque rola Luta/Tiro vs Aparar do alvo (corpo a corpo) ou TN 4 (distância). Raise no ataque = +1d6 de dano.',
-    'Dano vs Resistência: dano >= Resistência → Abalado (Shaken). Cada +4 acima da Resistência = +1 Ferimento adicional. Já Abalado + novo golpe = +1 Ferimento imediato.',
-    'Ferimentos (Wild Cards): -1 por ferimento em TODOS os testes (máx -3). 4+ ferimentos = Incapacitado.',
-    'Extras (NPCs comuns, guardas, zumbis, bandidos): 1 único ferimento = removido de combate imediatamente. Sem Wild Die, sem Bennies.',
-    'Wild Cards (heróis, vilões, chefes): suportam até 3 ferimentos como o jogador. Possuem Wild Die e Bennies.',
-    'Soak (absorver ferimento): custa 1 Benny + rola Vigor. Sucesso = 1 ferimento absorvido. Cada raise = +1 ferimento absorvido.',
-    'Bennies: gastar para re-rolar teste, fazer Soak (absorver ferimento), ou recuperar de Abalado.',
-    'Fadiga: acumula por esforço, ambiente, poderes. Causa -1 por nível. Em excesso → Incapacitado.'
+    '=== SAVAGE WORLDS RULES (summary) ===',
+    'Trait rolls: roll the skill/attribute die + Wild Die (d6). Use the HIGHEST result. Rolling the max value causes the die to "ace" (reroll and add).',
+    'Success: total >= 4 (standard TN). Each +4 above TN = 1 Raise (exceptional success).',
+    'Combat: Attack rolls Fighting/Shooting vs target\'s Parry (melee) or TN 4 (ranged). Raise on attack = +1d6 damage.',
+    'Damage vs Toughness: damage >= Toughness → Shaken. Each +4 above Toughness = +1 additional Wound. Already Shaken + new hit = +1 immediate Wound.',
+    'Wounds (Wild Cards): -1 per wound to ALL trait rolls (max -3). 4+ wounds = Incapacitated.',
+    'Extras (common NPCs, guards, zombies, bandits): 1 wound = removed from combat immediately. No Wild Die, no Bennies.',
+    'Wild Cards (heroes, villains, bosses): can sustain up to 3 wounds like a player. Have Wild Die and Bennies.',
+    'Soak: costs 1 Benny + roll Vigor. Success = 1 wound soaked. Each raise = +1 additional wound soaked.',
+    'Bennies: spend to reroll a trait test, Soak a wound, or recover from Shaken.',
+    'Fatigue: accumulates from exertion, environment, powers. Causes -1 per level. Excess → Incapacitated.'
   ].join('\n'))
 
-  // 2. Perícias com descrições
+  // 2. Skills with descriptions
   sections.push([
-    '=== PERÍCIAS DISPONÍVEIS ===',
+    '=== AVAILABLE SKILLS ===',
+
     ...SKILLS.map(s => {
       const attr = ATTRIBUTES.find(a => a.key === s.linkedAttribute)
       return `${s.label} (${attr?.label ?? s.linkedAttribute}): ${s.description}`
     })
   ].join('\n'))
 
-  // 3. Edges do personagem
+  // 3. Character edges
   const playerEdges = state.player.edges
   if (playerEdges.length > 0) {
     const edgeLines = playerEdges.map(edgeKey => {
       const def = EDGES.find(e => e.key === edgeKey)
       if (def) return `${def.label}: ${def.description}`
-      return `${edgeKey}: (efeito não catalogado)`
+      return `${edgeKey}: (effect not catalogued)`
     })
     sections.push([
-      '=== VANTAGENS DO PERSONAGEM ===',
+      '=== CHARACTER EDGES ===',
       ...edgeLines
     ].join('\n'))
   }
 
-  // 4. Hindrances do personagem
+  // 4. Character hindrances
   const playerHindrances = state.player.hindrances
   if (playerHindrances.length > 0) {
     const hindranceLines = playerHindrances.map((h: Hindrance) => {
       const def = HINDRANCES.find(hd => hd.key === h.name)
-      const severity = h.severity === 'major' ? 'Maior' : 'Menor'
+      const severity = h.severity === 'major' ? 'Major' : 'Minor'
       if (def) return `${def.label} (${severity}): ${def.description}`
-      return `${h.name} (${severity}): (efeito não catalogado)`
+      return `${h.name} (${severity}): (effect not catalogued)`
     })
     sections.push([
-      '=== COMPLICAÇÕES DO PERSONAGEM ===',
+      '=== CHARACTER HINDRANCES ===',
       ...hindranceLines
     ].join('\n'))
   }
 
-  // 5. Atributos do personagem
+  // 5. Character attributes
   const attrLines = ATTRIBUTES.map(a => {
     const die = state.player.attributes[a.key]
     return `${a.label}: d${die}`
   })
   sections.push([
-    '=== ATRIBUTOS DO PERSONAGEM ===',
+    '=== CHARACTER ATTRIBUTES ===',
     ...attrLines,
-    `Aparar: ${state.player.parry} | Resistência: ${state.player.toughness} | Armadura: ${state.player.armor} | Passo: ${state.player.pace}`
+    `Parry: ${state.player.parry} | Toughness: ${state.player.toughness} | Armor: ${state.player.armor} | Pace: ${state.player.pace}`
   ].join('\n'))
 
   return sections.join('\n\n')
@@ -143,6 +144,11 @@ export type LlmContext = {
     /** IDs de NPCs já derrotados nesta sessão — para orientar o LLM a não referenciá-los como ameaças ativas */
     defeatedNpcIds: string[]
     situation: 'exploracao' | 'combat' | 'dialogo'
+    /**
+     * Catálogo de NPCs nomeados do mundo — LLM deve referenciar estes NPCs por id canônico.
+     * Apenas campos narrativos relevantes (id, name, description, dispositionDefault).
+     */
+    npcCatalog: Array<{ id: string; name: string; description?: string; dispositionDefault: string }>
     inventory: InventoryItem[]
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
     /** Perícias do jogador com seus dados atuais (label PT-BR → "dN") */
@@ -161,8 +167,9 @@ export function buildLlmContext(params: {
   state: GameState
   summary: SessionSummaryRow | null
   recentMessages?: ChatMessageRow[]
+  npcCatalog?: NpcDefinition[]
 }): LlmContext {
-  const { state, summary, recentMessages } = params
+  const { state, summary, recentMessages, npcCatalog } = params
 
   const situation: LlmContext['stateBrief']['situation'] = state.combat ? 'combat' : 'exploracao'
 
@@ -193,6 +200,12 @@ export function buildLlmContext(params: {
         })),
       defeatedNpcIds: state.defeatedNpcIds ?? [],
       situation,
+      npcCatalog: (npcCatalog ?? []).map((def) => ({
+        id: def.id,
+        name: def.name,
+        ...(def.description ? { description: def.description } : {}),
+        dispositionDefault: def.dispositionDefault
+      })),
       inventory: state.player.inventory ?? [],
       activeStatusEffects: state.player.statusEffects.map((e) => ({
         id: e.id,

@@ -1,4 +1,5 @@
 import { FieldValue, firestore } from '../infrastructure/firebase.js'
+import type { NpcDefinition } from '../domain/types/gameState.js'
 
 export type Visibility = 'private' | 'public'
 
@@ -14,6 +15,7 @@ export type WorldDoc = {
     base64: string
   }
   status: 'active'
+  npcCatalog?: NpcDefinition[]
   createdAt: unknown
   updatedAt: unknown
 }
@@ -103,6 +105,13 @@ export class WorldsRepo {
         lore,
         updatedAt: FieldValue.serverTimestamp()
       },
+      { merge: true }
+    )
+  }
+
+  async updateNpcCatalog(worldId: string, npcCatalog: NpcDefinition[]): Promise<void> {
+    await firestore.collection('worlds').doc(worldId).set(
+      { npcCatalog, updatedAt: FieldValue.serverTimestamp() },
       { merge: true }
     )
   }

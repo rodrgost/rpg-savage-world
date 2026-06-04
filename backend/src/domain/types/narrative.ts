@@ -189,10 +189,6 @@ export type NarratorTurnResponse = {
   statusChanges: StatusChange[]
   /** Ataques de NPCs hostis contra o jogador neste turno */
   npcAttacks?: NpcAttackEntry[]
-  /** Nova localização, se houve mudança */
-  locationChange?: string | null
-  /** Título do capítulo, se mudou */
-  chapterTitle?: string | null
   /** true quando o conteúdo é um fallback estático por falha do LLM */
   isFallback?: boolean
 }

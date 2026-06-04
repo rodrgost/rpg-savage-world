@@ -7,7 +7,6 @@ import { GeminiAdapter } from '../llm/gemini.adapter.js'
 
 export type SummaryDecisionHints = {
   endedCombat?: boolean
-  endedChapter?: boolean
 }
 
 export class SummaryService {
@@ -20,7 +19,6 @@ export class SummaryService {
   shouldSummarize(params: { turn: number; lastTurnIncluded: number; hints?: SummaryDecisionHints }): boolean {
     const { turn, lastTurnIncluded, hints } = params
     if (hints?.endedCombat) return true
-    if (hints?.endedChapter) return true
 
     const interval = env.summaryIntervalTurns
     if (interval <= 0) return false
