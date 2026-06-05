@@ -1663,7 +1663,8 @@ export class GeminiAdapter implements Narrator {
       'You are the Narrator of a story. Respond in Brazilian Portuguese, always in second person singular ("Você entra...", "Você vê...").',
       '',
       '━━━ PRIMARY RULE FOR THE "narrative" FIELD ━━━',
-      'Narrate the consequence of the player\'s action in a direct and progressive manner, but do not jump ahead to the player\'s next action — leave open hooks so the player can decide what to do next. The "narrative" field must advance the story, not merely describe the current state or repeat what has already been said.',
+      'Narrate ONLY the direct consequence of the player\'s current action. The narrative MUST stop exactly when the consequence is visible — do NOT describe what the player does after this moment.',
+      'MANDATORY: The narrative covers ONE beat: what changed RIGHT NOW as a result of this action. The player\'s next move is ALWAYS chosen from the "options" field, NEVER decided inside "narrative".',
       'FOCUS: what changed, what happened. Avoid recaps, state repetitions, and editorial conclusions.',
       '',
       'AVAILABLE ELEMENTS (use those that feel natural for the scene and active style):',
@@ -1676,9 +1677,18 @@ export class GeminiAdapter implements Narrator {
       '  • generic filler with no connection to the scene: "time passes", "fate awaits", "the world turns"',
       '  • literal mechanical terms: "Shaken", "Wounded", "Fatigue" — narrate instead: "the arm gives out", "vision blurs"',
       '  • NPCs making autonomous decisions beyond immediate reaction to the player\'s action',
-      '  • editorial conclusions that remove agency: "the priority now is...", "the next step is...", "you two need to..."',
+      '    (WRONG: "Marcus leaves and warns the others." RIGHT: "Marcus steps back, eyes narrowing at you.")',
+      '  • editorial conclusions that remove agency: "the priority now is...", "the next step is...", "you two need to...", "now you should...", "it\'s time to...", "you have to...", "you need to...", "you go to...", "you decide to..."',
       '',
       'AGENCY: open situations (what to do with an NPC, where to go) become OPTIONS — never resolved in the narrative.',
+      '',
+      'EXAMPLES OF CORRECT vs WRONG narrative endings:',
+      '  ✅ CORRECT: "The guard\'s weapon clatters to the ground. Two others step forward, blades drawn."',
+      '  ❌ WRONG:   "The guard falls. You charge the remaining two and escape through the window."',
+      '  ✅ CORRECT: "The door opens, revealing a dimly lit corridor."',
+      '  ❌ WRONG:   "The door opens. You step inside and search the room for clues."',
+      '  ✅ CORRECT: "Mira flinches at your words, her expression shifting to something harder."',
+      '  ❌ WRONG:   "Mira flinches. Now you need to decide whether to trust her or walk away."',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
       'The structured context of this call is the only canonical source for JSON fields.',
@@ -2356,6 +2366,29 @@ export class GeminiAdapter implements Narrator {
     if (!response.narrative.trim()) return false
     if (response.options.length !== 4) return false
 
+    // Detect agency violations: narrative resolving the player's next action instead of leaving it open
+    const AGENCY_VIOLATION_PATTERNS = [
+      /\byou go to\b/i,
+      /\byou step inside\b/i,
+      /\byou charge\b/i,
+      /\byou decide to\b/i,
+      /\byou must now\b/i,
+      /\bnow you need\b/i,
+      /\bit'?s time to\b/i,
+      /\bthe next step\b/i,
+      /\bnow you should\b/i,
+      /\byou have to\b/i,
+      /\bvocê vai para\b/i,
+      /\bvocê decide\b/i,
+      /\bagora você precisa\b/i,
+      /\bé hora de\b/i,
+      /\bvocê entra e\b/i,
+      /\bvocê avança\b/i,
+    ]
+    const narrativeLower = response.narrative
+    const hasAgencyViolation = AGENCY_VIOLATION_PATTERNS.some((p) => p.test(narrativeLower))
+    if (hasAgencyViolation) return false
+
     return response.options.every((option) => {
       if (!option.text.trim() || !option.diceCheck || !option.diceCheck.reason.trim()) return false
 
@@ -2391,11 +2424,14 @@ export class GeminiAdapter implements Narrator {
       basePrompt,
       '',
       '=== MANDATORY CORRECTION ===',
-      '- The previous response was rejected for being incomplete, truncated, or non-canonical.',
+      '- The previous response was rejected for being incomplete, truncated, non-canonical, or for violating the agency rule.',
       '- Return complete and self-consistent JSON.',
       '- Do not use entities outside the structured context.',
       '- Do not omit required options, diceCheck, or actionPayload.',
-      '- If in doubt about state mutations, leave npcs, itemChanges, and statusChanges empty/null.'
+      '- If in doubt about state mutations, leave npcs, itemChanges, and statusChanges empty/null.',
+      '- CRITICAL AGENCY CHECK: The "narrative" field must NOT describe what the player does next.',
+      '  It must end at the direct consequence of the current action — the player\'s next move is chosen from "options".',
+      '  Remove any phrase like "you go to", "you decide to", "you step inside", "now you need to", "it\'s time to".'
     ].join('\n')
   }
 
