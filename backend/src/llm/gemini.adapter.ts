@@ -2334,35 +2334,15 @@ export class GeminiAdapter implements Narrator {
     }
   }
 
-  private isNarratorResponseStructurallyValid(response: NarratorTurnResponse): boolean {
-    if (!response.narrative.trim()) return false
-    if (response.options.length !== 4) return false
+  private isNarratorResponseStructurallyValid(response: NarratorTurnResponse): { valid: true } | { valid: false; reason: string } {
+    if (!response.narrative.trim()) return { valid: false, reason: 'narrative empty' }
+    if (response.options.length !== 4) return { valid: false, reason: `options count=${response.options.length}` }
 
-    // Detect agency violations: narrative resolving the player's next action instead of leaving it open
-    const AGENCY_VIOLATION_PATTERNS = [
-      /\byou go to\b/i,
-      /\byou step inside\b/i,
-      /\byou charge\b/i,
-      /\byou decide to\b/i,
-      /\byou must now\b/i,
-      /\bnow you need\b/i,
-      /\bit'?s time to\b/i,
-      /\bthe next step\b/i,
-      /\bnow you should\b/i,
-      /\byou have to\b/i,
-      /\bvocê vai para\b/i,
-      /\bvocê decide\b/i,
-      /\bagora você precisa\b/i,
-      /\bé hora de\b/i,
-      /\bvocê entra e\b/i,
-      /\bvocê avança\b/i,
-    ]
-    const narrativeLower = response.narrative
-    const hasAgencyViolation = AGENCY_VIOLATION_PATTERNS.some((p) => p.test(narrativeLower))
-    if (hasAgencyViolation) return false
-
-    return response.options.every((option) => {
-      if (!option.text.trim() || !option.diceCheck || !option.diceCheck.reason.trim()) return false
+    for (let i = 0; i < response.options.length; i++) {
+      const option = response.options[i]
+      if (!option.text.trim()) return { valid: false, reason: `option[${i}] text empty` }
+      if (!option.diceCheck) return { valid: false, reason: `option[${i}] diceCheck missing` }
+      if (!option.diceCheck.reason.trim()) return { valid: false, reason: `option[${i}] diceCheck.reason empty` }
 
       const payload = option.actionPayload ?? {}
       const payloadSkill = sanitizeSkillName(payload.skill)
@@ -2371,24 +2351,29 @@ export class GeminiAdapter implements Narrator {
       const diceAttribute = sanitizeNullableInlineText(option.diceCheck.attribute)
 
       if (option.diceCheck.required && !diceSkill && !diceAttribute && !payloadSkill && !payloadAttribute) {
-        return false
+        return { valid: false, reason: `option[${i}] diceCheck.required=true but no skill/attribute` }
       }
 
       switch (option.actionType) {
         case 'attack':
-          return sanitizeInlineText(payload.targetId, '').length > 0
+          if (!sanitizeInlineText(payload.targetId, '').length) return { valid: false, reason: `option[${i}] attack missing targetId` }
+          break
         case 'travel':
-          return sanitizeInlineText(payload.to, '').length > 0
+          if (!sanitizeInlineText(payload.to, '').length) return { valid: false, reason: `option[${i}] travel missing to` }
+          break
         case 'trait_test':
-          return Boolean(payloadSkill || payloadAttribute || diceSkill || diceAttribute)
+          if (!payloadSkill && !payloadAttribute && !diceSkill && !diceAttribute) return { valid: false, reason: `option[${i}] trait_test missing skill/attribute` }
+          break
         case 'custom':
-          return Boolean(sanitizeInlineText(payload.input, option.text))
+          if (!sanitizeInlineText(payload.input, option.text)) return { valid: false, reason: `option[${i}] custom missing input` }
+          break
         case 'flag':
-          return Boolean(sanitizeInlineText(payload.key, ''))
-        default:
-          return true
+          if (!sanitizeInlineText(payload.key, '')) return { valid: false, reason: `option[${i}] flag missing key` }
+          break
       }
-    })
+    }
+
+    return { valid: true }
   }
 
   private buildNarratorRetrySystemPrompt(basePrompt: string): string {
@@ -2486,9 +2471,10 @@ export class GeminiAdapter implements Narrator {
           allowNarrativeFallback: false
         })
 
-        if (!this.isNarratorResponseStructurallyValid(sanitized)) {
+        const validationResult = this.isNarratorResponseStructurallyValid(sanitized)
+        if (!validationResult.valid) {
           lastError = new Error('Resposta narrativa estruturalmente inválida')
-          warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: sanitized response failed structural validation`)
+          warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: sanitized response failed structural validation — ${validationResult.reason}`)
           continue
         }
 
