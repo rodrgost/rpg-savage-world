@@ -65,7 +65,10 @@ export class NpcService {
       tags: [...(def.tags ?? []), 'catalog'],
       disposition: disposition ?? def.dispositionDefault,
       location,
-      status: 'active'
+      status: 'active',
+      ...(def.personality ? { personality: def.personality } : {}),
+      ...(def.motivation ? { motivation: def.motivation } : {}),
+      ...(def.speechPattern ? { speechPattern: def.speechPattern } : {})
     }
   }
 

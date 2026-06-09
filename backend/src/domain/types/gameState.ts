@@ -32,6 +32,12 @@ export type NpcDefinition = {
   id: string
   name: string
   description?: string
+  /** How this NPC acts: temperament, personality traits, behavioral tendencies */
+  personality?: string
+  /** What drives this NPC's decisions and actions */
+  motivation?: string
+  /** Distinctive speaking style: tone, vocabulary, speech habits or quirks */
+  speechPattern?: string
   isWildCard: boolean
   dispositionDefault: 'hostile' | 'neutral' | 'friendly'
   toughness: number
@@ -72,6 +78,12 @@ export type NPCCombatant = {
   damageFormula?: string
   /** Penetração de Armadura do ataque do NPC. */
   ap?: number
+  /** How this NPC acts: temperament, personality traits, behavioral tendencies */
+  personality?: string
+  /** What drives this NPC's decisions and actions */
+  motivation?: string
+  /** Distinctive speaking style: tone, vocabulary, speech habits or quirks */
+  speechPattern?: string
 }
 
 export type CombatState = {
