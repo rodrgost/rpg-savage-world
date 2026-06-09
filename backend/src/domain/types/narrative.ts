@@ -145,6 +145,8 @@ export type ActionOption = {
   id: string
   /** Texto narrativo descritivo da opção */
   text: string
+  /** Fala direta do personagem do jogador ao escolher esta opção (apenas opções de diálogo/confronto/social) */
+  playerSpeech?: string | null
   /** Tipo da ação mecânica correspondente no rule-engine */
   actionType: PlayerAction['type']
   /** Payload parcial para montar o PlayerAction */
