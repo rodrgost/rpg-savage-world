@@ -641,6 +641,9 @@ function ActionOptions({
                 {hasDice && <span className="dice-check-badge">🎲</span>}
                 {option.text}
               </span>
+              {option.playerSpeech && (
+                <span className="option-speech">"{option.playerSpeech}"</span>
+              )}
               {hasDice && dc && (
                 <span className="dice-check-info">
                   Teste: {trait.label}

@@ -1166,10 +1166,11 @@ export class GeminiAdapter implements Narrator {
     const sysPrompt = [
       'You maintain the canonical continuity summary of a story.',
       'Objective: generate a summary that preserves BOTH mechanical continuity AND open narrative threads — allowing the narrator to build on what has already been established.',
-      'SOURCE PRIORITY (most to least authoritative):',
-      '  1. CURRENT STRUCTURED STATE (factual anchor) — overrides any data in the previous summary or messages.',
-      '  2. Most recent messages — take priority over older messages when there is a narrative conflict.',
-      '  3. Previous summary — starting point; replace what has been superseded by recent events.',
+      'CHRONOLOGY: Write in chronological order — from older events to most recent. The summary must read as a story that progresses forward in time, never backwards.',
+      'CONFLICT RESOLUTION (when facts contradict — most authoritative wins):',
+      '  1. CURRENT STRUCTURED STATE — factual anchor; override any contradictions in the previous summary or messages.',
+      '  2. Most recent messages — take priority over older messages in a narrative conflict.',
+      '  3. Previous summary — background context; discard only what has been explicitly superseded.',
       'Rules:',
       '- Write in flowing paragraphs, without titles, labels, or sections.',
       '- Use 2 to 4 paragraphs — the information that matters for immediate continuation and narrative coherence.',
@@ -1189,7 +1190,11 @@ export class GeminiAdapter implements Narrator {
       : null
 
     const prompt = [
-      `=== CURRENT STATE (factual anchor — prevails in any conflict) ===`,
+      `=== PREVIOUS SUMMARY (background — starting point for the new summary) ===`,
+      req.previousSummary || 'no previous summary.',
+      '',
+      ...(narrativeBlock ? [narrativeBlock, ''] : []),
+      `=== CURRENT STATE (factual anchor — use to verify and correct any contradictions above) ===`,
       `Turn: ${req.upToTurn}. Location: ${state.worldState.activeLocation}.`,
       combatText,
       `Wounds: ${p.wounds}/${p.maxWounds}. Fatigue: ${p.fatigue}. Shaken: ${p.isShaken ? 'yes' : 'no'}. Bennies: ${p.bennies}.`,
@@ -1198,13 +1203,8 @@ export class GeminiAdapter implements Narrator {
       `Active effects: ${statusText}`,
       `Active world flags: ${activeFlagsText}`,
       '',
-      `=== PREVIOUS SUMMARY (starting point — replace what has been superseded) ===`,
-      req.previousSummary || 'no previous summary.',
-      narrativeBlock ? '' : null,
-      narrativeBlock,
-      '',
-      'Generate the updated summary. Discard from the previous summary everything that has been superseded. Do not repeat facts that the current state renders obsolete.'
-    ].filter((line) => line !== null).join('\n')
+      'Generate the updated summary in chronological order (oldest → most recent). Use the previous summary as narrative base, extend it with the new session messages, and correct any facts contradicted by the current state above. Do not repeat facts already superseded. Do not start with current state — start where the story began and advance forward.'
+    ].join('\n')
 
     try {
       const generated = await this.generateText(prompt, {
@@ -1253,7 +1253,9 @@ export class GeminiAdapter implements Narrator {
     const sysPrompt = [
       'You summarize the story of an RPG adventure.',
       'Read the messages below and generate a prose summary (2 to 4 paragraphs) of the important events.',
+      'CHRONOLOGY: Write in chronological order — from older events to most recent. The summary must read as a story that progresses forward in time, never backwards.',
       'Preserve character names, visited locations, discoveries, and mysteries not yet resolved.',
+      'Discard situations that were resolved or superseded by the events in the messages.',
       'Do not list inventory. Do not use markdown, titles, or bullets. Prose only in Brazilian Portuguese.'
     ].join('\n')
 
@@ -1261,13 +1263,22 @@ export class GeminiAdapter implements Narrator {
       .map((m) => `[Turn ${m.turn}] ${m.role === 'narrator' ? 'Narrator' : 'Player'}: ${m.text}`)
       .join('\n')
 
+    const currentStateBlock = [
+      `=== CURRENT STATE (factual anchor — correct any contradictions in the messages above) ===`,
+      `Location: ${state.worldState.activeLocation}. ${combatText}`,
+      `Visible threats: ${threatsText} | Forces: ${forcesText}`,
+      `Active flags: ${activeFlagsText}`
+    ].join('\n')
+
     const prompt = [
-      req.previousSummary ? '=== Previous summary ===\n' + req.previousSummary : '',
+      req.previousSummary ? '=== Previous summary (background — integrate forward, do not repeat) ===\n' + req.previousSummary : '',
       '',
-      '=== New events (chronological order) ===',
+      '=== New events (chronological order — oldest to most recent) ===',
       messagesText,
       '',
-      'Generate the updated summary incorporating the new events above.'
+      currentStateBlock,
+      '',
+      'Generate the updated summary in chronological order (oldest → most recent). Start from the beginning of the story as established in the previous summary, extend it with the new events, and correct facts using the current state above.'
     ].filter(Boolean).join('\n')
 
     let lastError: Error | null = null
@@ -1701,7 +1712,8 @@ export class GeminiAdapter implements Narrator {
       '  "options": [',
       '    {',
       '      "id": "<uuid>",',
-      '      "text": "<narrative description of the option>",',
+      '      "text": "<narrative description of the option (action label, 1 short sentence)>",',
+      '      "playerSpeech": "<optional — what the player character says out loud when choosing this option. Only for dialogue, confrontation, negotiation, persuasion, or social actions. OMIT for attack, travel, skill tests with no speech. Max 1 sentence, first person, same language as narrative>",',
       '      "actionType": "<mechanical action type: custom|trait_test|attack|travel|flag>",',
       '      "actionPayload": { <partial fields to build the mechanical action> },',
       '      "requiredItems": ["<inventory item name, if required for the action>"],',
@@ -1730,6 +1742,12 @@ export class GeminiAdapter implements Narrator {
       '    { "npcId": "<id of the attacking NPC>", "skillDie": <6|8|10|12>, "damageFormula": "<str+d6 or 2d6 etc>", "ap": 0 }',
       '  ]',
       '},',
+      '',
+      'playerSpeech FIELD RULES:',
+      '- Include ONLY when the option naturally involves the player character speaking out loud.',
+      '- ✅ USE for: dialogue, confrontation, negotiation, persuasion, taunt, plea, declaration, question directed at an NPC.',
+      '- ❌ OMIT for: attack, travel, skill tests (Percepção, Furtividade, Luta...), inspect/search, inventory actions.',
+      '- When used: 1 sentence max, first person, in the same language as the narrative. Write as direct speech (no attribution like "você diz:"). Example: "Sei que você está escondendo algo."',
       '',
       'diceCheck FIELD RULES (REQUIRED in EVERY option):',
       '- Only require a roll when BOTH: (1) outcome is genuinely uncertain, AND (2) failure has interesting consequences. If either is false → required=false.',
@@ -2105,6 +2123,7 @@ export class GeminiAdapter implements Narrator {
       pushOption({
         id: typeof o.id === 'string' ? o.id : randomUUID(),
         text,
+        playerSpeech: sanitizeNullableInlineText(o.playerSpeech),
         actionType,
         actionPayload,
         requiredItems: sanitizeStringList(o.requiredItems),

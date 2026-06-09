@@ -115,7 +115,7 @@ export class SummaryService {
     }
 
     const keyEvents = await this.events.listSince({ sessionId, afterTurn: lastTurnIncluded })
-    const recentRaw = await this.chatMessages.getRecent(sessionId, 10)
+    const recentRaw = await this.chatMessages.getRecent(sessionId, SummaryService.RECENT_MESSAGES_TO_KEEP)
 
     // Quando não há resumo anterior, inclui também as primeiras mensagens (cena de abertura)
     // para que o LLM não perca o contexto do início do jogo.
