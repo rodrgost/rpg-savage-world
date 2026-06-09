@@ -857,6 +857,35 @@ type AttackMissPayload = {
   wildRoll: DiceRollDetail | null
 }
 
+type NpcAttackHitPayload = {
+  npcId: string
+  npcName: string
+  skillDie: number
+  attackRoll: number
+  targetParry: number
+  attackRaises: number
+  damageTotal: number
+  raiseBonusDamage: number
+  playerToughness: number
+  woundsInflicted: number
+  playerShaken: boolean
+  playerWounds: number
+  playerIncapacitated: boolean
+  traitRoll: DiceRollDetail
+  wildRoll: DiceRollDetail | null
+  damageRolls: DiceRollDetail[]
+}
+
+type NpcAttackMissPayload = {
+  npcId: string
+  npcName: string
+  skillDie: number
+  attackRoll: number
+  targetParry: number
+  traitRoll: DiceRollDetail
+  wildRoll: DiceRollDetail | null
+}
+
 function AttackResultCard({ event }: { event: SessionEvent }) {
   const isHit = event.type === 'attack_hit'
   const p = event.payload as unknown as AttackHitPayload & AttackMissPayload
@@ -946,6 +975,103 @@ function AttackResultCard({ event }: { event: SessionEvent }) {
             ) : p.woundsInflicted > 0 ? (
               <span className="attack-result-status wounded">🩸 {p.woundsInflicted} ferimento{p.woundsInflicted > 1 ? 's' : ''}</span>
             ) : p.targetShaken ? (
+              <span className="attack-result-status shaken">🟡 Abalado</span>
+            ) : null}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function NpcAttackResultCard({ event }: { event: SessionEvent }) {
+  const isHit = event.type === 'npc_attack_hit'
+  const p = event.payload as unknown as NpcAttackHitPayload & NpcAttackMissPayload
+  const traitRoll = p.traitRoll
+  const wildRoll = p.wildRoll
+
+  return (
+    <div className={`dice-result-card ${isHit ? 'dice-failure' : 'dice-success'}`}>
+      <div className="dice-result-header">
+        <span className="dice-result-icon">{isHit ? '🗡️' : '🛡️'}</span>
+        <span className="dice-result-title">{p.npcName} ataca você</span>
+        {isHit ? (
+          <span className="dice-result-badge failure">
+            {p.attackRaises > 0
+              ? `Acertou +${p.attackRaises} ampliaç${p.attackRaises > 1 ? 'ões' : 'ão'}`
+              : 'Acertou'}
+          </span>
+        ) : (
+          <span className="dice-result-badge success">Errou</span>
+        )}
+      </div>
+
+      <div className="dice-result-rolls">
+        {traitRoll && (
+          <div className="dice-roll-group">
+            <span className="dice-roll-label">Ataque d{traitRoll.sides}</span>
+            <div className="dice-roll-values">
+              {traitRoll.rolls?.map((r: number, i: number) => (
+                <span key={i} className={`dice-value ${traitRoll.aced ? 'aced' : ''}`}>
+                  {r}{traitRoll.aced && i < traitRoll.rolls.length - 1 ? '🔥' : ''}
+                </span>
+              )) ?? <span className="dice-value">{traitRoll.total}</span>}
+              <span className="dice-roll-total">= {traitRoll.total}</span>
+            </div>
+          </div>
+        )}
+        {wildRoll && (
+          <div className="dice-roll-group">
+            <span className="dice-roll-label">Wild d6</span>
+            <div className="dice-roll-values">
+              {wildRoll.rolls?.map((r: number, i: number) => (
+                <span key={i} className={`dice-value ${wildRoll.aced ? 'aced' : ''}`}>
+                  {r}{wildRoll.aced && i < wildRoll.rolls.length - 1 ? '🔥' : ''}
+                </span>
+              )) ?? <span className="dice-value">{wildRoll.total}</span>}
+              <span className="dice-roll-total">= {wildRoll.total}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="dice-result-summary">
+        <span className="dice-final">Ataque: <strong>{p.attackRoll}</strong></span>
+        <span className="dice-tn">Aparar: {p.targetParry}</span>
+      </div>
+
+      {isHit && (
+        <>
+          <div className="dice-result-rolls attack-damage-rolls">
+            {p.damageRolls?.map((dr, i) => {
+              const diceLabel = dr.label === 'str'
+                ? `Força d${dr.sides}`
+                : dr.label === 'bonus'
+                  ? `Bônus d${dr.sides}`
+                  : `Arma d${dr.sides}`
+              return (
+                <div key={i} className="dice-roll-group">
+                  <span className="dice-roll-label">{diceLabel}</span>
+                  <div className="dice-roll-values">
+                    {dr.rolls.map((r: number, j: number) => (
+                      <span key={j} className={`dice-value ${dr.aced ? 'aced' : ''}`}>
+                        {r}{dr.aced && j < dr.rolls.length - 1 ? '🔥' : ''}
+                      </span>
+                    ))}
+                    <span className="dice-roll-total">= {dr.total}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div className="dice-result-summary">
+            <span className="dice-final">Dano: <strong>{p.damageTotal}</strong></span>
+            <span className="dice-tn">Resistência: {p.playerToughness}</span>
+            {p.playerIncapacitated ? (
+              <span className="attack-result-status incapacitated">💀 Você está incapacitado</span>
+            ) : p.woundsInflicted > 0 ? (
+              <span className="attack-result-status wounded">🩸 {p.woundsInflicted} ferimento{p.woundsInflicted > 1 ? 's' : ''} sofrido{p.woundsInflicted > 1 ? 's' : ''}</span>
+            ) : p.playerShaken ? (
               <span className="attack-result-status shaken">🟡 Abalado</span>
             ) : null}
           </div>
@@ -1094,6 +1220,9 @@ function RecoverShakenCard({ event }: { event: SessionEvent }) {
 function DiceResultCard({ event }: { event: SessionEvent }) {
   if (event.type === 'attack_hit' || event.type === 'attack_miss') {
     return <AttackResultCard event={event} />
+  }
+  if (event.type === 'npc_attack_hit' || event.type === 'npc_attack_miss') {
+    return <NpcAttackResultCard event={event} />
   }
   if (event.type === 'soak_roll') {
     return <SoakRollCard event={event} />
