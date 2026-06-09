@@ -524,23 +524,13 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
             // Use snapshot status from the message; fall back to current state only if absent
             const status = npcMention.status ?? npcState?.status
 
-            const getStatusIcon = (s?: string) => {
-              switch (s) {
-                case 'incapacitated': return '💀'
-                case 'defeated': return '⚰️'
-                case 'dead': return '☠️'
-                case 'active': return '✓'
-                default: return '?'
-              }
-            }
-
             const getStatusLabel = (s?: string) => {
               switch (s) {
                 case 'incapacitated': return 'Incapacitado'
                 case 'defeated': return 'Derrotado'
                 case 'dead': return 'Morto'
                 case 'active': return 'Ativo'
-                default: return ''
+                default: return 'Ativo'
               }
             }
 
@@ -548,19 +538,22 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
               ? 'npc-compact-inactive'
               : ''
 
+            const wounds = npcState?.wounds ?? null
+            const maxWounds = npcState?.maxWounds ?? null
+
             return (
               <div key={npcMention.id} className={`npc-compact ${npcMention.disposition} ${statusClass}`}>
                 <div className="npc-compact-header">
                   <span className="npc-compact-name">{npcMention.name}</span>
-                  <span className="npc-compact-status" title={getStatusLabel(status)}>
-                    {getStatusIcon(status)}
-                  </span>
+                  <span className="npc-compact-status">{getStatusLabel(status)}</span>
                 </div>
                 <div className="npc-compact-stats">
-                  <span title="Ferimentos">❤️ {npcState?.wounds ?? '?'}/{npcState?.maxWounds ?? '?'}</span>
-                  {npcState?.toughness && <span title="Resistência">🛡️ {npcState.toughness}</span>}
-                  {npcState?.parry && <span title="Aparar">⚔️ {npcState.parry}</span>}
-                  {npcState?.isShaken && <span className="shaken-indicator" title="Abalado">😵</span>}
+                  {wounds !== null && maxWounds !== null && (
+                    <span>Ferimentos: {wounds}/{maxWounds}</span>
+                  )}
+                  {npcState?.toughness != null && <span>Resistência: {npcState.toughness}</span>}
+                  {npcState?.parry != null && <span>Aparar: {npcState.parry}</span>}
+                  {npcState?.isShaken && <span className="shaken-indicator">Abalado</span>}
                 </div>
               </div>
             )
@@ -726,16 +719,6 @@ function NpcStatusEffectsPanel({ npcs }: { npcs: NonNullable<GameState['npcs']> 
   const affectedNpcs = npcs.filter((npc) => (npc.statusEffects ?? []).length > 0)
   if (!affectedNpcs.length) return null
 
-  const getStatusIcon = (status?: string) => {
-    switch (status) {
-      case 'incapacitated': return '💀'
-      case 'defeated': return '⚰️'
-      case 'dead': return '☠️'
-      case 'active': return '✓'
-      default: return ''
-    }
-  }
-
   const getStatusLabel = (status?: string) => {
     switch (status) {
       case 'incapacitated': return 'Incapacitado'
@@ -752,7 +735,7 @@ function NpcStatusEffectsPanel({ npcs }: { npcs: NonNullable<GameState['npcs']> 
       <div className="effects-list">
         {affectedNpcs.flatMap((npc) => (npc.statusEffects ?? []).map((effect) => (
           <span key={`${npc.id}-${effect.id}`} className="effect-tag" title={`${npc.name}${npc.status ? ` - ${getStatusLabel(npc.status)}` : ''}`}>
-            {getStatusIcon(npc.status)} {npc.name}: {effect.name}
+            {npc.status ? `[${getStatusLabel(npc.status)}] ` : ''}{npc.name}: {effect.name}
             {effect.turnsRemaining !== undefined && ` (${effect.turnsRemaining}t)`}
           </span>
         )))}
@@ -841,6 +824,7 @@ type AttackHitPayload = {
   damageTotal: number
   targetToughness: number
   woundsInflicted: number
+  targetWounds: number
   targetShaken: boolean
   targetIncapacitated: boolean
   traitRoll: DiceRollDetail
@@ -971,11 +955,11 @@ function AttackResultCard({ event }: { event: SessionEvent }) {
             <span className="dice-final">Dano: <strong>{p.damageTotal}</strong></span>
             <span className="dice-tn">Resistência: {p.targetToughness}</span>
             {p.targetIncapacitated ? (
-              <span className="attack-result-status incapacitated">💀 Incapacitado</span>
+              <span className="attack-result-status incapacitated">Incapacitado</span>
             ) : p.woundsInflicted > 0 ? (
-              <span className="attack-result-status wounded">🩸 {p.woundsInflicted} ferimento{p.woundsInflicted > 1 ? 's' : ''}</span>
+              <span className="attack-result-status wounded">{p.woundsInflicted} ferimento{p.woundsInflicted > 1 ? 's' : ''} — total: {p.targetWounds ?? p.woundsInflicted}</span>
             ) : p.targetShaken ? (
-              <span className="attack-result-status shaken">🟡 Abalado</span>
+              <span className="attack-result-status shaken">Abalado</span>
             ) : null}
           </div>
         </>
@@ -1068,11 +1052,11 @@ function NpcAttackResultCard({ event }: { event: SessionEvent }) {
             <span className="dice-final">Dano: <strong>{p.damageTotal}</strong></span>
             <span className="dice-tn">Resistência: {p.playerToughness}</span>
             {p.playerIncapacitated ? (
-              <span className="attack-result-status incapacitated">💀 Você está incapacitado</span>
+              <span className="attack-result-status incapacitated">Você está incapacitado — ferimentos: {p.playerWounds}</span>
             ) : p.woundsInflicted > 0 ? (
-              <span className="attack-result-status wounded">🩸 {p.woundsInflicted} ferimento{p.woundsInflicted > 1 ? 's' : ''} sofrido{p.woundsInflicted > 1 ? 's' : ''}</span>
+              <span className="attack-result-status wounded">{p.woundsInflicted} ferimento{p.woundsInflicted > 1 ? 's' : ''} sofrido{p.woundsInflicted > 1 ? 's' : ''} — total: {p.playerWounds}</span>
             ) : p.playerShaken ? (
-              <span className="attack-result-status shaken">🟡 Abalado</span>
+              <span className="attack-result-status shaken">Abalado</span>
             ) : null}
           </div>
         </>
@@ -1143,11 +1127,11 @@ function SoakRollCard({ event }: { event: SessionEvent }) {
         <span className="dice-final">Total: <strong>{p.finalTotal}</strong></span>
         <span className="dice-tn">TN: 4</span>
         {p.isSuccess && p.shakenRemoved && (
-          <span className="attack-result-status shaken">✅ Abalado removido</span>
+          <span className="attack-result-status shaken">Abalado removido</span>
         )}
         <span className="dice-mod">Bennies: {p.remainingBennies}</span>
         {!p.isSuccess && (
-          <span className="attack-result-status wounded">🩸 Ferimentos restantes: {p.remainingWounds}</span>
+          <span className="attack-result-status wounded">Ferimentos restantes: {p.remainingWounds}</span>
         )}
       </div>
     </div>
