@@ -257,6 +257,9 @@ export type NarrateTurnRequest = {
       toughness: number
       parry: number
       statusEffects?: Array<{ id: string; name: string; turnsRemaining?: number }>
+      personality?: string
+      motivation?: string
+      speechPattern?: string
     }>
     /** IDs de NPCs já derrotados nesta sessão */
     defeatedNpcIds?: string[]
