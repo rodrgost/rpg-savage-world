@@ -1670,8 +1670,9 @@ export class GeminiAdapter implements Narrator {
       'DO NOT WRITE:',
       '  • states that didn\'t change, absent things, or generic filler ("nothing changed", "time passes", "no threats in sight")',
       '  • literal mechanical terms: "Shaken", "Wounded", "Fatigue" — narrate instead: "the arm gives out", "vision blurs"',
-      '  • NPCs making autonomous decisions beyond immediate reaction to the player\'s action',
-      '    (WRONG: "Marcus leaves and warns the others." RIGHT: "Marcus steps back, eyes narrowing at you.")',
+      '  • NPCs making autonomous decisions that REMOVE player agency or skip the player\'s next choice',
+      '    (WRONG: "Marcus leaves, warns the others, and the building is surrounded." RIGHT: "Marcus steps back, hand moving toward his radio.")',
+      '  • NOTE: NPCs MAY speak, threaten, taunt, react emotionally, or take immediate in-scene actions (draw a weapon, block a door, shout a warning) — this IS expected. The prohibition is on NPCs resolving the OUTCOME of the scene without player input.',
       '  • editorial conclusions that remove agency: "the priority now is...", "the next step is...", "you two need to...", "now you should...", "it\'s time to...", "you have to...", "you need to...", "you go to...", "you decide to..."',
       '',
       'AGENCY: open situations (what to do with an NPC, where to go) become OPTIONS — never resolved in the narrative.',
@@ -1986,6 +1987,20 @@ export class GeminiAdapter implements Narrator {
       '  • Use results to seed future plots naturally (social debt, alerted enemy, incomplete clue).',
       '  • JSON FIELDS: register only elements with explicit structured context support — no invented state.',
       '  • NARRATIVE TEXT: freely add atmosphere, sensory details, hints, world flavor — keep OUT of JSON fields.',
+    )
+
+    // NPC character participation rules
+    lines.push(
+      '',
+      '=== NPC CHARACTER & PARTICIPATION ===',
+      'When a PRESENT NPC has Personality, Motivation, or Speech fields:',
+      '  • Use these to shape EVERY reaction, dialogue line, and behavior choice for that NPC.',
+      '  • NPCs are CHARACTERS, not statblocks. They have opinions, fear, pride, goals.',
+      '  • NPCs may speak (via segments type="npc"), threaten, taunt, plead, negotiate, or react emotionally in ways consistent with their character.',
+      '  • Hostile NPCs may take immediate in-scene initiative: draw a weapon, step forward, shout a warning, call for backup — as long as the outcome of the SCENE remains unresolved and the player still chooses their next action from "options".',
+      '  • NPCs without personality/motivation fields: use their disposition and context to infer a credible behavioral baseline.',
+      '  • CONSISTENCY: if an NPC said or did something in a previous turn, stay true to that characterization. Never flip tone without narrative cause.',
+      '  • SPEECH PATTERN matters: a cynical mercenary does not speak like a noble diplomat. Write dialogue that sounds like a real person, not a plot device.',
     )
 
     return lines.join('\n')
@@ -2821,7 +2836,10 @@ export class GeminiAdapter implements Narrator {
           const effects = (n.statusEffects ?? []).length
             ? ` | effects: ${(n.statusEffects ?? []).map(effect => `${effect.name}${effect.turnsRemaining !== undefined ? ` (${effect.turnsRemaining} turns)` : ''}`).join(', ')}`
             : ''
-          return `- ${n.name} (${n.id}) [${tipo}, ${disp}, Toughness ${n.toughness}, Parry ${n.parry}${status}${effects}]`
+          const personality = n.personality ? ` | Personality: ${n.personality}` : ''
+          const motivation = n.motivation ? ` | Motivation: ${n.motivation}` : ''
+          const speech = n.speechPattern ? ` | Speech: ${n.speechPattern}` : ''
+          return `- ${n.name} (${n.id}) [${tipo}, ${disp}, Toughness ${n.toughness}, Parry ${n.parry}${status}${effects}${personality}${motivation}${speech}]`
         }).join('\n')
       : 'No NPCs present'
 

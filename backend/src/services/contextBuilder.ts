@@ -140,6 +140,9 @@ export type LlmContext = {
       toughness: number
       parry: number
       statusEffects?: Array<{ id: string; name: string; turnsRemaining?: number }>
+      personality?: string
+      motivation?: string
+      speechPattern?: string
     }>
     /** IDs de NPCs já derrotados nesta sessão — para orientar o LLM a não referenciá-los como ameaças ativas */
     defeatedNpcIds: string[]
@@ -196,7 +199,10 @@ export function buildLlmContext(params: {
             id: effect.id,
             name: effect.name,
             turnsRemaining: effect.turnsRemaining
-          }))
+          })),
+          ...(n.personality ? { personality: n.personality } : {}),
+          ...(n.motivation ? { motivation: n.motivation } : {}),
+          ...(n.speechPattern ? { speechPattern: n.speechPattern } : {})
         })),
       defeatedNpcIds: state.defeatedNpcIds ?? [],
       situation,
