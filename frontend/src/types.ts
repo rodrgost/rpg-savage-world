@@ -162,6 +162,7 @@ export type DiceCheck = {
 export type ActionOption = {
   id: string
   text: string
+  playerSpeech?: string | null
   actionType: string
   actionPayload: Record<string, unknown>
   requiredItems?: string[]
