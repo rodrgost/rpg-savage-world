@@ -200,9 +200,9 @@ export function buildLlmContext(params: {
             name: effect.name,
             turnsRemaining: effect.turnsRemaining
           })),
-          ...(n.personality ? { personality: n.personality } : {}),
-          ...(n.motivation ? { motivation: n.motivation } : {}),
-          ...(n.speechPattern ? { speechPattern: n.speechPattern } : {})
+          personality: n.personality,
+          motivation: n.motivation,
+          speechPattern: n.speechPattern,
         })),
       defeatedNpcIds: state.defeatedNpcIds ?? [],
       situation,

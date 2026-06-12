@@ -1668,7 +1668,9 @@ export class GeminiAdapter implements Narrator {
       cs: opts.campaign?.storyDescription,
       rd: opts.rulesDigest,
       st: opts.summaryText,
-      ps: opts.playerSkills,
+      ps: opts.playerSkills
+        ? Object.fromEntries(Object.entries(opts.playerSkills).sort(([a], [b]) => a.localeCompare(b)))
+        : undefined,
       mode: opts.mode,
       ns: opts.narrativeStyle,
       sv: opts.simpleVocabulary,

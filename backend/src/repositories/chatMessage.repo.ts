@@ -136,8 +136,8 @@ export class ChatMessageRepo {
   }
 
   async countBySession(sessionId: string): Promise<number> {
-    const qs = await this.messagesCollection(sessionId).select().get()
-    return qs.size
+    const snapshot = await this.messagesCollection(sessionId).count().get()
+    return snapshot.data().count
   }
 
   async getOldest(sessionId: string, limit: number): Promise<ChatMessageRow[]> {

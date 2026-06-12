@@ -80,7 +80,7 @@ export class CampaignsRepo {
   }
 
   async listByOwner(params: { ownerId: string; worldId?: string }): Promise<Array<CampaignDoc & { id: string }>> {
-    const qs = await firestore.collection('campaigns').where('ownerId', '==', params.ownerId).get()
+    const qs = await firestore.collection('campaigns').where('ownerId', '==', params.ownerId).limit(200).get()
 
     const filtered = this.toActiveRows(qs).filter((campaign) => {
       if (campaign.status !== 'active') return false

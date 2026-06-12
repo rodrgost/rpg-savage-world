@@ -1718,20 +1718,21 @@ export function GamePage() {
   }
 
   const sessionSummaryText = trimIncompleteSummaryText(summary?.summaryText)
-  const hasPersistedSummaryMessage = messages.some(
-    (message) => message.role === 'system' && Boolean(message.narrative?.trim()) && !(message.engineEvents?.length)
-  )
-  const displayMessages = useMemo(() => sessionSummaryText && !hasPersistedSummaryMessage
-    ? [{
-        messageId: `session-summary-${sessionId || state?.meta.sessionId || 'session'}`,
-        sessionId: sessionId || state?.meta.sessionId || '',
-        turn: -1,
-        seq: -1,
-        role: 'system' as const,
-        narrative: sessionSummaryText
-      }, ...messages]
-    : messages
-  , [messages, sessionSummaryText, hasPersistedSummaryMessage, sessionId, state?.meta.sessionId])
+  const displayMessages = useMemo(() => {
+    const hasPersistedSummaryMessage = messages.some(
+      (m) => m.role === 'system' && Boolean(m.narrative?.trim()) && !(m.engineEvents?.length)
+    )
+    return sessionSummaryText && !hasPersistedSummaryMessage
+      ? [{
+          messageId: `session-summary-${sessionId || state?.meta.sessionId || 'session'}`,
+          sessionId: sessionId || state?.meta.sessionId || '',
+          turn: -1,
+          seq: -1,
+          role: 'system' as const,
+          narrative: sessionSummaryText
+        }, ...messages]
+      : messages
+  }, [messages, sessionSummaryText, sessionId, state?.meta.sessionId])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {

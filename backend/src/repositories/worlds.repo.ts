@@ -76,7 +76,7 @@ export class WorldsRepo {
   }
 
   async listByOwner(params: { ownerId: string }): Promise<Array<WorldDoc & { id: string }>> {
-    const qs = await firestore.collection('worlds').where('ownerId', '==', params.ownerId).get()
+    const qs = await firestore.collection('worlds').where('ownerId', '==', params.ownerId).limit(200).get()
 
     return this.sortByCreatedAt(this.toActiveRows(qs))
   }
