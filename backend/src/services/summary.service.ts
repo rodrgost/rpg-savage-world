@@ -98,10 +98,10 @@ export class SummaryService {
     return delta >= interval
   }
 
-  private async updateIncrementalSummary(params: { state: GameState; stateForSummary?: GameState; hints?: SummaryDecisionHints }): Promise<void> {
+  private async updateIncrementalSummary(params: { state: GameState; stateForSummary?: GameState; hints?: SummaryDecisionHints; existing?: Awaited<ReturnType<SessionSummaryRepo['getSummary']>> }): Promise<void> {
     const sessionId = params.state.meta.sessionId
 
-    const existing = await this.summaries.getSummary(sessionId)
+    const existing = params.existing ?? await this.summaries.getSummary(sessionId)
     const lastTurnIncluded = existing?.lastTurnIncluded ?? 0
 
     if (
@@ -223,21 +223,27 @@ export class SummaryService {
   async manageSummaryAfterTurn(params: { state: GameState; stateBeforeTurn?: GameState; hints?: SummaryDecisionHints }): Promise<void> {
     const { state, stateBeforeTurn, hints } = params
     const sessionId = state.meta.sessionId
-    const totalMessages = await this.chatMessages.countBySession(sessionId)
+
+    const [totalMessages, existingBefore] = await Promise.all([
+      this.chatMessages.countBySession(sessionId),
+      this.summaries.getSummary(sessionId)
+    ])
     const messagesToCompact = totalMessages - SummaryService.RECENT_MESSAGES_TO_KEEP
 
     if (messagesToCompact >= env.compactBatchMin) {
       log('manageSummary', `Compacting ${messagesToCompact} old messages (threshold=${env.compactBatchMin})`)
       await this.compactOldMessages({ state, stateForSummary: stateBeforeTurn })
-      // Não retorna aqui: deixa o resumo incremental rodar no mesmo turno
-      // para que as mensagens recentes (não compactadas) também sejam incorporadas
     }
 
-    const existing = await this.summaries.getSummary(sessionId)
+    // Re-read only if compaction may have written a new summary; otherwise reuse the cached read
+    const existing = messagesToCompact >= env.compactBatchMin
+      ? await this.summaries.getSummary(sessionId)
+      : existingBefore
+
     const lastTurnIncluded = existing?.lastTurnIncluded ?? 0
     if (this.shouldSummarize({ turn: state.meta.turn, lastTurnIncluded, hints })) {
       log('manageSummary', `Updating incremental summary at turn=${state.meta.turn} (lastTurnIncluded=${lastTurnIncluded})`)
-      await this.updateIncrementalSummary({ state, stateForSummary: stateBeforeTurn, hints })
+      await this.updateIncrementalSummary({ state, stateForSummary: stateBeforeTurn, hints, existing })
     }
   }
 

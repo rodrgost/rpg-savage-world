@@ -71,14 +71,16 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 async function apiStreamRequest<T>(
   path: string,
   body: unknown,
-  onPhase: (data: Record<string, unknown>) => void
+  onPhase: (data: Record<string, unknown>) => void,
+  signal?: AbortSignal
 ): Promise<T> {
   const headers = await buildAuthHeaders()
 
   const response = await fetch(`${backendBaseUrl}${path}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   })
 
   if (!response.ok) {
@@ -676,14 +678,16 @@ export async function rebuildHistorySummary(sessionId: string): Promise<SessionP
 export async function executeCustomAction(
   sessionId: string,
   input: string,
-  onEnginePhase?: (data: EnginePhaseData) => void
+  onEnginePhase?: (data: EnginePhaseData) => void,
+  signal?: AbortSignal
 ): Promise<SessionPayload> {
   const body = { action: { type: 'custom', input } }
   if (onEnginePhase) {
     return await apiStreamRequest<SessionPayload>(
       '/sessions/' + encodeURIComponent(sessionId) + '/actions/stream',
       body,
-      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) }
+      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) },
+      signal
     )
   }
   return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/actions', {
@@ -700,7 +704,8 @@ export async function executeTraitTest(
     modifier?: number
     description?: string
   },
-  onEnginePhase?: (data: EnginePhaseData) => void
+  onEnginePhase?: (data: EnginePhaseData) => void,
+  signal?: AbortSignal
 ): Promise<SessionPayload> {
   const body = {
     action: {
@@ -715,7 +720,8 @@ export async function executeTraitTest(
     return await apiStreamRequest<SessionPayload>(
       '/sessions/' + encodeURIComponent(params.sessionId) + '/actions/stream',
       body,
-      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) }
+      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) },
+      signal
     )
   }
   return await apiRequest('/sessions/' + encodeURIComponent(params.sessionId) + '/actions', {
@@ -733,7 +739,8 @@ export async function executeAttack(
     damageFormula?: string
     ap?: number
   },
-  onEnginePhase?: (data: EnginePhaseData) => void
+  onEnginePhase?: (data: EnginePhaseData) => void,
+  signal?: AbortSignal
 ): Promise<SessionPayload> {
   const body = {
     action: {
@@ -749,7 +756,8 @@ export async function executeAttack(
     return await apiStreamRequest<SessionPayload>(
       '/sessions/' + encodeURIComponent(params.sessionId) + '/actions/stream',
       body,
-      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) }
+      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) },
+      signal
     )
   }
   return await apiRequest('/sessions/' + encodeURIComponent(params.sessionId) + '/actions', {
@@ -760,14 +768,16 @@ export async function executeAttack(
 
 export async function executeSoakRoll(
   sessionId: string,
-  onEnginePhase?: (data: EnginePhaseData) => void
+  onEnginePhase?: (data: EnginePhaseData) => void,
+  signal?: AbortSignal
 ): Promise<SessionPayload> {
   const body = { action: { type: 'soak_roll' } }
   if (onEnginePhase) {
     return await apiStreamRequest<SessionPayload>(
       '/sessions/' + encodeURIComponent(sessionId) + '/actions/stream',
       body,
-      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) }
+      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) },
+      signal
     )
   }
   return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/actions', {
@@ -779,14 +789,16 @@ export async function executeSoakRoll(
 export async function executeSpendBenny(
   sessionId: string,
   purpose: 'reroll' | 'soak' | 'unshake' = 'reroll',
-  onEnginePhase?: (data: EnginePhaseData) => void
+  onEnginePhase?: (data: EnginePhaseData) => void,
+  signal?: AbortSignal
 ): Promise<SessionPayload> {
   const body = { action: { type: 'spend_benny', purpose } }
   if (onEnginePhase) {
     return await apiStreamRequest<SessionPayload>(
       '/sessions/' + encodeURIComponent(sessionId) + '/actions/stream',
       body,
-      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) }
+      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) },
+      signal
     )
   }
   return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/actions', {
@@ -797,14 +809,16 @@ export async function executeSpendBenny(
 
 export async function executeRecoverShaken(
   sessionId: string,
-  onEnginePhase?: (data: EnginePhaseData) => void
+  onEnginePhase?: (data: EnginePhaseData) => void,
+  signal?: AbortSignal
 ): Promise<SessionPayload> {
   const body = { action: { type: 'recover_shaken' } }
   if (onEnginePhase) {
     return await apiStreamRequest<SessionPayload>(
       '/sessions/' + encodeURIComponent(sessionId) + '/actions/stream',
       body,
-      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) }
+      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) },
+      signal
     )
   }
   return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/actions', {
@@ -847,14 +861,16 @@ export async function getSessionSummary(sessionId: string): Promise<SummaryDoc |
 export async function chooseOption(
   sessionId: string,
   optionId: string,
-  onEnginePhase?: (data: EnginePhaseData) => void
+  onEnginePhase?: (data: EnginePhaseData) => void,
+  signal?: AbortSignal
 ): Promise<SessionPayload> {
   const body = { optionId }
   if (onEnginePhase) {
     return await apiStreamRequest<SessionPayload>(
       '/sessions/' + encodeURIComponent(sessionId) + '/choose/stream',
       body,
-      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) }
+      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) },
+      signal
     )
   }
   return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/choose', {

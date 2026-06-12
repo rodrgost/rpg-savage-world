@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from 'react'
+import { FormEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import {
@@ -405,7 +405,7 @@ function formatState(state: GameState): string {
 
 // ─── Components ───
 
-function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerImage, npcs = [] }: {
+const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerImage, npcs = [] }: {
   message: ChatMessage
   isNew?: boolean
   charsPerTick?: number
@@ -602,7 +602,7 @@ function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerI
       )}
     </div>
   )
-}
+})
 
 function ActionOptions({
   options,
@@ -1704,11 +1704,17 @@ export function GamePage() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
   const pendingEngineMessagesRef = useRef<Map<string, ChatMessage>>(new Map())
+  const streamAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => { streamAbortRef.current?.abort() }
+  }, [])
+
   const sessionSummaryText = trimIncompleteSummaryText(summary?.summaryText)
   const hasPersistedSummaryMessage = messages.some(
     (message) => message.role === 'system' && Boolean(message.narrative?.trim()) && !(message.engineEvents?.length)
   )
-  const displayMessages = sessionSummaryText && !hasPersistedSummaryMessage
+  const displayMessages = useMemo(() => sessionSummaryText && !hasPersistedSummaryMessage
     ? [{
         messageId: `session-summary-${sessionId || state?.meta.sessionId || 'session'}`,
         sessionId: sessionId || state?.meta.sessionId || '',
@@ -1718,6 +1724,7 @@ export function GamePage() {
         narrative: sessionSummaryText
       }, ...messages]
     : messages
+  , [messages, sessionSummaryText, hasPersistedSummaryMessage, sessionId, state?.meta.sessionId])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -1980,10 +1987,14 @@ export function GamePage() {
     setLoading(true)
     setCurrentOptions([])
     if (displayText) pushOptimisticPlayerMessage(displayText)
+    streamAbortRef.current?.abort()
+    const controller = new AbortController()
+    streamAbortRef.current = controller
     try {
-      const result = await chooseOption(sessionId, optionId, handleEnginePhase)
+      const result = await chooseOption(sessionId, optionId, handleEnginePhase, controller.signal)
       handlePayload(result)
     } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Falha ao executar opção')
       setLoading(false)
     }

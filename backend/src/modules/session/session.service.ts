@@ -152,10 +152,12 @@ export class SessionService {
       ? { ...state, meta: { ...state.meta, narrativeStyle: 'balanced' as const } }
       : state
 
-    const summary = await this.summaryRepo.getSummary(sessionId)
-    const recentMessages = await this.chatMessages.getRecent(sessionId, 20)
-    const messages = await this.chatMessages.listBySession(sessionId)
-    const events = await this.events.listSince({ sessionId, afterTurn: -1 })
+    const [summary, recentMessages, messages, events] = await Promise.all([
+      this.summaryRepo.getSummary(sessionId),
+      this.chatMessages.getRecent(sessionId, 20),
+      this.chatMessages.listBySession(sessionId),
+      this.events.listSince({ sessionId, afterTurn: -1 })
+    ])
     const context = buildLlmContext({ state: normalizedState, summary, recentMessages })
 
     return { state: normalizedState, summary, events, context, messages }
@@ -1267,9 +1269,8 @@ export class SessionService {
         ? this.campaigns.get(result.nextState.meta.campaignId)
         : Promise.resolve(null)
     ])
-    const worldDoc = result.nextState.meta.worldId
-      ? await this.worlds.get(result.nextState.meta.worldId)
-      : (campaignDoc ? await this.worlds.get(campaignDoc.worldId) : null)
+    const worldIdToFetch = result.nextState.meta.worldId || campaignDoc?.worldId || null
+    const worldDoc = worldIdToFetch ? await this.worlds.get(worldIdToFetch) : null
     const context = buildLlmContext({ state: result.nextState, summary, recentMessages, npcCatalog: worldDoc?.npcCatalog })
     const canonicalAnchors = buildCanonicalAnchors({
       state: result.nextState,
