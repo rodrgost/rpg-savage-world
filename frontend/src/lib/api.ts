@@ -93,7 +93,8 @@ async function apiStreamRequest<T>(
     throw new Error(message)
   }
 
-  const reader = response.body!.getReader()
+  if (!response.body) throw new Error('Resposta sem stream — corpo da resposta é nulo')
+  const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
   let lastResult: T | null = null

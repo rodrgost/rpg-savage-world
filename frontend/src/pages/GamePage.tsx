@@ -1710,6 +1710,13 @@ export function GamePage() {
     return () => { streamAbortRef.current?.abort() }
   }, [])
 
+  function getStreamController(): AbortSignal {
+    streamAbortRef.current?.abort()
+    const controller = new AbortController()
+    streamAbortRef.current = controller
+    return controller.signal
+  }
+
   const sessionSummaryText = trimIncompleteSummaryText(summary?.summaryText)
   const hasPersistedSummaryMessage = messages.some(
     (message) => message.role === 'system' && Boolean(message.narrative?.trim()) && !(message.engineEvents?.length)
@@ -1987,11 +1994,9 @@ export function GamePage() {
     setLoading(true)
     setCurrentOptions([])
     if (displayText) pushOptimisticPlayerMessage(displayText)
-    streamAbortRef.current?.abort()
-    const controller = new AbortController()
-    streamAbortRef.current = controller
+    const signal = getStreamController()
     try {
-      const result = await chooseOption(sessionId, optionId, handleEnginePhase, controller.signal)
+      const result = await chooseOption(sessionId, optionId, handleEnginePhase, signal)
       handlePayload(result)
     } catch (err) {
       if ((err as { name?: string }).name === 'AbortError') return
@@ -2034,6 +2039,7 @@ export function GamePage() {
     setInput('')
     setPendingValidation(null)
     pushOptimisticPlayerMessage(text)
+    const signal = getStreamController()
     try {
       let result
       // Se a validação indicou trait_test ou diceCheck com skill/attribute, enviar como trait_test
@@ -2049,7 +2055,8 @@ export function GamePage() {
             modifier: dc.modifier ?? 0,
             description: text
           },
-          handleEnginePhase
+          handleEnginePhase,
+          signal
         )
       } else if (isAttack && combatSkill) {
         // Ataque livre sem dice check required explícito — rolar a perícia de combate
@@ -2060,13 +2067,15 @@ export function GamePage() {
             modifier: dc?.modifier ?? 0,
             description: text
           },
-          handleEnginePhase
+          handleEnginePhase,
+          signal
         )
       } else {
-        result = await executeCustomAction(sessionId, text, handleEnginePhase)
+        result = await executeCustomAction(sessionId, text, handleEnginePhase, signal)
       }
       handlePayload(result)
     } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Falha ao enviar ação')
       setLoading(false)
     }
@@ -2096,10 +2105,12 @@ export function GamePage() {
     setLoading(true)
     setCurrentOptions([])
     pushOptimisticPlayerMessage(`Teste de ${ATTR_LABEL_MAP[skill ?? ''] ?? skill ?? ATTR_LABEL_MAP[attribute ?? ''] ?? attribute}`)
+    const signal = getStreamController()
     try {
-      const result = await executeTraitTest({ sessionId, skill, attribute }, handleEnginePhase)
+      const result = await executeTraitTest({ sessionId, skill, attribute }, handleEnginePhase, signal)
       handlePayload(result)
     } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Falha')
       setLoading(false)
     }
@@ -2110,10 +2121,12 @@ export function GamePage() {
     setError('')
     setLoading(true)
     pushOptimisticPlayerMessage('Rolagem de absorção')
+    const signal = getStreamController()
     try {
-      const result = await executeSoakRoll(sessionId, handleEnginePhase)
+      const result = await executeSoakRoll(sessionId, handleEnginePhase, signal)
       handlePayload(result)
     } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Falha')
       setLoading(false)
     }
@@ -2124,10 +2137,12 @@ export function GamePage() {
     setError('')
     setLoading(true)
     pushOptimisticPlayerMessage(`Usar Benny: ${purpose}`)
+    const signal = getStreamController()
     try {
-      const result = await executeSpendBenny(sessionId, purpose, handleEnginePhase)
+      const result = await executeSpendBenny(sessionId, purpose, handleEnginePhase, signal)
       handlePayload(result)
     } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Falha')
       setLoading(false)
     }
@@ -2138,10 +2153,12 @@ export function GamePage() {
     setError('')
     setLoading(true)
     pushOptimisticPlayerMessage('Recuperar de abalado')
+    const signal = getStreamController()
     try {
-      const result = await executeRecoverShaken(sessionId, handleEnginePhase)
+      const result = await executeRecoverShaken(sessionId, handleEnginePhase, signal)
       handlePayload(result)
     } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Falha')
       setLoading(false)
     }
