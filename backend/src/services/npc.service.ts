@@ -66,9 +66,9 @@ export class NpcService {
       disposition: disposition ?? def.dispositionDefault,
       location,
       status: 'active',
-      ...(def.personality ? { personality: def.personality } : {}),
-      ...(def.motivation ? { motivation: def.motivation } : {}),
-      ...(def.speechPattern ? { speechPattern: def.speechPattern } : {})
+      personality: def.personality,
+      motivation: def.motivation,
+      speechPattern: def.speechPattern,
     }
   }
 

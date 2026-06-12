@@ -1,17 +1,17 @@
 import { NavLink, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom'
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 
 import { signOutCurrentUser, subscribeToAuthState, type AuthSession } from './lib/firebase'
 import { LoginPage } from './pages/LoginPage'
 import { HomePage } from './pages/HomePage'
-import { CreateWorldPage } from './pages/CreateWorldPage'
-import { WorldsPage } from './pages/WorldsPage'
-import { CampaignsPage } from './pages/CampaignsPage'
-import { CreateCampaignPage } from './pages/CreateCampaignPage'
-import { CreateCharacterPage } from './pages/CreateCharacterPage'
-import { GamePage } from './pages/GamePage'
-import { CharactersPage } from './pages/CharactersPage'
-import { RulesPage } from './pages/RulesPage'
+const CreateWorldPage = lazy(() => import('./pages/CreateWorldPage').then(m => ({ default: m.CreateWorldPage })))
+const WorldsPage = lazy(() => import('./pages/WorldsPage').then(m => ({ default: m.WorldsPage })))
+const CampaignsPage = lazy(() => import('./pages/CampaignsPage').then(m => ({ default: m.CampaignsPage })))
+const CreateCampaignPage = lazy(() => import('./pages/CreateCampaignPage').then(m => ({ default: m.CreateCampaignPage })))
+const CreateCharacterPage = lazy(() => import('./pages/CreateCharacterPage').then(m => ({ default: m.CreateCharacterPage })))
+const GamePage = lazy(() => import('./pages/GamePage').then(m => ({ default: m.GamePage })))
+const CharactersPage = lazy(() => import('./pages/CharactersPage').then(m => ({ default: m.CharactersPage })))
+const RulesPage = lazy(() => import('./pages/RulesPage').then(m => ({ default: m.RulesPage })))
 
 /** Redirect /worlds/:worldId/campaigns → /campaigns?worldId=X */
 function WorldCampaignsRedirect() {
@@ -126,32 +126,34 @@ export function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage currentUser={currentUser} />} />
+    <Suspense fallback={<div className="auth-screen auth-screen--loading"><section className="auth-loading-card"><h2>Carregando...</h2></section></div>}>
+      <Routes>
+        <Route path="/login" element={<LoginPage currentUser={currentUser} />} />
 
-      <Route element={<RequireAuth currentUser={currentUser} />}>
-        <Route
-          element={
-            <AuthenticatedLayout currentUser={currentUser!} authError={authError} onSignOut={handleSignOut} />
-          }
-        >
-          <Route path="/" element={<HomePage accountLabel={accountLabel} />} />
-          <Route path="/worlds/new" element={<CreateWorldPage uid={uid} />} />
-          <Route path="/worlds/:worldId/edit" element={<CreateWorldPage uid={uid} />} />
-          <Route path="/worlds/:worldId/campaigns" element={<WorldCampaignsRedirect />} />
-          <Route path="/worlds/:worldId/campaigns/new" element={<CreateCampaignPage uid={uid} />} />
-          <Route path="/campaigns" element={<CampaignsPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
-          <Route path="/campaigns/:campaignId/edit" element={<CreateCampaignPage uid={uid} />} />
-          <Route path="/worlds" element={<WorldsPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
-          <Route path="/characters" element={<CharactersPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
-          <Route path="/characters/new" element={<CreateCharacterPage uid={uid} />} />
-          <Route path="/characters/:characterId/edit" element={<CreateCharacterPage uid={uid} />} />
-          <Route path="/rules" element={<RulesPage />} />
+        <Route element={<RequireAuth currentUser={currentUser} />}>
+          <Route
+            element={
+              <AuthenticatedLayout currentUser={currentUser!} authError={authError} onSignOut={handleSignOut} />
+            }
+          >
+            <Route path="/" element={<HomePage accountLabel={accountLabel} />} />
+            <Route path="/worlds/new" element={<CreateWorldPage uid={uid} />} />
+            <Route path="/worlds/:worldId/edit" element={<CreateWorldPage uid={uid} />} />
+            <Route path="/worlds/:worldId/campaigns" element={<WorldCampaignsRedirect />} />
+            <Route path="/worlds/:worldId/campaigns/new" element={<CreateCampaignPage uid={uid} />} />
+            <Route path="/campaigns" element={<CampaignsPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
+            <Route path="/campaigns/:campaignId/edit" element={<CreateCampaignPage uid={uid} />} />
+            <Route path="/worlds" element={<WorldsPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
+            <Route path="/characters" element={<CharactersPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
+            <Route path="/characters/new" element={<CreateCharacterPage uid={uid} />} />
+            <Route path="/characters/:characterId/edit" element={<CreateCharacterPage uid={uid} />} />
+            <Route path="/rules" element={<RulesPage />} />
+          </Route>
+          <Route path="/game/:sessionId" element={<GamePage />} />
         </Route>
-        <Route path="/game/:sessionId" element={<GamePage />} />
-      </Route>
 
-      <Route path="*" element={<Navigate to={currentUser && !currentUser.isAnonymous ? '/' : '/login'} replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to={currentUser && !currentUser.isAnonymous ? '/' : '/login'} replace />} />
+      </Routes>
+    </Suspense>
   )
 }

@@ -900,6 +900,10 @@ export class GeminiAdapter implements Narrator {
 
   private generateTextCallId = 0
 
+  /** Cache: cacheKey → system prompt string. Evita reconstruir ~1800 linhas a cada turno. */
+  private readonly narratorPromptCache = new Map<string, string>()
+  private static readonly PROMPT_CACHE_MAX = 20
+
   /**
    * Chamada genérica ao Gemini generateContent.
    * @param promptOrContents - string (single-turn) ou ContentEntry[] (multi-turn)
@@ -1653,6 +1657,37 @@ export class GeminiAdapter implements Narrator {
   }
 
   // ─── Narrative Chat Methods ───
+
+  private getCachedNarratorSystemPrompt(opts: Parameters<GeminiAdapter['buildNarratorSystemPrompt']>[0]): string {
+    const key = JSON.stringify({
+      wn: opts.world?.name,
+      wd: opts.world?.description,
+      wl: opts.world?.lore,
+      cn: opts.campaign?.name,
+      ct: opts.campaign?.thematic,
+      cs: opts.campaign?.storyDescription,
+      rd: opts.rulesDigest,
+      st: opts.summaryText,
+      ps: opts.playerSkills
+        ? Object.fromEntries(Object.entries(opts.playerSkills).sort(([a], [b]) => a.localeCompare(b)))
+        : undefined,
+      mode: opts.mode,
+      ns: opts.narrativeStyle,
+      sv: opts.simpleVocabulary,
+    })
+
+    const cached = this.narratorPromptCache.get(key)
+    if (cached) return cached
+
+    const prompt = this.buildNarratorSystemPrompt(opts)
+
+    if (this.narratorPromptCache.size >= GeminiAdapter.PROMPT_CACHE_MAX) {
+      const firstKey = this.narratorPromptCache.keys().next().value
+      if (firstKey !== undefined) this.narratorPromptCache.delete(firstKey)
+    }
+    this.narratorPromptCache.set(key, prompt)
+    return prompt
+  }
 
   /**
    * Monta o system prompt do narrador.
@@ -2450,7 +2485,7 @@ export class GeminiAdapter implements Narrator {
     } = {}
   ): Promise<NarratorTurnResponse> {
     const narratorMode = systemPromptOpts.mode ?? 'turn'
-    const systemPrompt = this.buildNarratorSystemPrompt(systemPromptOpts)
+    const systemPrompt = this.getCachedNarratorSystemPrompt(systemPromptOpts)
     const effectiveMaxTokens = maxTokens ?? this.worldMaxOutputTokens
 
     const baseTemperature = narratorMode === 'start'

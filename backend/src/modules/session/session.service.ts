@@ -152,10 +152,12 @@ export class SessionService {
       ? { ...state, meta: { ...state.meta, narrativeStyle: 'balanced' as const } }
       : state
 
-    const summary = await this.summaryRepo.getSummary(sessionId)
-    const recentMessages = await this.chatMessages.getRecent(sessionId, 20)
-    const messages = await this.chatMessages.listBySession(sessionId)
-    const events = await this.events.listSince({ sessionId, afterTurn: -1 })
+    const [summary, recentMessages, messages, events] = await Promise.all([
+      this.summaryRepo.getSummary(sessionId),
+      this.chatMessages.getRecent(sessionId, 20),
+      this.chatMessages.listBySession(sessionId),
+      this.events.listSince({ sessionId, afterTurn: -1 })
+    ])
     const context = buildLlmContext({ state: normalizedState, summary, recentMessages })
 
     return { state: normalizedState, summary, events, context, messages }
@@ -810,13 +812,14 @@ export class SessionService {
   }
 
   async createSession(params: { ownerId: string; campaignId: string; characterId: string; narrativeStyle?: NarrativeStyle; simpleVocabulary?: boolean }) {
-    const campaign = await this.campaigns.get(params.campaignId)
+    const [campaign, character] = await Promise.all([
+      this.campaigns.get(params.campaignId),
+      this.characters.get(params.characterId)
+    ])
     if (!campaign) throw new NotFoundException('Campanha não encontrada')
     if (campaign.ownerId !== params.ownerId && campaign.visibility !== 'public') {
       throw new NotFoundException('Sem permissão para esta campanha')
     }
-
-    const character = await this.characters.get(params.characterId)
     if (!character) throw new NotFoundException('Character não encontrado')
     const characterOwnerId = typeof character.ownerId === 'string' && character.ownerId.trim()
       ? character.ownerId
@@ -1260,16 +1263,16 @@ export class SessionService {
     }
 
     // 3. Buscar contexto, campanha e mundo para a LLM (em paralelo para reduzir latência)
-    const [summary, recentMessages, campaignDoc] = await Promise.all([
+    const worldIdDirect = result.nextState.meta.worldId || null
+    const [summary, recentMessages, campaignDoc, worldDocDirect] = await Promise.all([
       this.summaryRepo.getSummary(params.sessionId),
       this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT),
       result.nextState.meta.campaignId
         ? this.campaigns.get(result.nextState.meta.campaignId)
-        : Promise.resolve(null)
+        : Promise.resolve(null),
+      worldIdDirect ? this.worlds.get(worldIdDirect) : Promise.resolve(null)
     ])
-    const worldDoc = result.nextState.meta.worldId
-      ? await this.worlds.get(result.nextState.meta.worldId)
-      : (campaignDoc ? await this.worlds.get(campaignDoc.worldId) : null)
+    const worldDoc = worldDocDirect ?? (campaignDoc?.worldId ? await this.worlds.get(campaignDoc.worldId) : null)
     const context = buildLlmContext({ state: result.nextState, summary, recentMessages, npcCatalog: worldDoc?.npcCatalog })
     const canonicalAnchors = buildCanonicalAnchors({
       state: result.nextState,
