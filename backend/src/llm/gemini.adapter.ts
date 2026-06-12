@@ -1658,7 +1658,16 @@ export class GeminiAdapter implements Narrator {
 
   // ─── Narrative Chat Methods ───
 
-  private getCachedNarratorSystemPrompt(opts: Parameters<GeminiAdapter['buildNarratorSystemPrompt']>[0]): string {
+  private getCachedNarratorSystemPrompt(opts: {
+    world?: { name?: string; description?: string; lore?: string }
+    campaign?: { name?: string; thematic?: string; storyDescription?: string }
+    rulesDigest?: string
+    summaryText?: string
+    playerSkills?: Record<string, string>
+    mode?: NarratorPromptMode
+    narrativeStyle?: 'concise' | 'balanced'
+    simpleVocabulary?: boolean
+  } = {}): string {
     const key = JSON.stringify({
       wn: opts.world?.name,
       wd: opts.world?.description,
