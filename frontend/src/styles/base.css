@@ -13,7 +13,7 @@
   --bg-surface: #14171e;
   --bg-surface-hover: #1a1e28;
   --glass-bg: rgba(20, 23, 30, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.06);
   --bg-field: #111520;
   --bg-muted: #0f1219;
   --bg-card: #161b25;
@@ -96,9 +96,8 @@ body,
 body {
   margin: 0;
   background:
-    radial-gradient(circle at top, rgba(74, 108, 247, 0.18) 0%, rgba(74, 108, 247, 0.06) 22%, transparent 46%),
-    radial-gradient(circle at 85% 18%, rgba(73, 187, 255, 0.10) 0%, transparent 24%),
-    linear-gradient(180deg, #0c0e12 0%, #090c12 100%);
+    radial-gradient(ellipse 80% 40% at 50% 0%, rgba(74, 108, 247, 0.06) 0%, transparent 100%),
+    #090c12;
   color: var(--text-primary);
   font-family: inherit;
   font-size: var(--font-base);
