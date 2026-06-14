@@ -22,6 +22,7 @@ import type { EnginePhaseData } from '../lib/api'
 import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, NarratorTurnResponse, NarrativeSegment, NarrativeStyle, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
 import { ATTRIBUTES, SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
 import { YouTubeAmbient } from '../components/YouTubeAmbient'
+import { NarrationLogPanel } from '../components/game/NarrationLogPanel'
 
 // ─── Helpers ───
 
@@ -1687,6 +1688,7 @@ export function GamePage() {
   const [selectedSkill, setSelectedSkill] = useState('')
   const [selectedAttribute, setSelectedAttribute] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showNarrationLog, setShowNarrationLog] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null)
@@ -2276,6 +2278,14 @@ export function GamePage() {
               >
                 ⚔️ Ações
               </button>
+              <button
+                type="button"
+                className="subheader-btn"
+                onClick={() => setShowNarrationLog(!showNarrationLog)}
+                title="Log de Narração"
+              >
+                🗒 Log
+              </button>
               <select
                 className="subheader-btn"
                 value={typewriterSpeed}
@@ -2302,6 +2312,12 @@ export function GamePage() {
           </>
         )}
       </div>
+
+      <NarrationLogPanel
+        sessionId={sessionId ?? ''}
+        isOpen={showNarrationLog}
+        onClose={() => setShowNarrationLog(false)}
+      />
 
       {/* ── Sidebar do Personagem (fixa à direita) ── */}
       <CharacterSidebar

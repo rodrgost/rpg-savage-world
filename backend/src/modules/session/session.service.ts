@@ -26,6 +26,7 @@ import { findSkillDefinition, isDieType } from '../../domain/savage-worlds/const
 import type { Narrator } from '../../llm/narrator.js'
 import { GeminiAdapter } from '../../llm/gemini.adapter.js'
 import { log, warn } from '../../utils/file-logger.js'
+import { pushNarrationLog } from '../../services/narrationLog.js'
 
 type SessionDocData = Record<string, unknown>
 type SessionDocSnapshot = FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData>
@@ -141,6 +142,10 @@ export class SessionService {
     const sessionData = sessionSnap.data() as Record<string, unknown>
     if (sessionData.ownerId !== ownerId) throw new NotFoundException('Sem permissão')
     return sessionData
+  }
+
+  async requireOwnedSessionPublic(ownerId: string, sessionId: string): Promise<void> {
+    await this.requireOwnedSession(sessionId, ownerId)
   }
 
   private async buildSessionPayload(sessionId: string) {
@@ -1281,6 +1286,7 @@ export class SessionService {
     })
 
     // 4. Chamar LLM para narrativa do turno
+    const llmStart = Date.now()
     let narratorResponse = this.validateNarratorResponse({
       response: await this.narrator.narrateTurn({
         playerAction: {
@@ -1408,6 +1414,40 @@ export class SessionService {
         engineEvents: npcAttackEvents.map((e) => ({ type: e.type, payload: e.payload as Record<string, unknown> }))
       })
     }
+
+    // 5.9 Registrar log de narração em memória
+    pushNarrationLog({
+      sessionId: params.sessionId,
+      timestamp: Date.now(),
+      turn: finalState.meta.turn,
+      durationMs: Date.now() - llmStart,
+      playerAction: { type: normalizedAction.type, description: actionDescription },
+      engineEvents: result.emittedEvents.map((e) => ({ type: e.type, payload: e.payload as Record<string, unknown> })),
+      narrative: narratorResponse.narrative,
+      options: narratorResponse.options.map((o) => ({
+        id: o.id,
+        text: o.text,
+        playerSpeech: o.playerSpeech,
+        actionType: o.actionType,
+        feasible: o.feasible,
+        diceCheck: o.diceCheck ?? null
+      })),
+      npcs: narratorResponse.npcs.map((n) => ({ id: n.id, name: n.name, action: n.action })),
+      itemChanges: narratorResponse.itemChanges.map((c) => ({
+        name: c.name,
+        changeType: c.changeType,
+        quantity: typeof (c as Record<string, unknown>).quantity === 'number'
+          ? (c as Record<string, unknown>).quantity as number
+          : undefined
+      })),
+      statusChanges: narratorResponse.statusChanges.map((c) => ({
+        name: (c as Record<string, unknown>).name as string ?? '',
+        changeType: (c as Record<string, unknown>).changeType as string ?? '',
+        effectId: (c as Record<string, unknown>).effectId as string | undefined
+      })),
+      npcAttackEvents: npcAttackEvents.map((e) => ({ type: e.type, payload: e.payload as Record<string, unknown> })),
+      isFallback: narratorResponse.isFallback ?? false
+    })
 
     // 6. Salvar estado final e mensagem do narrador
     await this.snapshots.saveTurnState(finalState)
