@@ -441,18 +441,25 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
   }, [message.messageId, isNew, charsPerTick])
 
   if (message.role === 'player') {
-    const isSpeech = typeof message.playerInput === 'string' && message.playerInput.startsWith('- ')
-    const displayText = isSpeech ? message.playerInput!.slice(2).trim() : message.playerInput
+    const raw = message.playerInput ?? ''
+    const isSpeechOnly = raw.startsWith('- ')
+    const dashIdx = !isSpeechOnly ? raw.indexOf(' - ') : -1
+    const isCombined = dashIdx !== -1
+    const actionText = isCombined ? raw.slice(0, dashIdx) : null
+    const speechText = isSpeechOnly
+      ? raw.slice(2).trim()
+      : isCombined
+        ? raw.slice(dashIdx + 3).trim()
+        : null
+    const hasSpeech = isSpeechOnly || isCombined
     return (
-      <div className={`msg player${isSpeech ? ' player-speech' : ''}`}>
+      <div className={`msg player${hasSpeech ? ' player-speech' : ''}`}>
         <div className="player-content">
           <div className="player-text">
             <strong>{playerName ?? 'Você'}</strong>
-            {isSpeech ? (
-              <p className="speech-text">"{displayText}"</p>
-            ) : (
-              <p>{displayText}</p>
-            )}
+            {actionText && <p>{actionText}</p>}
+            {speechText && <p className="speech-text">"{speechText}"</p>}
+            {!hasSpeech && <p>{raw}</p>}
           </div>
           {playerImage && (
             <img
