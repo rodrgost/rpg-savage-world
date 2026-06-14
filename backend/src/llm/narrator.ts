@@ -76,6 +76,11 @@ export type SuggestedCharacter = {
   profession: string
   description: string
   campaignRole: string
+  genderPt?: string
+  racePt?: string
+  professionPt?: string
+  descriptionPt?: string
+  campaignRolePt?: string
 }
 
 export type GenerateImageDescriptionRequest =

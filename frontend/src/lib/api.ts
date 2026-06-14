@@ -504,6 +504,11 @@ export async function createCharacter(params: {
   profession: string
   description?: string
   campaignRole?: string
+  genderEn?: string
+  raceEn?: string
+  professionEn?: string
+  descriptionEn?: string
+  campaignRoleEn?: string
   visibility?: Visibility
   attributes: Record<string, number>
   skills?: Record<string, number>
@@ -537,6 +542,11 @@ export async function generateCharacterFromWorldStory(params: {
   profession: string
   description: string
   campaignRole: string
+  genderPt?: string
+  racePt?: string
+  professionPt?: string
+  descriptionPt?: string
+  campaignRolePt?: string
 }> {
   return await apiRequest('/characters/suggest-from-world', {
     method: 'POST',
@@ -554,6 +564,11 @@ export async function generateCharacterFromDescription(params: {
   profession: string
   description: string
   campaignRole: string
+  genderPt?: string
+  racePt?: string
+  professionPt?: string
+  descriptionPt?: string
+  campaignRolePt?: string
 }> {
   return await apiRequest('/characters/suggest-from-description', {
     method: 'POST',

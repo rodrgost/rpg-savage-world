@@ -569,9 +569,9 @@ function buildRecentSuggestionAvoidanceLines(recent: RecentSuggestedCharacter[])
   if (!recent.length) return []
 
   return [
-    'Evite repetir sugestões recentes para esta mesma aventura:',
+    'Avoid repeating recent suggestions for this same adventure:',
     ...recent.slice(0, 5).map((character) => `  - ${character.name} / ${character.profession}`),
-    'Crie uma nova combinação de nome, profissão, papel narrativo e motivação.'
+    'Create a new combination of name, profession, narrative role, and motivation.'
   ]
 }
 
@@ -764,13 +764,24 @@ function buildSuggestedCharacterFromRecord(source: Record<string, unknown>): Sug
     'função'
   ])
 
+  const genderPtValue = extractFieldFromRecord(source, ['genderPt', 'generoPt', 'gêneroPt'])
+  const racePtValue = extractFieldFromRecord(source, ['racePt', 'racaPt', 'raçaPt'])
+  const professionPtValue = extractFieldFromRecord(source, ['professionPt', 'profissaoPt', 'profissãoPt'])
+  const descriptionPtValue = extractFieldFromRecord(source, ['descriptionPt', 'descricaoPt', 'descriçãoPt'])
+  const campaignRolePtValue = extractFieldFromRecord(source, ['campaignRolePt', 'papelPt', 'papelNaCampanhaPt'])
+
   return {
     name: sanitizeCharacterField(nameValue, ''),
     gender: sanitizeCharacterField(genderValue, ''),
     race: sanitizeCharacterField(raceValue, ''),
     profession: sanitizeCharacterField(professionValue, ''),
     description: sanitizeCharacterField(descriptionValue, ''),
-    campaignRole: sanitizeCharacterField(campaignRoleValue, '')
+    campaignRole: sanitizeCharacterField(campaignRoleValue, ''),
+    genderPt: sanitizeCharacterField(genderPtValue, '') || undefined,
+    racePt: sanitizeCharacterField(racePtValue, '') || undefined,
+    professionPt: sanitizeCharacterField(professionPtValue, '') || undefined,
+    descriptionPt: sanitizeCharacterField(descriptionPtValue, '') || undefined,
+    campaignRolePt: sanitizeCharacterField(campaignRolePtValue, '') || undefined,
   }
 }
 
@@ -1551,7 +1562,7 @@ export class GeminiAdapter implements Narrator {
     const existingLines: string[] = []
     if (hasExisting) {
       existingLines.push(
-        'O jogador já preencheu os campos a seguir — MANTENHA esses valores exatamente como estão e preencha apenas os campos ausentes:'
+        'The player has already filled in the following fields — KEEP these values exactly as they are and fill in only the missing fields:'
       )
       if (existing.name) existingLines.push(`  name: "${existing.name}"`)
       if (existing.gender) existingLines.push(`  gender: "${existing.gender}"`)
@@ -1562,21 +1573,26 @@ export class GeminiAdapter implements Narrator {
     }
 
     const sysPrompt = [
-      'Você é um designer de personagens.',
-      'Leia o nome do mundo, o lore do universo e a história da aventura. Crie um personagem cujo papel e profissão emergam NATURALMENTE desses dados, sem usar arquétipos pré-definidos do sistema.',
-      'Responda APENAS em JSON válido, sem markdown ou comentários.',
-      'Sempre retorne as 6 chaves; gender e race podem ser string vazia quando o contexto não permite inferência.',
-      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"..."}',
+      'You are a character designer.',
+      'Read the world name, universe lore, and adventure story. Create a character whose role and profession emerge NATURALLY from that data, without using pre-defined archetypes from the system.',
+      'Respond ONLY in valid JSON, without markdown or comments.',
+      'Always return all 11 keys; gender, race, genderPt, and racePt can be empty string when the context does not support an inference.',
+      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
       '',
-      'Instruções de campos:',
-      '  name: nome coerente com o contexto; se o jogador forneceu um nome, preserve esse valor exatamente e trate-o apenas como âncora de identidade',
-      '  gender: Masculino, Feminino ou Outro apenas quando há uma pista contextual; caso contrário, string vazia',
-      '  race: raça/espécie apenas quando há uma pista contextual; caso contrário, string vazia',
-      '  profession: ofício ou papel social derivado exclusivamente do nome do mundo, lore e história; máx 60 chars',
-      '  description: 2-3 frases derivadas principalmente da história da aventura e do lore, descrevendo aparência física (cabelo, olhos, porte ou cicatriz notável), vestimenta ou equipamento coerente com a profissão, e traço de personalidade com motivação. Mín 80 chars, máx 280 chars.',
-      '  campaignRole: o que este personagem está fazendo nesta aventura específica, sua missão ou como se conecta ao enredo. Derive da história/lore, seja concreto e não genérico. Máx 300 chars.',
-      'Se um nome for fornecido, não invente a descrição a partir do som do nome; use o nome apenas para preservar identidade e derive todo o resto da história da aventura e do lore.',
-      'Em chamadas repetidas para o mesmo enredo, varie o nome, a profissão, a função narrativa, a motivação, a aparência e o ponto de entrada na aventura.',
+      'Field instructions:',
+      '  name: name coherent with the context; if the player provided a name, preserve that value exactly and treat it only as an identity anchor',
+      '  gender: Masculine, Feminine, or Other only when there is a contextual clue; otherwise empty string',
+      '  race: race/species only when there is a contextual clue; otherwise empty string',
+      '  profession: trade or social role derived exclusively from the world name, lore, and story; max 60 chars',
+      '  description: 2-3 sentences derived primarily from the adventure story and lore, describing physical appearance (hair, eyes, build, or notable scar), clothing or equipment coherent with the profession, and personality trait with motivation. Min 80 chars, max 280 chars.',
+      '  campaignRole: what this character is doing in this specific adventure, their mission, or how they connect to the plot. Derive from story/lore, be concrete and not generic. Max 300 chars.',
+      '  genderPt: Brazilian Portuguese translation of gender (Masculino, Feminino, or Outro); empty string if gender is empty',
+      '  racePt: Brazilian Portuguese translation of race/species; empty string if race is empty',
+      '  professionPt: Brazilian Portuguese translation of profession; max 60 chars',
+      '  descriptionPt: Brazilian Portuguese translation of description; same length constraints (min 80, max 280 chars)',
+      '  campaignRolePt: Brazilian Portuguese translation of campaignRole; max 300 chars',
+      'If a name is provided, do not invent the description from the sound of the name; use the name only to preserve identity and derive everything else from the adventure story and lore.',
+      'In repeated calls for the same plot, vary the name, profession, narrative function, motivation, appearance, and entry point into the adventure.',
     ].join('\n')
 
     const buildPrompt = (attempt: number): string => {
@@ -1585,13 +1601,13 @@ export class GeminiAdapter implements Narrator {
       return [
         ...(existingLines.length > 0 ? [...existingLines, ''] : []),
         ...(avoidanceLines.length > 0 ? [...avoidanceLines, ''] : []),
-        `Tentativa de variação: ${attempt}.`,
+        `Variation attempt: ${attempt}.`,
         '',
-        ...(worldName ? [`Nome do mundo/universo: ${worldName}.`] : []),
-        ...(promptWorldLore ? [`Lore do universo: ${promptWorldLore}.`, ''] : []),
-        `História da aventura: ${promptStoryDescription || 'não informada'}.`,
+        ...(worldName ? [`World/universe name: ${worldName}.`] : []),
+        ...(promptWorldLore ? [`Universe lore: ${promptWorldLore}.`, ''] : []),
+        `Adventure story: ${promptStoryDescription || 'not provided'}.`,
         '',
-        'Derive a profissão e o papel apenas do mundo/universo, do lore e da história da aventura.'
+        'Derive the profession and role solely from the world/universe, the lore, and the adventure story.'
       ].join('\n')
     }
 
@@ -1665,30 +1681,35 @@ export class GeminiAdapter implements Narrator {
     const promptWorldLore = worldLore.length > 4000 ? `${worldLore.slice(0, 4000)}...` : worldLore
 
     const sysPrompt = [
-      'Você é um designer de personagens para RPG de mesa.',
-      'O jogador escreveu um conceito livre descrevendo o personagem que deseja criar.',
-      'Sua tarefa é expandir esse conceito em um perfil de personagem completo que se encaixe no contexto do mundo e da campanha.',
-      'Responda APENAS em JSON válido, sem markdown ou comentários.',
-      'Sempre retorne as 6 chaves; gender e race podem ser string vazia quando não mencionados ou inferíveis.',
-      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"..."}',
+      'You are a character designer for a tabletop RPG.',
+      'The player has written a free-form concept describing the character they want to create.',
+      'Your task is to expand that concept into a complete character profile that fits the world and campaign context.',
+      'Respond ONLY in valid JSON, without markdown or comments.',
+      'Always return all 11 keys; gender, race, genderPt, and racePt can be empty string when not mentioned or inferable.',
+      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
       '',
-      'Instruções de campos:',
-      '  name: um nome adequado e consistente com o conceito e o mundo; se o jogador mencionou um nome, use-o',
-      '  gender: Masculino, Feminino ou Outro apenas quando mencionado ou claramente implícito; caso contrário, string vazia',
-      '  race: raça/espécie apenas quando mencionada ou inferível do conceito; caso contrário, string vazia',
-      '  profession: ofício ou papel social derivado do conceito do jogador; máx 60 chars',
-      '  description: 2-3 frases expandindo o conceito com aparência física (cabelo, olhos, porte ou cicatriz notável), vestimenta ou equipamento coerente com a profissão, e traço de personalidade com motivação. Mín 80 chars, máx 280 chars.',
-      '  campaignRole: o que este personagem faz no mundo, sua missão ou como se conecta ao cenário. Concreto e específico, não genérico. Máx 300 chars.',
+      'Field instructions:',
+      '  name: an appropriate name consistent with the concept and world; if the player mentioned a name, use it',
+      '  gender: Masculine, Feminine, or Other only when mentioned or clearly implied; otherwise empty string',
+      '  race: race/species only when mentioned or inferable from the concept; otherwise empty string',
+      '  profession: trade or social role derived from the player concept; max 60 chars',
+      '  description: 2-3 sentences expanding the concept with physical appearance (hair, eyes, build, or notable scar), clothing or equipment coherent with the profession, and personality trait with motivation. Min 80 chars, max 280 chars.',
+      '  campaignRole: what this character does in the world, their mission, or how they connect to the setting. Concrete and specific, not generic. Max 300 chars.',
+      '  genderPt: Brazilian Portuguese translation of gender (Masculino, Feminino, or Outro); empty string if gender is empty',
+      '  racePt: Brazilian Portuguese translation of race/species; empty string if race is empty',
+      '  professionPt: Brazilian Portuguese translation of profession; max 60 chars',
+      '  descriptionPt: Brazilian Portuguese translation of description; same length constraints (min 80, max 280 chars)',
+      '  campaignRolePt: Brazilian Portuguese translation of campaignRole; max 300 chars',
     ].join('\n')
 
     const userPrompt = [
-      `Conceito do jogador: ${characterConcept}`,
+      `Player concept: ${characterConcept}`,
       '',
-      ...(worldName ? [`Mundo/universo: ${worldName}.`] : []),
-      ...(campaignThematic ? [`Temática da campanha: ${campaignThematic}.`] : []),
-      ...(promptWorldLore ? [`Lore do universo: ${promptWorldLore}.`] : []),
+      ...(worldName ? [`World/universe: ${worldName}.`] : []),
+      ...(campaignThematic ? [`Campaign thematic: ${campaignThematic}.`] : []),
+      ...(promptWorldLore ? [`Universe lore: ${promptWorldLore}.`] : []),
       '',
-      'Expanda o conceito do jogador em um perfil de personagem completo seguindo o esquema JSON acima.',
+      'Expand the player concept into a full character profile following the JSON schema above.',
     ].join('\n')
 
     try {
