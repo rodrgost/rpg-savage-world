@@ -9,35 +9,35 @@
   --panel-padding: clamp(20px, 2.6vw, 34px);
   --max-width: var(--content-max-width-game);
 
-  --bg-app: #0c0e12;
-  --bg-surface: #14171e;
-  --bg-surface-hover: #1a1e28;
-  --glass-bg: rgba(20, 23, 30, 0.7);
+  --bg-app: #0f0f0f;
+  --bg-surface: #1a1a1a;
+  --bg-surface-hover: #222222;
+  --glass-bg: rgba(26, 26, 26, 0.88);
   --glass-border: rgba(255, 255, 255, 0.06);
-  --bg-field: #111520;
-  --bg-muted: #0f1219;
-  --bg-card: #161b25;
-  --bg-elevated: #1c2130;
-  --bg-chip: #1a1f2b;
-  --bg-chip-active: #252e44;
+  --bg-field: #141414;
+  --bg-muted: #0c0c0c;
+  --bg-card: #1e1e1e;
+  --bg-elevated: #262626;
+  --bg-chip: #2a2a2a;
+  --bg-chip-active: #333333;
 
-  --text-primary: #eaecf0;
-  --text-secondary: #b0b8cc;
-  --text-muted: #707a90;
-  --text-link: #8ba4ff;
+  --text-primary: #e8e8e8;
+  --text-secondary: #a0a0a0;
+  --text-muted: #666666;
+  --text-link: #c0c0c0;
 
-  --border-default: #222838;
-  --border-strong: #2e3650;
-  --border-accent: #3d5afe;
-  --border-subtle: #1c2030;
+  --border-default: #2e2e2e;
+  --border-strong: #3d3d3d;
+  --border-accent: #8c8c8c;
+  --border-subtle: #202020;
 
-  --accent: #5c7cff;
-  --accent-hover: #7c9cff;
-  --accent-soft: rgba(92, 124, 255, 0.12);
-  --accent-glow: rgba(92, 124, 255, 0.4);
+  --accent: #8c8c8c;
+  --accent-hover: #aaaaaa;
+  --accent-soft: rgba(140, 140, 140, 0.10);
+  --accent-glow: rgba(140, 140, 140, 0.18);
 
-  --action-primary: #3d5afe;
-  --action-primary-hover: #536dfe;
+  --action-primary: #3a3a3a;
+  --action-primary-hover: #4e4e4e;
   --action-danger: #d32f2f;
   --action-danger-hover: #ef5350;
 
@@ -45,8 +45,8 @@
   --feedback-success: #69db7c;
   --feedback-warn: #ffd43b;
 
-  --gradient-hero: linear-gradient(135deg, #1a1e2e 0%, #12151e 100%);
-  --gradient-accent: linear-gradient(135deg, #3d5afe 0%, #651fff 100%);
+  --gradient-hero: linear-gradient(135deg, #1a1a1a 0%, #111111 100%);
+  --gradient-accent: linear-gradient(135deg, #8c8c8c 0%, #c0c0c0 100%);
 
   --shadow-sm: 0 1px 2px rgba(0,0,0,.25);
   --shadow-md: 0 4px 12px rgba(0,0,0,.35);
@@ -95,9 +95,7 @@ body,
 
 body {
   margin: 0;
-  background:
-    radial-gradient(ellipse 80% 40% at 50% 0%, rgba(74, 108, 247, 0.06) 0%, transparent 100%),
-    #090c12;
+  background: #0f0f0f;
   color: var(--text-primary);
   font-family: inherit;
   font-size: var(--font-base);

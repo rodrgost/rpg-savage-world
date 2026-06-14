@@ -163,12 +163,12 @@
 /* ─── Section Card (for form sections) ─────────────── */
 
 .section-card {
-  background: linear-gradient(180deg, rgba(22, 27, 37, 0.95) 0%, rgba(18, 23, 33, 0.98) 100%);
+  background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   margin-bottom: var(--space-4);
   overflow: hidden;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .section-card-header {
@@ -176,7 +176,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-4) var(--space-5);
-  background: linear-gradient(180deg, rgba(25, 31, 44, 0.98) 0%, rgba(21, 26, 38, 0.96) 100%);
+  background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-subtle);
   gap: var(--space-3);
 }
@@ -250,9 +250,9 @@
   justify-content: center;
   border-radius: 50%;
   overflow: hidden;
-  border: 1px solid rgba(139, 164, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.03);
-  background: linear-gradient(180deg, rgba(34, 40, 56, 0.95) 0%, rgba(20, 24, 34, 0.98) 100%);
+  background: var(--bg-elevated);
 }
 
 .entity-owner-avatar-image {
@@ -678,7 +678,7 @@ button:disabled {
 .chat-empty-icon {
   font-size: 2.4rem;
   line-height: 1;
-  filter: drop-shadow(0 0 12px rgba(74, 108, 247, 0.4));
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.12));
 }
 
 .chat-empty-text {
@@ -721,9 +721,9 @@ button:disabled {
   max-width: 85%;
   border-radius: var(--radius-md) 0 var(--radius-md) var(--radius-md);
   overflow: hidden;
-  background: linear-gradient(135deg, rgba(74, 108, 247, 0.18) 0%, rgba(61, 90, 254, 0.10) 100%);
-  border: 1px solid rgba(74, 108, 247, 0.28);
-  box-shadow: 0 2px 12px rgba(61, 90, 254, 0.12);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .msg.player .player-text {
@@ -753,7 +753,7 @@ button:disabled {
   border-radius: 0;
   object-fit: cover;
   object-position: top center;
-  border-left: 1px solid rgba(74, 108, 247, 0.3);
+  border-left: 1px solid var(--border-default);
   flex-shrink: 0;
   align-self: stretch;
   min-height: 60px;
@@ -1103,7 +1103,7 @@ button:disabled {
 
 .option-btn:hover:not(:disabled) {
   border-color: var(--accent);
-  background: rgba(92, 124, 255, 0.08);
+  background: var(--accent-soft);
 }
 
 .option-btn:active:not(:disabled) {
