@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   createCharacter,
   deleteCharacter,
+  generateCharacterFromDescription,
   generateCharacterFromWorldStory,
   generateCharacterImagePreview,
   getCharacter,
@@ -120,7 +121,9 @@ export function CreateCharacterPage({ uid }: Props) {
   const [image, setImage] = useState<StoredImage | undefined>()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [characterConcept, setCharacterConcept] = useState('')
   const [suggestLoading, setSuggestLoading] = useState(false)
+  const [conceptLoading, setConceptLoading] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
   const [hindranceAllocation, setHindranceAllocation] = useState<HindrancePointsAllocation>({
     extraEdges: 0, extraAttributePoints: 0, extraSkillPoints: 0,
@@ -300,6 +303,28 @@ export function CreateCharacterPage({ uid }: Props) {
     }
   }
 
+  async function handleGenerateFromConcept() {
+    if (!selectedCampaignId || !characterConcept.trim()) return
+    setConceptLoading(true)
+    setError('')
+    try {
+      const suggestion = await generateCharacterFromDescription({
+        campaignId: selectedCampaignId,
+        characterConcept: characterConcept.trim()
+      })
+      setName(suggestion.name)
+      setGender(suggestion.gender)
+      setRace(suggestion.race)
+      setProfession(suggestion.profession)
+      setDescription(suggestion.description)
+      setCampaignRole(suggestion.campaignRole)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao gerar personagem a partir da descrição')
+    } finally {
+      setConceptLoading(false)
+    }
+  }
+
   async function handleImagePreview() {
     if (!selectedCampaignId || !profession) return
     setImageLoading(true)
@@ -390,6 +415,38 @@ export function CreateCharacterPage({ uid }: Props) {
 
       <form onSubmit={handleSubmit}>
         <fieldset className="form-fieldset-reset" disabled={isReadOnly}>
+        {/* ═══════ GERAÇÃO POR DESCRIÇÃO ═══════ */}
+        <div className="section-card">
+          <div className="section-card-header">
+            <h3>✍️ Descreva seu personagem</h3>
+          </div>
+          <div className="section-card-body form-stack">
+            <p className="section-card-hint">
+              Escreva livremente quem é o seu personagem — origem, personalidade, aparência, motivação — e a IA gera todas as informações básicas para você.
+            </p>
+            <label>
+              Conceito do personagem
+              <textarea
+                disabled={!selectedCampaignId}
+                onChange={(e) => setCharacterConcept(e.target.value)}
+                placeholder={selectedCampaignId ? 'Ex: Um elfo alto e reservado que cresceu entre os ladrões de uma cidade portuária corrupta. Habilidoso com faca e palavras afiadas, busca redenção após trair sua guilda...' : 'Selecione uma campanha para habilitar'}
+                rows={4}
+                value={characterConcept}
+              />
+            </label>
+            <button
+              className="btn-ai-gen button-full"
+              disabled={conceptLoading || !selectedCampaignId || characterConcept.trim().length < 10}
+              onClick={handleGenerateFromConcept}
+              type="button"
+            >
+              {conceptLoading
+                ? <><span className="btn-ai-spinner" /> Gerando personagem…</>
+                : '✨ Gerar personagem pela descrição'}
+            </button>
+          </div>
+        </div>
+
         {/* ═══════ DADOS BÁSICOS ═══════ */}
         <div className="section-card">
           <div className="section-card-header">

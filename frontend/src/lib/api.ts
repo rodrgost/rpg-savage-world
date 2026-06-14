@@ -544,6 +544,23 @@ export async function generateCharacterFromWorldStory(params: {
   })
 }
 
+export async function generateCharacterFromDescription(params: {
+  campaignId: string
+  characterConcept: string
+}): Promise<{
+  name: string
+  gender: string
+  race: string
+  profession: string
+  description: string
+  campaignRole: string
+}> {
+  return await apiRequest('/characters/suggest-from-description', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  })
+}
+
 export async function generateCharacterImagePreview(params: {
   campaignId: string
   gender?: string

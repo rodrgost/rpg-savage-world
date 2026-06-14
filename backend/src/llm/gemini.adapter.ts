@@ -7,6 +7,7 @@ import type {
   Narrator,
   SuggestedCharacter,
   SuggestCharacterFromWorldRequest,
+  SuggestCharacterFromDescriptionRequest,
   SummarizeHistoryRequest,
   SummarizeRequest
 } from './narrator.js'
@@ -1653,6 +1654,82 @@ export class GeminiAdapter implements Narrator {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
       throw new Error(`Falha ao sugerir personagem com ${this.providerLabel}: ${message}`)
+    }
+  }
+
+  async suggestCharacterFromDescription(req: SuggestCharacterFromDescriptionRequest): Promise<SuggestedCharacter> {
+    const characterConcept = req.characterConcept?.trim() ?? ''
+    const worldName = req.worldName?.trim() ?? ''
+    const worldLore = req.worldLore?.trim() ?? ''
+    const campaignThematic = req.campaignThematic?.trim() ?? ''
+    const promptWorldLore = worldLore.length > 4000 ? `${worldLore.slice(0, 4000)}...` : worldLore
+
+    const sysPrompt = [
+      'You are a character designer for a tabletop RPG.',
+      'The player has written a free-form concept describing the character they want to create.',
+      'Your task is to expand that concept into a complete character profile that fits the world and campaign context.',
+      'Respond ONLY in valid JSON, without markdown or comments.',
+      'Always return all 6 keys; gender and race can be empty string when not mentioned or inferable.',
+      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"..."}',
+      '',
+      'Field instructions:',
+      '  name: an appropriate name consistent with the concept and world; if the player mentioned a name, use it',
+      '  gender: Masculine, Feminine, or Other only when mentioned or clearly implied; otherwise empty string',
+      '  race: race/species only when mentioned or inferable from the concept; otherwise empty string',
+      '  profession: trade or social role derived from the player concept; max 60 chars',
+      '  description: 2-3 sentences expanding the concept with physical appearance (hair, eyes, build, or notable scar), clothing or equipment coherent with the profession, and personality trait with motivation. Min 80 chars, max 280 chars.',
+      '  campaignRole: what this character does in the world, their mission, or how they connect to the setting. Concrete and specific, not generic. Max 300 chars.',
+    ].join('\n')
+
+    const userPrompt = [
+      `Player concept: ${characterConcept}`,
+      '',
+      ...(worldName ? [`World/universe: ${worldName}.`] : []),
+      ...(campaignThematic ? [`Campaign thematic: ${campaignThematic}.`] : []),
+      ...(promptWorldLore ? [`Universe lore: ${promptWorldLore}.`] : []),
+      '',
+      'Expand the player concept into a full character profile following the JSON schema above.',
+    ].join('\n')
+
+    try {
+      let lastIssues: string[] = []
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const result = await this.generateTextDetailed(userPrompt, {
+          maxOutputTokens: this.characterSuggestionMaxOutputTokens,
+          timeoutMs: this.timeoutMs,
+          responseMimeType: 'application/json',
+          temperature: Math.max(this.characterSuggestionTemperature, attempt === 1 ? 0.85 : 1.05),
+          systemInstruction: sysPrompt,
+          ...(this.provider === 'gemini' ? { thinkingBudget: this.characterSuggestionThinkingBudget } : {})
+        }, attempt)
+
+        log('suggestCharacterFromDescription', `LLM raw response (attempt=${attempt}):`, result.text)
+
+        const parsedJson = parseJsonObjectDetailed(result.text)
+        const parsed = parsedJson?.value ?? null
+
+        if (parsed) {
+          const character = buildSuggestedCharacterFromRecord(parsed)
+          const truncated = result.finishReason === 'MAX_TOKENS' && parsedJson?.source !== 'direct'
+          const issues = getSuggestedCharacterIssues(character)
+          lastIssues = [...(truncated ? ['truncado'] : []), ...issues]
+
+          if (!truncated && issues.length === 0) {
+            return character
+          }
+
+          warn('suggestCharacterFromDescription', `Tentativa insuficiente (attempt=${attempt}, issues=${lastIssues.join(', ')})`)
+        } else {
+          lastIssues = ['resposta sem objeto legivel']
+          warn('suggestCharacterFromDescription', `Tentativa sem parse legivel (attempt=${attempt})`)
+        }
+      }
+
+      throw new Error(`Resposta incompleta ou fora do JSON esperado (${lastIssues.join(', ') || 'sem detalhe'})`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'erro desconhecido'
+      throw new Error(`Falha ao gerar personagem com ${this.providerLabel}: ${message}`)
     }
   }
 
