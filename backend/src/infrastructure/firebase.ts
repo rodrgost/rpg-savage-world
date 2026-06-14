@@ -50,4 +50,5 @@ function init(): admin.app.App {
 export const firebaseApp = init()
 export const firebaseAuth = admin.auth(firebaseApp)
 export const firestore = admin.firestore(firebaseApp)
+firestore.settings({ ignoreUndefinedProperties: true })
 export const FieldValue = admin.firestore.FieldValue
