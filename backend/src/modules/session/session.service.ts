@@ -1427,13 +1427,13 @@ export class SessionService {
       options: narratorResponse.options.map((o) => ({
         id: o.id,
         text: o.text,
-        playerSpeech: o.playerSpeech,
+        playerSpeech: o.playerSpeech ?? null,
         actionType: o.actionType,
         feasible: o.feasible,
         diceCheck: o.diceCheck ? {
-          skill: o.diceCheck.skill ?? undefined,
-          attribute: o.diceCheck.attribute ?? undefined,
-          tn: o.diceCheck.tn,
+          skill: o.diceCheck.skill ?? null,
+          attribute: o.diceCheck.attribute ?? null,
+          tn: o.diceCheck.tn ?? null,
           required: o.diceCheck.required
         } : null
       })),
@@ -1443,12 +1443,12 @@ export class SessionService {
         changeType: c.changeType,
         quantity: typeof (c as Record<string, unknown>).quantity === 'number'
           ? (c as Record<string, unknown>).quantity as number
-          : undefined
+          : null
       })),
       statusChanges: narratorResponse.statusChanges.map((c) => ({
         name: (c as Record<string, unknown>).name as string ?? '',
         changeType: (c as Record<string, unknown>).changeType as string ?? '',
-        effectId: (c as Record<string, unknown>).effectId as string | undefined
+        effectId: ((c as Record<string, unknown>).effectId as string | null) ?? null
       })),
       npcAttackEvents: npcAttackEvents.map((e) => ({ type: e.type, payload: e.payload as Record<string, unknown> })),
       isFallback: narratorResponse.isFallback ?? false
