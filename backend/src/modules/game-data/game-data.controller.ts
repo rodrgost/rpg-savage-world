@@ -156,6 +156,13 @@ const CharacterSuggestionBody = z
     }).optional()
   })
   .strict()
+
+const CharacterFromDescriptionBody = z
+  .object({
+    campaignId: z.string().min(1),
+    characterConcept: z.string().min(10).max(1000)
+  })
+  .strict()
 // ─── NPC Catalog (catálogo de NPCs do mundo) ───────────────
 
 const NpcDefinitionBody = z.object({
@@ -329,6 +336,12 @@ export class GameDataController {
   async suggestCharacterFromWorld(@CurrentUser('uid') userId: string, @Body() body: unknown) {
     const parsed = CharacterSuggestionBody.parse(body)
     return await this.gameData.suggestCharacterFromWorld({ userId, ...parsed })
+  }
+
+  @Post('/characters/suggest-from-description')
+  async suggestCharacterFromDescription(@CurrentUser('uid') userId: string, @Body() body: unknown) {
+    const parsed = CharacterFromDescriptionBody.parse(body)
+    return await this.gameData.suggestCharacterFromDescription({ userId, ...parsed })
   }
 
   // ── NPC Catalog ────────────────────────────

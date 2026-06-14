@@ -918,6 +918,52 @@ export class GameDataService {
     }
   }
 
+  async suggestCharacterFromDescription(params: {
+    userId: string
+    campaignId: string
+    characterConcept: string
+  }) {
+    if (!params.characterConcept?.trim()) {
+      throw new BadRequestException('Informe uma descrição do personagem.')
+    }
+
+    const campaign = await this.campaigns.get(params.campaignId)
+    if (!campaign) throw new NotFoundException('Campanha não encontrada')
+    if (!this.canReadResource({ ownerId: campaign.ownerId, visibility: campaign.visibility, userId: params.userId })) {
+      throw new ForbiddenException('Sem permissão para esta campanha')
+    }
+
+    const world = await this.worlds.get(campaign.worldId)
+    const worldName = world?.name?.trim() ?? ''
+    const worldLore = world?.lore?.trim() ?? ''
+    const campaignThematic = campaign.thematic?.trim() ?? campaign.name?.trim() ?? ''
+
+    try {
+      const suggestion = await this.narrator.suggestCharacterFromDescription({
+        characterConcept: params.characterConcept.trim(),
+        worldName,
+        worldLore,
+        campaignThematic
+      })
+
+      if (!suggestion.name || !suggestion.profession || suggestion.description.length < 80) {
+        throw new Error('O provedor de IA retornou uma sugestão incompleta.')
+      }
+
+      return {
+        name: suggestion.name.trim(),
+        gender: (suggestion.gender || '').trim(),
+        race: (suggestion.race || '').trim(),
+        profession: suggestion.profession.trim(),
+        description: suggestion.description.trim(),
+        campaignRole: (suggestion.campaignRole || '').trim()
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'erro desconhecido'
+      throw new ServiceUnavailableException(`Falha ao gerar personagem com IA: ${message}`)
+    }
+  }
+
   async deleteCharacter(params: { userId: string; characterId: string }) {
     const character = await this.characters.get(params.characterId)
     if (!character) throw new NotFoundException('Personagem não encontrado')

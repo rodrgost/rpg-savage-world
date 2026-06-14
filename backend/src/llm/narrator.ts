@@ -62,6 +62,13 @@ export type SuggestCharacterFromWorldRequest = {
     campaignRole?: string
   }
 }
+
+export type SuggestCharacterFromDescriptionRequest = {
+  characterConcept: string
+  worldName?: string
+  worldLore?: string
+  campaignThematic?: string
+}
 export type SuggestedCharacter = {
   name: string
   gender: string
@@ -97,6 +104,7 @@ export interface Narrator {
   expandWorldLore(req: ExpandWorldLoreRequest): Promise<string>
   generateImageDescription(req: GenerateImageDescriptionRequest): Promise<string>
   suggestCharacterFromWorld(req: SuggestCharacterFromWorldRequest): Promise<SuggestedCharacter>
+  suggestCharacterFromDescription(req: SuggestCharacterFromDescriptionRequest): Promise<SuggestedCharacter>
   /** Valida uma ação custom do jogador antes de executá-la */
   validateAction(req: ValidateActionRequest): Promise<ValidateActionResponse>
   /** Gera a narrativa inicial ao começar uma sessão */
