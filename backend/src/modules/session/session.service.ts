@@ -1430,9 +1430,14 @@ export class SessionService {
         playerSpeech: o.playerSpeech,
         actionType: o.actionType,
         feasible: o.feasible,
-        diceCheck: o.diceCheck ?? null
+        diceCheck: o.diceCheck ? {
+          skill: o.diceCheck.skill ?? undefined,
+          attribute: o.diceCheck.attribute ?? undefined,
+          tn: o.diceCheck.tn,
+          required: o.diceCheck.required
+        } : null
       })),
-      npcs: narratorResponse.npcs.map((n) => ({ id: n.id, name: n.name, action: n.action })),
+      npcs: narratorResponse.npcs.map((n) => ({ id: n.id, name: n.name, action: n.status ?? n.disposition })),
       itemChanges: narratorResponse.itemChanges.map((c) => ({
         name: c.name,
         changeType: c.changeType,
