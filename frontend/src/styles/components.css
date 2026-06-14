@@ -421,6 +421,54 @@ button:disabled {
   width: 100%;
 }
 
+/* ─── PWA Install Modal ────────────────────────────── */
+
+.pwa-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.pwa-modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 28px 24px 24px;
+  max-width: 380px;
+  width: 100%;
+}
+
+.pwa-modal h3 {
+  margin: 0 0 16px;
+  font-size: var(--font-lg);
+  color: var(--text-primary);
+}
+
+.pwa-ios-steps {
+  margin: 0 0 24px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.pwa-ios-steps li {
+  font-size: var(--font-sm);
+}
+
+.pwa-icon-share {
+  display: inline-block;
+  font-size: 1.1em;
+  vertical-align: middle;
+}
+
 /* ─── Row / Flex helpers ───────────────────────────── */
 
 .row {
