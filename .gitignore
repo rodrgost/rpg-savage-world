@@ -4,6 +4,8 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+frontend/vite.config.js
+generate-icons.mjs
 
 # Ambiente local
 .env
