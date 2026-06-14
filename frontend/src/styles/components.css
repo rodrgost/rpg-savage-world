@@ -2804,6 +2804,7 @@ button:disabled {
   border-left: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   animation: slideInRight 200ms ease;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
 }
@@ -2841,6 +2842,31 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.nlog-copy-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-md);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.nlog-copy-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.nlog-copy-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .nlog-refresh-btn {
