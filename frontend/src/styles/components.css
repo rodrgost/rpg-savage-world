@@ -748,6 +748,27 @@ button:disabled {
   line-height: 1.5;
 }
 
+/* Fala direta do personagem (ação começando com "-") */
+.msg.player.player-speech .player-content {
+  border-color: rgba(180, 210, 255, 0.35);
+  background: linear-gradient(135deg, rgba(180, 210, 255, 0.07) 0%, var(--bg-elevated) 100%);
+}
+
+.msg.player .player-text .speech-text {
+  margin: 0;
+  font-size: 1.05rem;
+  font-style: italic;
+  color: rgba(210, 230, 255, 0.95);
+  line-height: 1.5;
+}
+
+/* Quando há ação + fala combinadas, separar com borda superior sutil */
+.msg.player .player-text p + .speech-text {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid rgba(180, 210, 255, 0.2);
+}
+
 .player-avatar {
   width: 64px;
   border-radius: 0;

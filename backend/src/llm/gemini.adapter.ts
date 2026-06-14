@@ -3011,6 +3011,11 @@ export class GeminiAdapter implements Narrator {
       '── PLAYER ACTION ──',
       `Type: ${req.playerAction.type}`,
       `Description: ${req.playerAction.description}`,
+      ...(req.playerAction.playerSpeech ? [
+        '',
+        '── PLAYER SAYS (direct dialogue spoken out loud — the character literally said these words) ──',
+        `"${req.playerAction.playerSpeech}"`
+      ] : []),
       '',
       '── MECHANICAL RESULT ──',
       'Use this block as a mandatory anchor: narrate its consequences without contradicting any success, failure, damage, status, or changes described in it.',

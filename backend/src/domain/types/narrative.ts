@@ -226,6 +226,8 @@ export type NarrateTurnRequest = {
   playerAction: {
     type: string
     description: string
+    /** Fala direta do personagem (quando ação começa com "-") */
+    playerSpeech?: string
   }
   /** Resultado mecânico do rule-engine */
   engineEvents: Array<{ type: string; payload: Record<string, unknown> }>
