@@ -3,7 +3,6 @@ import { FieldValue, firestore } from '../infrastructure/firestore.js'
 export type CampaignDoc = {
   worldId: string
   ownerId: string
-  thematic: string
   storyDescription: string
   image?: {
     mimeType: string
@@ -21,7 +20,7 @@ export class CampaignsRepo {
     campaignId: string
     worldId: string
     ownerId: string
-    thematic: string
+    name?: string
     storyDescription: string
     image?: { mimeType: string; base64: string }
     youtubeUrl?: string
@@ -33,11 +32,10 @@ export class CampaignsRepo {
       .set({
         worldId: params.worldId,
         ownerId: params.ownerId,
-        thematic: params.thematic,
         storyDescription: params.storyDescription,
         ...(image ? { image } : {}),
         ...(params.youtubeUrl ? { youtubeUrl: params.youtubeUrl } : {}),
-        name: params.thematic,
+        name: params.name ?? '',
         status: 'active',
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()

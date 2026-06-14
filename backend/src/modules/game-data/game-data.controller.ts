@@ -37,7 +37,6 @@ const StoryCharacterBody = z.object({
 
 const CreateCampaignBody = z.object({
   worldId: z.string().min(1),
-  thematic: z.string().min(1),
   name: z.string().optional(),
   storyDescription: z.string().optional(),
   storyCharacters: z.array(StoryCharacterBody).min(0).max(7).optional(),
@@ -48,7 +47,6 @@ const CreateCampaignBody = z.object({
 
 const UpdateCampaignBody = z.object({
   name: z.string().min(1).optional(),
-  thematic: z.string().min(1),
   storyDescription: z.string().optional().default(''),
   storyCharacters: z.array(StoryCharacterBody).min(0).max(7).optional(),
   visibility: VisibilityBody.optional(),
@@ -57,14 +55,12 @@ const UpdateCampaignBody = z.object({
 })
 
 const IncrementCampaignPreviewBody = z.object({
-  worldName: z.string().min(1),
-  thematic: z.string().optional()
+  worldName: z.string().min(1)
 })
 
 const CampaignImagePreviewBody = z
   .object({
-    name: z.string().min(1).optional(),
-    thematic: z.string().min(1)
+    name: z.string().min(1).optional()
   })
   .strict()
 

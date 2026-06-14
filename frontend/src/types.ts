@@ -27,7 +27,6 @@ export type Campaign = {
   ownerProfile?: OwnerProfile
   visibility: Visibility
   name?: string
-  thematic: string
   storyDescription: string
   storyCharacters?: StoryCharacter[]
   image?: {

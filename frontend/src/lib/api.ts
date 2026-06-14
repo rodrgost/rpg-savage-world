@@ -213,7 +213,6 @@ function mapCampaignRecord(item: {
   ownerProfile?: { uid?: string; displayName?: string; photoUrl?: string }
   visibility?: Visibility
   name?: string
-  thematic?: string
   storyDescription?: string
   storyCharacters?: Array<{ name?: string; role?: string; description?: string; status?: string }>
   image?: { mimeType?: string; base64?: string }
@@ -226,7 +225,6 @@ function mapCampaignRecord(item: {
     ownerProfile: mapOwnerProfile(item.ownerProfile),
     visibility: normalizeVisibility(item.visibility),
     name: item.name,
-    thematic: item.thematic ?? item.name ?? '',
     storyDescription: item.storyDescription ?? '',
     storyCharacters: Array.isArray(item.storyCharacters)
       ? item.storyCharacters.map((c) => ({
@@ -310,7 +308,6 @@ export async function mergeAnonymousOwnership(anonymousToken: string): Promise<{
 
 export async function createCampaign(params: {
   worldId: string
-  thematic: string
   name?: string
   storyDescription?: string
   visibility?: Visibility
@@ -334,7 +331,6 @@ export async function listCampaigns(worldId?: string): Promise<Campaign[]> {
       ownerProfile?: { uid?: string; displayName?: string; photoUrl?: string }
       visibility?: Visibility
       name?: string
-      thematic?: string
       storyDescription?: string
       storyCharacters?: Array<{ name?: string; role?: string; description?: string; status?: string }>
       image?: { mimeType?: string; base64?: string }
@@ -354,7 +350,6 @@ export async function getCampaign(campaignId: string): Promise<Campaign> {
       ownerProfile?: { uid?: string; displayName?: string; photoUrl?: string }
       visibility?: Visibility
       name?: string
-      thematic?: string
       storyDescription?: string
       storyCharacters?: Array<{ name?: string; role?: string; description?: string; status?: string }>
       image?: { mimeType?: string; base64?: string }
@@ -367,7 +362,7 @@ export async function getCampaign(campaignId: string): Promise<Campaign> {
 
 export async function updateCampaign(
   campaignId: string,
-  params: { name?: string; thematic: string; storyDescription?: string; storyCharacters?: StoryCharacter[]; visibility?: Visibility; image?: StoredImage; youtubeUrl?: string }
+  params: { name?: string; storyDescription?: string; storyCharacters?: StoryCharacter[]; visibility?: Visibility; image?: StoredImage; youtubeUrl?: string }
 ): Promise<void> {
   await apiRequest<{ ok: true }>(`/campaigns/${encodeURIComponent(campaignId)}`, {
     method: 'PUT',
@@ -383,17 +378,15 @@ export async function deleteCampaign(campaignId: string): Promise<void> {
 
 export async function incrementCampaignStoryPreview(params: {
   worldName: string
-  thematic?: string
-}): Promise<{ storyDescription: string; storyCharacters: StoryCharacter[]; name?: string; thematic?: string }> {
-  const response = await apiRequest<{ storyDescription: string; storyCharacters?: StoryCharacter[]; name?: string; thematic?: string }>('/campaigns/increment-preview', {
+}): Promise<{ storyDescription: string; storyCharacters: StoryCharacter[]; name?: string }> {
+  const response = await apiRequest<{ storyDescription: string; storyCharacters?: StoryCharacter[]; name?: string }>('/campaigns/increment-preview', {
     method: 'POST',
     body: JSON.stringify(params)
   })
   return {
     storyDescription: response.storyDescription,
     storyCharacters: response.storyCharacters ?? [],
-    name: response.name,
-    thematic: response.thematic
+    name: response.name
   }
 }
 
@@ -406,7 +399,6 @@ export async function incrementCampaignStory(campaignId: string): Promise<{ stor
 
 export async function generateCampaignImagePreview(params: {
   name?: string
-  thematic: string
 }): Promise<StoredImage> {
   const response = await apiRequest<{ image: StoredImage }>('/campaigns/image-preview', {
     method: 'POST',

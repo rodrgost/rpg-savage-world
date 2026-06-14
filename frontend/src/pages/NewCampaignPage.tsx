@@ -15,7 +15,7 @@ export function NewCampaignPage({ uid }: Props) {
   useEffect(() => {
     if (!worldId || !uid) return
 
-    createCampaign({ worldId, thematic: 'Nova campanha', visibility: 'private' })
+    createCampaign({ worldId, visibility: 'private' })
       .then((campaignId) => {
         navigate(`/campaigns/${campaignId}/edit`, { replace: true })
       })

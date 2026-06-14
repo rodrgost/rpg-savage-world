@@ -95,7 +95,7 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
         {characters.map((character) => {
           const campaign = campaigns.find((c) => c.id === character.campaignId)
           const world = worlds.find((w) => w.id === (character.worldId ?? campaign?.worldId))
-          const campaignName = campaign?.name || campaign?.thematic || 'Campanha desconhecida'
+          const campaignName = campaign?.name || 'Campanha desconhecida'
           const worldName = world?.name ?? 'Universo desconhecido'
           const isOwner = character.ownerId === uid
           const resolvedOwnerLabel = isOwner

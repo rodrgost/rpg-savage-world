@@ -136,7 +136,7 @@ export function CampaignsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
             >
               {campaign.image && (
                 <img
-                  alt={`Capa da campanha ${campaign.thematic}`}
+                  alt={`Capa da campanha ${campaign.name || ''}`}
                   className="card-image card-image--world"
                   src={`data:${campaign.image.mimeType};base64,${campaign.image.base64}`}
                 />
@@ -148,10 +148,7 @@ export function CampaignsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                     {campaign.visibility === 'public' ? 'Pública' : 'Privada'}
                   </span>
                 </div>
-                <h3>{campaign.name || campaign.thematic || 'Campanha sem nome'}</h3>
-                {campaign.thematic && campaign.name !== campaign.thematic && (
-                  <p className="muted">{campaign.thematic}</p>
-                )}
+                <h3>{campaign.name || 'Campanha sem nome'}</h3>
                 {world && !selectedWorldId && (
                   <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>🌍 {world.name}</p>
                 )}
