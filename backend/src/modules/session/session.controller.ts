@@ -83,7 +83,7 @@ export class SessionController {
   @Get('/:sessionId/narration-log')
   async narrationLog(@CurrentUser('uid') userId: string, @Param('sessionId') sessionId: string) {
     await this.sessions.requireOwnedSessionPublic(userId, sessionId)
-    return { entries: getNarrationLog(sessionId) }
+    return { entries: await getNarrationLog(sessionId) }
   }
 
   @Get('/:sessionId/events')
