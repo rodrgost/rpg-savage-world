@@ -204,7 +204,6 @@ export type NarrateStartRequest = {
     lore?: string
   }
   campaign: {
-    thematic: string
     storyDescription: string
     name?: string
   }
@@ -237,10 +236,9 @@ export type NarrateTurnRequest = {
     description?: string
     lore?: string
   }
-  /** Dados da campanha (temática, história) — injetados no systemInstruction */
+  /** Dados da campanha (história) — injetados no systemInstruction */
   campaign?: {
     name?: string
-    thematic?: string
     storyDescription?: string
   }
   /** Contexto para a LLM (summary, estado, inventário) */

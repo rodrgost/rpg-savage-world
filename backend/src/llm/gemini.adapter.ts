@@ -1332,7 +1332,6 @@ export class GeminiAdapter implements Narrator {
       'Objective: create from scratch a complete story from minimal context.',
       'Expected output: a valid JSON with the following fields:',
       '  "name": short and evocative title for the story (3-8 words).',
-      '  "thematic": summarized thematic of the story (1 short sentence, e.g.: "Collapsing empire and forbidden magic").',
       '  "storyDescription": 3-6 paragraphs with context, conflicts, factions, locations, and 2-4 adventure hooks.',
       '  "storyCharacters": array of 3 to 7 world NPCs relevant to the narrative, each with:',
       '    - "name": character name',
@@ -1340,13 +1339,11 @@ export class GeminiAdapter implements Narrator {
       '    - "description": brief character description (1-2 sentences)',
       '    - "status": current situation in the story (e.g.: active, fugitive, dead, unknown)',
       'Constraints: return ONLY the JSON, without preamble, greeting, comments, or separators.',
-      'Even when a thematic is provided, generate a title, refined thematic, story, and NPCs as a complete new creation.',
       'Start directly with { and end with }.'
     ].join('\n')
 
     const prompt = [
       `Campaign name/context: ${req.campaignName || 'free'}.`,
-      `Thematic (if provided): ${req.thematic?.trim() || 'to be defined by the LLM'}.`,
       'Current description: ignore; generate from scratch.'
     ].join('\n')
 
@@ -1362,7 +1359,7 @@ export class GeminiAdapter implements Narrator {
       const lastBrace = cleaned.lastIndexOf('}')
       const jsonStr = firstBrace !== -1 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned
 
-      let parsed: { name?: unknown; thematic?: unknown; storyDescription?: unknown; storyCharacters?: unknown }
+      let parsed: { name?: unknown; storyDescription?: unknown; storyCharacters?: unknown }
       try {
         parsed = JSON.parse(jsonStr)
       } catch {
@@ -1387,9 +1384,8 @@ export class GeminiAdapter implements Narrator {
         .filter((c) => c.name.length > 0)
 
       const name = typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : undefined
-      const thematic = typeof parsed.thematic === 'string' && parsed.thematic.trim() ? parsed.thematic.trim() : undefined
 
-      return { storyDescription, storyCharacters, name, thematic }
+      return { storyDescription, storyCharacters, name }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
       throw new Error(`Falha ao gerar história com ${this.providerLabel}: ${message}`)
@@ -1737,7 +1733,7 @@ export class GeminiAdapter implements Narrator {
 
   private getCachedNarratorSystemPrompt(opts: {
     world?: { name?: string; description?: string; lore?: string }
-    campaign?: { name?: string; thematic?: string; storyDescription?: string }
+    campaign?: { name?: string; storyDescription?: string }
     rulesDigest?: string
     summaryText?: string
     playerSkills?: Record<string, string>
@@ -1750,7 +1746,6 @@ export class GeminiAdapter implements Narrator {
       wd: opts.world?.description,
       wl: opts.world?.lore,
       cn: opts.campaign?.name,
-      ct: opts.campaign?.thematic,
       cs: opts.campaign?.storyDescription,
       rd: opts.rulesDigest,
       st: opts.summaryText,
@@ -1782,7 +1777,7 @@ export class GeminiAdapter implements Narrator {
    */
   private buildNarratorSystemPrompt(opts: {
     world?: { name?: string; description?: string; lore?: string }
-    campaign?: { name?: string; thematic?: string; storyDescription?: string }
+    campaign?: { name?: string; storyDescription?: string }
     rulesDigest?: string
     summaryText?: string
     playerSkills?: Record<string, string>
@@ -2030,13 +2025,12 @@ export class GeminiAdapter implements Narrator {
       )
     }
 
-    // Inject campaign context (thematic and specific story)
-    if (campaign && (campaign.thematic || campaign.storyDescription)) {
+    // Inject campaign context (specific story)
+    if (campaign && campaign.storyDescription) {
       lines.push(
         '',
         '=== CAMPAIGN ===',
         `Name: ${campaign.name ?? 'Unnamed'}`,
-        `Thematic: ${campaign.thematic ?? ''}`,
         `Story: ${campaign.storyDescription ?? ''}`
       )
     }
@@ -2561,7 +2555,7 @@ export class GeminiAdapter implements Narrator {
     maxTokens?: number,
     systemPromptOpts: {
       world?: { name?: string; description?: string; lore?: string }
-      campaign?: { name?: string; thematic?: string; storyDescription?: string }
+      campaign?: { name?: string; storyDescription?: string }
       rulesDigest?: string
       summaryText?: string
       playerSkills?: Record<string, string>
@@ -2911,7 +2905,7 @@ export class GeminiAdapter implements Narrator {
       // Fallback mínimo para não bloquear a sessão
       return {
         isFallback: true,
-        narrative: `You arrive at a new place. The air carries the weight of untold stories. Around you, the landscape of ${req.campaign.thematic} stretches as far as the eye can see. A path opens before you, and you feel that adventure is about to begin.`,
+        narrative: `You arrive at a new place. The air carries the weight of untold stories. Around you, the landscape of ${req.campaign.name ?? 'this world'} stretches as far as the eye can see. A path opens before you, and you feel that adventure is about to begin.`,
         options: [
           { id: randomUUID(), text: 'Explore the main path', actionType: 'custom', actionPayload: { input: 'Explore the main path' }, feasible: true, diceCheck: { required: false, reason: 'Safe and accessible path' } },
           { id: randomUUID(), text: 'Observe the surroundings carefully', actionType: 'trait_test', actionPayload: { skill: 'Percepção' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detect hidden details in the environment' } },

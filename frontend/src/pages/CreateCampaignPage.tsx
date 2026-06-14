@@ -33,7 +33,6 @@ export function CreateCampaignPage({ uid }: Props) {
   const [ownerId, setOwnerId] = useState('')
   const [visibility, setVisibility] = useState<Visibility>('private')
   const [name, setName] = useState('')
-  const [thematic, setThematic] = useState('')
   const [storyDescription, setStoryDescription] = useState('')
   const [storyCharacters, setStoryCharacters] = useState<StoryCharacter[]>([])
   const [imagePreview, setImagePreview] = useState<StoredImage | null>(null)
@@ -71,8 +70,7 @@ export function CreateCampaignPage({ uid }: Props) {
         setOwnerId(campaign.ownerId)
         setVisibility(campaign.visibility)
         setResolvedWorldId(campaign.worldId)
-        setName(campaign.name ?? campaign.thematic ?? '')
-        setThematic(campaign.thematic)
+        setName(campaign.name ?? '')
         setStoryDescription(campaign.storyDescription ?? '')
         setStoryCharacters(campaign.storyCharacters ?? [])
         setImagePreview(campaign.image ?? null)
@@ -87,16 +85,11 @@ export function CreateCampaignPage({ uid }: Props) {
   async function handleGenerateImage() {
     if (!isOwner) return
 
-    if (!thematic.trim()) {
-      setError('Informe a temática antes de gerar imagem.')
-      return
-    }
-
     setError('')
     setImageLoading(true)
 
     try {
-      const image = await generateCampaignImagePreview({ name: name.trim() || undefined, thematic })
+      const image = await generateCampaignImagePreview({ name: name.trim() || undefined })
       setImagePreview(image)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Falha ao gerar imagem da campanha')
@@ -116,7 +109,6 @@ export function CreateCampaignPage({ uid }: Props) {
       if (isEditMode && campaignId) {
         await updateCampaign(campaignId, {
           name: name.trim() || undefined,
-          thematic,
           storyDescription,
           storyCharacters: storyCharacters.length > 0 ? storyCharacters : undefined,
           visibility,
@@ -127,7 +119,6 @@ export function CreateCampaignPage({ uid }: Props) {
       } else {
         await createCampaign({
           worldId: resolvedWorldId,
-          thematic,
           name: name.trim() || undefined,
           storyDescription,
           visibility,
@@ -170,7 +161,6 @@ export function CreateCampaignPage({ uid }: Props) {
       setStoryDescription(result.storyDescription)
       setStoryCharacters(result.storyCharacters)
       setName(result.name ?? '')
-      setThematic(result.thematic ?? '')
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Falha ao gerar campanha com LLM')
     } finally {
@@ -208,20 +198,9 @@ export function CreateCampaignPage({ uid }: Props) {
           />
         </label>
 
-        <label>
-          Temática / era da campanha
-          <input
-            value={thematic}
-            onChange={(event) => setThematic(event.target.value)}
-            placeholder="Ex: Reinos Fragmentados e magia decadente"
-            disabled={!isOwner}
-            required
-          />
-        </label>
-
         {isOwner && (
           <button
-            disabled={imageLoading || llmLoading || loading || !thematic.trim()}
+            disabled={imageLoading || llmLoading || loading}
             onClick={handleGenerateImage}
             type="button"
           >
@@ -321,7 +300,7 @@ export function CreateCampaignPage({ uid }: Props) {
         </label>
 
         {isOwner && (
-          <button disabled={loading || llmLoading || !uid || !thematic.trim()} type="submit">
+          <button disabled={loading || llmLoading || !uid} type="submit">
             {loading ? (isEditMode ? 'Salvando...' : 'Criando...') : isEditMode ? 'Salvar campanha' : 'Criar campanha'}
           </button>
         )}

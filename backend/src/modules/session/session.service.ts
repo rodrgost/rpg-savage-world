@@ -912,7 +912,6 @@ export class SessionService {
           ? { name: world.name, description: world.description, lore: world.lore }
           : undefined,
         campaign: {
-          thematic: campaign.thematic ?? '',
           storyDescription: campaign.storyDescription ?? '',
           name: campaign.name
         },
@@ -1080,11 +1079,10 @@ export class SessionService {
           : undefined,
         campaign: campaign
           ? {
-              thematic: campaign.thematic ?? '',
               storyDescription: campaign.storyDescription ?? '',
               name: campaign.name
             }
-          : { thematic: '', storyDescription: '' },
+          : { storyDescription: '' },
         character: {
           name: character.name ?? 'Aventureiro',
           profession: character.profession,
@@ -1308,7 +1306,7 @@ export class SessionService {
           ? { name: worldDoc.name, description: worldDoc.description, lore: worldDoc.lore }
           : undefined,
         campaign: campaignDoc
-          ? { name: campaignDoc.name, thematic: campaignDoc.thematic, storyDescription: campaignDoc.storyDescription }
+          ? { name: campaignDoc.name, storyDescription: campaignDoc.storyDescription }
           : undefined,
         context: {
           summaryText: context.summaryText,

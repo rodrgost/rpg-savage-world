@@ -6,7 +6,6 @@ export type CampaignDoc = {
   worldId: string
   ownerId: string
   visibility?: Visibility
-  thematic: string
   storyDescription: string
   storyCharacters?: StoryCharacter[]
   image?: {
@@ -46,7 +45,6 @@ export class CampaignsRepo {
     worldId: string
     ownerId: string
     visibility: Visibility
-    thematic: string
     name?: string
     storyDescription: string
     storyCharacters?: StoryCharacter[]
@@ -61,12 +59,11 @@ export class CampaignsRepo {
         worldId: params.worldId,
         ownerId: params.ownerId,
         visibility: params.visibility,
-        thematic: params.thematic,
         storyDescription: params.storyDescription,
         ...(params.storyCharacters ? { storyCharacters: params.storyCharacters } : {}),
         ...(image ? { image } : {}),
         ...(params.youtubeUrl ? { youtubeUrl: params.youtubeUrl } : {}),
-        name: params.name ?? params.thematic,
+        name: params.name ?? '',
         status: 'active',
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
@@ -134,7 +131,6 @@ export class CampaignsRepo {
   async updateCampaign(params: {
     campaignId: string
     name?: string
-    thematic: string
     storyDescription: string
     storyCharacters?: StoryCharacter[]
     visibility?: Visibility
@@ -144,8 +140,7 @@ export class CampaignsRepo {
     const image = params.image
     await firestore.collection('campaigns').doc(params.campaignId).set(
       {
-        thematic: params.thematic,
-        name: params.name ?? params.thematic,
+        name: params.name ?? '',
         storyDescription: params.storyDescription,
         ...(params.storyCharacters !== undefined ? { storyCharacters: params.storyCharacters } : {}),
         ...(params.visibility !== undefined ? { visibility: params.visibility } : {}),

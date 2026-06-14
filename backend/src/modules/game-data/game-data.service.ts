@@ -16,11 +16,10 @@ function sanitizeInlineText(value: string | undefined): string {
   return (value ?? '').trim().replace(/\s+/g, ' ')
 }
 
-function buildWorldImagePrompt(params: { campaignName?: string; thematic: string; visualDescription?: string }): string {
+function buildWorldImagePrompt(params: { campaignName?: string; visualDescription?: string }): string {
   const campaignName = sanitizeInlineText(params.campaignName)
-  const thematic = sanitizeInlineText(params.thematic)
   const visualDescription = sanitizeInlineText(params.visualDescription)
-  const title = campaignName || thematic || 'Untitled campaign'
+  const title = campaignName || 'Untitled campaign'
 
   return [
     'Create a illustrated key art.',
@@ -49,7 +48,7 @@ function buildUniverseImagePrompt(params: { name: string; visualDescription?: st
 
 function buildCharacterImagePrompt(params: {
   worldName: string
-  thematic: string
+  campaignName?: string
   gender?: string
   race?: string
   profession: string
@@ -57,7 +56,7 @@ function buildCharacterImagePrompt(params: {
   visualDescription?: string
 }): string {
   const worldName = sanitizeInlineText(params.worldName)
-  const thematic = sanitizeInlineText(params.thematic)
+  const campaignName = sanitizeInlineText(params.campaignName)
   const gender = sanitizeInlineText(params.gender)
   const race = sanitizeInlineText(params.race)
   const profession = sanitizeInlineText(params.profession)
@@ -68,7 +67,7 @@ function buildCharacterImagePrompt(params: {
     'Create a RPG character portrait illustration.',
     'Style: high quality, portrait bust shot.',
     'Rules: no watermarks, no typography, safe for all audiences.',
-    `Setting: ${worldName || 'Unknown world'}, ${thematic || 'generic fantasy'}.`,
+    `Setting: ${worldName || 'Unknown world'}${campaignName ? `, ${campaignName}` : ''}.`,
     ...(gender ? [`Gender: ${gender}.`] : []),
     ...(race ? [`Race/Species: ${race}.`] : []),
     `Profession: ${profession || 'Traveler'}.`,
@@ -512,7 +511,6 @@ export class GameDataService {
   async createCampaign(params: {
     userId: string
     worldId: string
-    thematic: string
     name?: string
     storyDescription?: string
     visibility?: Visibility
@@ -540,7 +538,6 @@ export class GameDataService {
       worldId: params.worldId,
       ownerId: params.userId,
       visibility,
-      thematic: params.thematic,
       name: params.name,
       storyDescription: params.storyDescription?.trim() ?? '',
       image: normalizedImage,
@@ -550,17 +547,15 @@ export class GameDataService {
     return { campaignId }
   }
 
-  async generateCampaignStoryPreview(params: { userId: string; worldName: string; thematic?: string }) {
+  async generateCampaignStoryPreview(params: { userId: string; worldName: string }) {
     const result = await this.narrator.expandAdventureStory({
-      campaignName: params.worldName,
-      thematic: params.thematic
+      campaignName: params.worldName
     })
 
     return {
       storyDescription: result.storyDescription,
       storyCharacters: result.storyCharacters,
-      name: result.name,
-      thematic: result.thematic
+      name: result.name
     }
   }
 
@@ -603,7 +598,6 @@ export class GameDataService {
     userId: string
     campaignId: string
     name?: string
-    thematic: string
     storyDescription: string
     storyCharacters?: Array<{ name: string; role: string; description: string; status: string }>
     visibility?: Visibility
@@ -640,7 +634,6 @@ export class GameDataService {
     await this.campaigns.updateCampaign({
       campaignId: params.campaignId,
       name: params.name?.trim() || undefined,
-      thematic: params.thematic,
       storyDescription: params.storyDescription?.trim() ?? '',
       storyCharacters: params.storyCharacters,
       visibility: params.visibility ? normalizeVisibility(params.visibility) : undefined,
@@ -654,16 +647,13 @@ export class GameDataService {
   async generateCampaignImagePreview(params: {
     userId: string
     name?: string
-    thematic: string
   }): Promise<{ image: StoredImage }> {
     const campaignName = params.name?.trim() ?? ''
-    const thematic = params.thematic?.trim() ?? ''
-    if (!thematic) throw new BadRequestException('Temática é obrigatória')
 
-    const visualDescription = await this.buildVisualDescription({ entityType: 'campaign', title: campaignName || thematic })
+    const visualDescription = await this.buildVisualDescription({ entityType: 'campaign', title: campaignName || 'Unnamed campaign' })
 
     const generated = await this.imageGenerator.generateImage({
-      prompt: buildWorldImagePrompt({ campaignName, thematic, visualDescription }),
+      prompt: buildWorldImagePrompt({ campaignName, visualDescription }),
       width: 768,
       height: 432,
       mimeType: 'image/webp'
@@ -681,10 +671,8 @@ export class GameDataService {
     const world = await this.worlds.get(campaign.worldId)
     const worldName = world?.name ?? 'Mundo desconhecido'
 
-    const thematic = campaign.thematic?.trim() || campaign.name?.trim() || 'Campanha sem temática definida'
     const result = await this.narrator.expandAdventureStory({
-      campaignName: worldName,
-      thematic
+      campaignName: campaign.name?.trim() || worldName
     })
 
     await this.campaigns.updateStoryDescription(campaign.id, result.storyDescription, result.storyCharacters)
@@ -776,11 +764,11 @@ export class GameDataService {
 
     const world = await this.worlds.get(campaign.worldId)
     const worldName = world?.name ?? 'Mundo desconhecido'
-    const thematic = campaign.thematic ?? campaign.name ?? ''
+    const campaignName = campaign.name ?? ''
     const visualDescription = await this.buildVisualDescription({
       entityType: 'character',
       worldName,
-      campaignTitle: thematic,
+      campaignTitle: campaignName,
       gender: params.gender,
       race: params.race,
       profession: params.profession,
@@ -790,7 +778,7 @@ export class GameDataService {
     const generated = await this.imageGenerator.generateImage({
       prompt: buildCharacterImagePrompt({
         worldName,
-        thematic,
+        campaignName,
         gender: params.gender,
         race: params.race,
         profession: params.profession,
@@ -936,14 +924,14 @@ export class GameDataService {
     const world = await this.worlds.get(campaign.worldId)
     const worldName = world?.name?.trim() ?? ''
     const worldLore = world?.lore?.trim() ?? ''
-    const campaignThematic = campaign.thematic?.trim() ?? campaign.name?.trim() ?? ''
+    const campaignName = campaign.name?.trim() ?? ''
 
     try {
       const suggestion = await this.narrator.suggestCharacterFromDescription({
         characterConcept: params.characterConcept.trim(),
         worldName,
         worldLore,
-        campaignThematic
+        campaignThematic: campaignName
       })
 
       if (!suggestion.name || !suggestion.profession || suggestion.description.length < 80) {

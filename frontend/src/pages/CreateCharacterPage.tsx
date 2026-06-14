@@ -334,7 +334,7 @@ export function CreateCharacterPage({ uid }: Props) {
       const parts: string[] = []
       if (name.trim()) parts.push(`Nome do personagem: ${name.trim()}`)
       if (description.trim()) parts.push(`Descrição base: ${description.trim()}`)
-      if (selectedCampaign?.thematic?.trim()) parts.push(`Tom da campanha: ${selectedCampaign.thematic.trim()}`)
+      if (selectedCampaign?.name?.trim()) parts.push(`Campanha: ${selectedCampaign.name.trim()}`)
       if (selectedEdges.length > 0) {
         const labels = selectedEdges.map(k => EDGES.find(e => e.key === k)?.label ?? k)
         parts.push(`Traços marcantes: ${labels.join(', ')}`)
@@ -493,7 +493,7 @@ export function CreateCharacterPage({ uid }: Props) {
                 <option value="">Selecione uma campanha</option>
                 {campaigns.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name || c.thematic}
+                    {c.name || 'Campanha sem nome'}
                   </option>
                 ))}
               </select>

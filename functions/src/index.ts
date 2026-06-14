@@ -24,7 +24,7 @@ function requireAuth(auth: unknown): asserts auth is { uid: string } {
 
 const CreateCampaignInput = z.object({
   worldId: z.string().min(1),
-  thematic: z.string().min(1),
+  name: z.string().optional(),
   storyDescription: z.string().optional()
 })
 
@@ -41,7 +41,7 @@ export const createCampaign = onCall(async (req) => {
     campaignId,
     worldId: input.worldId,
     ownerId: req.auth.uid,
-    thematic: input.thematic,
+    name: input.name?.trim(),
     storyDescription: input.storyDescription?.trim() ?? ''
   })
 

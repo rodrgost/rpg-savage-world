@@ -24,7 +24,6 @@ export type SummarizeHistoryRequest = {
 
 export type ExpandWorldRequest = {
   campaignName: string
-  thematic?: string
   currentDescription?: string
 }
 
@@ -39,7 +38,6 @@ export type ExpandAdventureStoryResult = {
   storyDescription: string
   storyCharacters: StoryCharacter[]
   name?: string
-  thematic?: string
 }
 
 export type ExpandWorldLoreRequest = {
