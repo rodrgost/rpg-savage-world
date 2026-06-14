@@ -17,9 +17,11 @@ export default defineConfig({
         theme_color: '#1a0a2e',
         background_color: '#1a0a2e',
         display: 'standalone',
+        display_override: ['standalone', 'minimal-ui'],
         orientation: 'any',
         scope: '/',
-        start_url: '/',
+        start_url: '/?source=pwa',
+        prefer_related_applications: false,
         icons: [
           { src: '/icon-72x72.png',   sizes: '72x72',   type: 'image/png' },
           { src: '/icon-96x96.png',   sizes: '96x96',   type: 'image/png' },
@@ -32,7 +34,7 @@ export default defineConfig({
           { src: '/maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' },
         ],
-        screenshots: [],
+        categories: ['games', 'entertainment'],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],

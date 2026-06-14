@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { signOutCurrentUser, subscribeToAuthState, type AuthSession } from './lib/firebase'
 import { LoginPage } from './pages/LoginPage'
 import { HomePage } from './pages/HomePage'
+import { InstallButton } from './components/InstallButton'
 const CreateWorldPage = lazy(() => import('./pages/CreateWorldPage').then(m => ({ default: m.CreateWorldPage })))
 const WorldsPage = lazy(() => import('./pages/WorldsPage').then(m => ({ default: m.WorldsPage })))
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage').then(m => ({ default: m.CampaignsPage })))
@@ -68,6 +69,7 @@ function AuthenticatedLayout({
               <span className="topbar-session-label">Conta ativa</span>
               <strong>{accountLabel}</strong>
             </div>
+            <InstallButton />
             <button type="button" className="button-secondary button-sm" onClick={() => void onSignOut()}>
               Sair
             </button>
