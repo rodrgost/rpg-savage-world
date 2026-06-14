@@ -911,3 +911,34 @@ export async function getMessages(sessionId: string): Promise<ChatMessage[]> {
   )
   return response.messages
 }
+
+export type NarrationLogEntry = {
+  id: string
+  sessionId: string
+  timestamp: number
+  turn: number
+  durationMs: number
+  playerAction: { type: string; description: string }
+  engineEvents: Array<{ type: string; payload: Record<string, unknown> }>
+  narrative: string
+  options: Array<{
+    id: string
+    text: string
+    playerSpeech?: string | null
+    actionType: string
+    feasible: boolean
+    diceCheck?: { skill?: string; attribute?: string; tn?: number; required?: boolean } | null
+  }>
+  npcs: Array<{ id: string; name: string; action: string }>
+  itemChanges: Array<{ name: string; changeType: string; quantity?: number }>
+  statusChanges: Array<{ name: string; changeType: string; effectId?: string }>
+  npcAttackEvents: Array<{ type: string; payload: Record<string, unknown> }>
+  isFallback: boolean
+}
+
+export async function getNarrationLog(sessionId: string): Promise<NarrationLogEntry[]> {
+  const response = await apiRequest<{ entries: NarrationLogEntry[] }>(
+    '/sessions/' + encodeURIComponent(sessionId) + '/narration-log'
+  )
+  return response.entries
+}

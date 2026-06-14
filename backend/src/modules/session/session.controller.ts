@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { SessionService } from './session.service.js'
 import { CurrentUser } from '../../auth/current-user.decorator.js'
 import { error as logError } from '../../utils/file-logger.js'
+import { getNarrationLog } from '../../services/narrationLog.js'
 
 const StartSessionBody = z.object({
   campaignId: z.string().min(1),
@@ -77,6 +78,12 @@ export class SessionController {
   @Get('/:sessionId')
   async get(@CurrentUser('uid') userId: string, @Param('sessionId') sessionId: string) {
     return await this.sessions.getSession({ ownerId: userId, sessionId })
+  }
+
+  @Get('/:sessionId/narration-log')
+  async narrationLog(@CurrentUser('uid') userId: string, @Param('sessionId') sessionId: string) {
+    await this.sessions.requireOwnedSessionPublic(userId, sessionId)
+    return { entries: getNarrationLog(sessionId) }
   }
 
   @Get('/:sessionId/events')
