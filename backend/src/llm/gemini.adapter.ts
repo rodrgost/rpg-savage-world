@@ -764,13 +764,24 @@ function buildSuggestedCharacterFromRecord(source: Record<string, unknown>): Sug
     'função'
   ])
 
+  const genderPtValue = extractFieldFromRecord(source, ['genderPt', 'generoPt', 'gêneroPt'])
+  const racePtValue = extractFieldFromRecord(source, ['racePt', 'racaPt', 'raçaPt'])
+  const professionPtValue = extractFieldFromRecord(source, ['professionPt', 'profissaoPt', 'profissãoPt'])
+  const descriptionPtValue = extractFieldFromRecord(source, ['descriptionPt', 'descricaoPt', 'descriçãoPt'])
+  const campaignRolePtValue = extractFieldFromRecord(source, ['campaignRolePt', 'papelPt', 'papelNaCampanhaPt'])
+
   return {
     name: sanitizeCharacterField(nameValue, ''),
     gender: sanitizeCharacterField(genderValue, ''),
     race: sanitizeCharacterField(raceValue, ''),
     profession: sanitizeCharacterField(professionValue, ''),
     description: sanitizeCharacterField(descriptionValue, ''),
-    campaignRole: sanitizeCharacterField(campaignRoleValue, '')
+    campaignRole: sanitizeCharacterField(campaignRoleValue, ''),
+    genderPt: sanitizeCharacterField(genderPtValue, '') || undefined,
+    racePt: sanitizeCharacterField(racePtValue, '') || undefined,
+    professionPt: sanitizeCharacterField(professionPtValue, '') || undefined,
+    descriptionPt: sanitizeCharacterField(descriptionPtValue, '') || undefined,
+    campaignRolePt: sanitizeCharacterField(campaignRolePtValue, '') || undefined,
   }
 }
 
@@ -1561,8 +1572,8 @@ export class GeminiAdapter implements Narrator {
       'You are a character designer.',
       'Read the world name, universe lore, and adventure story. Create a character whose role and profession emerge NATURALLY from that data, without using pre-defined archetypes from the system.',
       'Respond ONLY in valid JSON, without markdown or comments.',
-      'Always return the 6 keys; gender and race can be empty string when the context does not support an inference.',
-      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"..."}',
+      'Always return all 11 keys; gender, race, genderPt, and racePt can be empty string when the context does not support an inference.',
+      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
       '',
       'Field instructions:',
       '  name: name coherent with the context; if the player provided a name, preserve that value exactly and treat it only as an identity anchor',
@@ -1571,6 +1582,11 @@ export class GeminiAdapter implements Narrator {
       '  profession: trade or social role derived exclusively from the world name, lore, and story; max 60 chars',
       '  description: 2-3 sentences derived primarily from the adventure story and lore, describing physical appearance (hair, eyes, build, or notable scar), clothing or equipment coherent with the profession, and personality trait with motivation. Min 80 chars, max 280 chars.',
       '  campaignRole: what this character is doing in this specific adventure, their mission, or how they connect to the plot. Derive from story/lore, be concrete and not generic. Max 300 chars.',
+      '  genderPt: Brazilian Portuguese translation of gender (Masculino, Feminino, or Outro); empty string if gender is empty',
+      '  racePt: Brazilian Portuguese translation of race/species; empty string if race is empty',
+      '  professionPt: Brazilian Portuguese translation of profession; max 60 chars',
+      '  descriptionPt: Brazilian Portuguese translation of description; same length constraints (min 80, max 280 chars)',
+      '  campaignRolePt: Brazilian Portuguese translation of campaignRole; max 300 chars',
       'If a name is provided, do not invent the description from the sound of the name; use the name only to preserve identity and derive everything else from the adventure story and lore.',
       'In repeated calls for the same plot, vary the name, profession, narrative function, motivation, appearance, and entry point into the adventure.',
     ].join('\n')
@@ -1665,8 +1681,8 @@ export class GeminiAdapter implements Narrator {
       'The player has written a free-form concept describing the character they want to create.',
       'Your task is to expand that concept into a complete character profile that fits the world and campaign context.',
       'Respond ONLY in valid JSON, without markdown or comments.',
-      'Always return all 6 keys; gender and race can be empty string when not mentioned or inferable.',
-      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"..."}',
+      'Always return all 11 keys; gender, race, genderPt, and racePt can be empty string when not mentioned or inferable.',
+      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
       '',
       'Field instructions:',
       '  name: an appropriate name consistent with the concept and world; if the player mentioned a name, use it',
@@ -1675,6 +1691,11 @@ export class GeminiAdapter implements Narrator {
       '  profession: trade or social role derived from the player concept; max 60 chars',
       '  description: 2-3 sentences expanding the concept with physical appearance (hair, eyes, build, or notable scar), clothing or equipment coherent with the profession, and personality trait with motivation. Min 80 chars, max 280 chars.',
       '  campaignRole: what this character does in the world, their mission, or how they connect to the setting. Concrete and specific, not generic. Max 300 chars.',
+      '  genderPt: Brazilian Portuguese translation of gender (Masculino, Feminino, or Outro); empty string if gender is empty',
+      '  racePt: Brazilian Portuguese translation of race/species; empty string if race is empty',
+      '  professionPt: Brazilian Portuguese translation of profession; max 60 chars',
+      '  descriptionPt: Brazilian Portuguese translation of description; same length constraints (min 80, max 280 chars)',
+      '  campaignRolePt: Brazilian Portuguese translation of campaignRole; max 300 chars',
     ].join('\n')
 
     const userPrompt = [

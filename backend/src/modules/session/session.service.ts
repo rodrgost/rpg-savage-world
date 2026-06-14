@@ -917,10 +917,10 @@ export class SessionService {
         },
         character: {
           name: character.name ?? 'Aventureiro',
-          profession: character.profession,
-          race: character.race,
-          gender: character.gender,
-          description: character.description,
+          profession: character.professionEn ?? character.profession,
+          race: character.raceEn ?? character.race,
+          gender: character.genderEn ?? character.gender,
+          description: character.descriptionEn ?? character.description,
           edges,
           hindrances: hindrances.map((h) => ({ name: h.name, severity: h.severity }))
         },
@@ -1085,10 +1085,10 @@ export class SessionService {
           : { storyDescription: '' },
         character: {
           name: character.name ?? 'Aventureiro',
-          profession: character.profession,
-          race: character.race,
-          gender: character.gender,
-          description: character.description,
+          profession: character.professionEn ?? character.profession,
+          race: character.raceEn ?? character.race,
+          gender: character.genderEn ?? character.gender,
+          description: character.descriptionEn ?? character.description,
           edges,
           hindrances: hindrances.map((h) => ({ name: h.name, severity: h.severity }))
         },

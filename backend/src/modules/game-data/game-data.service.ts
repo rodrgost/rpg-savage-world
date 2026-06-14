@@ -688,6 +688,11 @@ export class GameDataService {
     profession: string
     description?: string
     campaignRole?: string
+    genderEn?: string
+    raceEn?: string
+    professionEn?: string
+    descriptionEn?: string
+    campaignRoleEn?: string
     visibility?: Visibility
     attributes: Record<string, number>
     skills?: Record<string, number>
@@ -736,6 +741,11 @@ export class GameDataService {
       profession: params.profession,
       description: params.description?.trim() ?? '',
       campaignRole: params.campaignRole?.trim() ?? '',
+      genderEn: params.genderEn?.trim() || undefined,
+      raceEn: params.raceEn?.trim() || undefined,
+      professionEn: params.professionEn?.trim() || undefined,
+      descriptionEn: params.descriptionEn?.trim() || undefined,
+      campaignRoleEn: params.campaignRoleEn?.trim() || undefined,
       attributes: normalizedAttributes,
       skills: normalizedSkills,
       edges: normalizedEdges,
@@ -897,7 +907,12 @@ export class GameDataService {
         race,
         profession,
         description,
-        campaignRole
+        campaignRole,
+        genderPt: suggestion.genderPt,
+        racePt: suggestion.racePt,
+        professionPt: suggestion.professionPt,
+        descriptionPt: suggestion.descriptionPt,
+        campaignRolePt: suggestion.campaignRolePt,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
@@ -944,7 +959,12 @@ export class GameDataService {
         race: (suggestion.race || '').trim(),
         profession: suggestion.profession.trim(),
         description: suggestion.description.trim(),
-        campaignRole: (suggestion.campaignRole || '').trim()
+        campaignRole: (suggestion.campaignRole || '').trim(),
+        genderPt: suggestion.genderPt,
+        racePt: suggestion.racePt,
+        professionPt: suggestion.professionPt,
+        descriptionPt: suggestion.descriptionPt,
+        campaignRolePt: suggestion.campaignRolePt,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'

@@ -114,6 +114,11 @@ export function CreateCharacterPage({ uid }: Props) {
   const [profession, setProfession] = useState('')
   const [description, setDescription] = useState('')
   const [campaignRole, setCampaignRole] = useState('')
+  const [genderEn, setGenderEn] = useState<string | undefined>()
+  const [raceEn, setRaceEn] = useState<string | undefined>()
+  const [professionEn, setProfessionEn] = useState<string | undefined>()
+  const [descriptionEn, setDescriptionEn] = useState<string | undefined>()
+  const [campaignRoleEn, setCampaignRoleEn] = useState<string | undefined>()
   const [attributes, setAttributes] = useState<Record<string, DieType>>(defaultAttributes)
   const [skills, setSkills] = useState<Record<string, DieType>>({})
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
@@ -291,11 +296,16 @@ export function CreateCharacterPage({ uid }: Props) {
 
       // Only the typed name is preserved; the rest is regenerated from the campaign story.
       if (!name.trim()) setName(suggestion.name)
-      setGender(suggestion.gender)
-      setRace(suggestion.race)
-      setProfession(suggestion.profession)
-      setDescription(suggestion.description)
-      setCampaignRole(suggestion.campaignRole)
+      setGender(suggestion.genderPt ?? suggestion.gender)
+      setRace(suggestion.racePt ?? suggestion.race)
+      setProfession(suggestion.professionPt ?? suggestion.profession)
+      setDescription(suggestion.descriptionPt ?? suggestion.description)
+      setCampaignRole(suggestion.campaignRolePt ?? suggestion.campaignRole)
+      setGenderEn(suggestion.genderPt ? suggestion.gender : undefined)
+      setRaceEn(suggestion.racePt ? suggestion.race : undefined)
+      setProfessionEn(suggestion.professionPt ? suggestion.profession : undefined)
+      setDescriptionEn(suggestion.descriptionPt ? suggestion.description : undefined)
+      setCampaignRoleEn(suggestion.campaignRolePt ? suggestion.campaignRole : undefined)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao gerar sugestão por IA para este personagem')
     } finally {
@@ -313,11 +323,16 @@ export function CreateCharacterPage({ uid }: Props) {
         characterConcept: characterConcept.trim()
       })
       setName(suggestion.name)
-      setGender(suggestion.gender)
-      setRace(suggestion.race)
-      setProfession(suggestion.profession)
-      setDescription(suggestion.description)
-      setCampaignRole(suggestion.campaignRole)
+      setGender(suggestion.genderPt ?? suggestion.gender)
+      setRace(suggestion.racePt ?? suggestion.race)
+      setProfession(suggestion.professionPt ?? suggestion.profession)
+      setDescription(suggestion.descriptionPt ?? suggestion.description)
+      setCampaignRole(suggestion.campaignRolePt ?? suggestion.campaignRole)
+      setGenderEn(suggestion.genderPt ? suggestion.gender : undefined)
+      setRaceEn(suggestion.racePt ? suggestion.race : undefined)
+      setProfessionEn(suggestion.professionPt ? suggestion.profession : undefined)
+      setDescriptionEn(suggestion.descriptionPt ? suggestion.description : undefined)
+      setCampaignRoleEn(suggestion.campaignRolePt ? suggestion.campaignRole : undefined)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao gerar personagem a partir da descrição')
     } finally {
@@ -394,6 +409,7 @@ export function CreateCharacterPage({ uid }: Props) {
         await createCharacter({
           campaignId: selectedCampaignId,
           name, gender, race, profession, description, campaignRole,
+          genderEn, raceEn, professionEn, descriptionEn, campaignRoleEn,
           visibility,
           attributes, skills, edges: selectedEdges, hindrances: selectedHindrances,
           hindranceAllocation, image
