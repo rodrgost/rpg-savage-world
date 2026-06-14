@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#1a0a2e"/>
+  <!-- Dado d20 estilizado -->
+  <polygon points="256,60 420,160 420,352 256,452 92,352 92,160" fill="none" stroke="#8b5cf6" stroke-width="16"/>
+  <polygon points="256,60 420,160 256,230" fill="#2d1b4e" stroke="#8b5cf6" stroke-width="8"/>
+  <polygon points="256,60 92,160 256,230" fill="#3d2460" stroke="#8b5cf6" stroke-width="8"/>
+  <polygon points="92,160 92,352 256,230" fill="#1f1240" stroke="#8b5cf6" stroke-width="8"/>
+  <polygon points="420,160 420,352 256,230" fill="#2a1650" stroke="#8b5cf6" stroke-width="8"/>
+  <polygon points="92,352 256,452 256,230" fill="#2d1b4e" stroke="#8b5cf6" stroke-width="8"/>
+  <polygon points="420,352 256,452 256,230" fill="#1a0e35" stroke="#8b5cf6" stroke-width="8"/>
+  <!-- Número 20 no centro -->
+  <text x="256" y="248" font-family="Georgia, serif" font-size="72" font-weight="bold" fill="#e2c97e" text-anchor="middle" dominant-baseline="middle">20</text>
+</svg>
