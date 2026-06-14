@@ -1415,7 +1415,7 @@ export class SessionService {
       })
     }
 
-    // 5.9 Registrar log de narração em memória
+    // 5.9 Registrar log de narração (fire-and-forget — não bloqueia o retorno do turno)
     pushNarrationLog({
       sessionId: params.sessionId,
       timestamp: Date.now(),
@@ -1452,7 +1452,7 @@ export class SessionService {
       })),
       npcAttackEvents: npcAttackEvents.map((e) => ({ type: e.type, payload: e.payload as Record<string, unknown> })),
       isFallback: narratorResponse.isFallback ?? false
-    })
+    }).catch(() => { /* log falhou silenciosamente — não afeta o turno */ })
 
     // 6. Salvar estado final e mensagem do narrador
     await this.snapshots.saveTurnState(finalState)

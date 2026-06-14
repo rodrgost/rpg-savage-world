@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { FieldValue, firestore } from '../infrastructure/firebase.js'
 
 export type NarrationLogEntry = {
   id: string
@@ -25,15 +26,28 @@ export type NarrationLogEntry = {
 }
 
 const MAX_PER_SESSION = 60
-const _store = new Map<string, NarrationLogEntry[]>()
 
-export function pushNarrationLog(entry: Omit<NarrationLogEntry, 'id'>): void {
-  const list = _store.get(entry.sessionId) ?? []
-  list.push({ id: randomUUID(), ...entry })
-  if (list.length > MAX_PER_SESSION) list.shift()
-  _store.set(entry.sessionId, list)
+function logCollection(sessionId: string) {
+  return firestore.collection('sessions').doc(sessionId).collection('narrationLog')
 }
 
-export function getNarrationLog(sessionId: string): NarrationLogEntry[] {
-  return [...(_store.get(sessionId) ?? [])].reverse()
+export async function pushNarrationLog(entry: Omit<NarrationLogEntry, 'id'>): Promise<void> {
+  const id = randomUUID()
+  await logCollection(entry.sessionId).doc(id).set({
+    ...entry,
+    id,
+    createdAt: FieldValue.serverTimestamp()
+  })
+}
+
+export async function getNarrationLog(sessionId: string): Promise<NarrationLogEntry[]> {
+  const qs = await logCollection(sessionId)
+    .orderBy('timestamp', 'desc')
+    .limit(MAX_PER_SESSION)
+    .get()
+
+  return qs.docs.map((d) => {
+    const data = d.data() as NarrationLogEntry
+    return { ...data, id: d.id }
+  })
 }
