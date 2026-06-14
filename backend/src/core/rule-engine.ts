@@ -103,16 +103,6 @@ function traitEdgeHindranceBonus(state: GameState, skillName: string | undefined
   return bonus
 }
 
-function applyShaken(target: { isShaken: boolean; wounds: number; maxWounds: number }): { wasAlreadyShaken: boolean; woundsApplied: number } {
-  if (!target.isShaken) {
-    target.isShaken = true
-    return { wasAlreadyShaken: false, woundsApplied: 0 }
-  }
-  // Já Shaken → aplica 1 Wound
-  target.wounds = Math.min(target.wounds + 1, target.maxWounds + 1)
-  return { wasAlreadyShaken: true, woundsApplied: 1 }
-}
-
 function resolveDamageVsToughness(damage: number, toughness: number): { shaken: boolean; wounds: number } {
   if (damage < toughness) return { shaken: false, wounds: 0 }
 
@@ -120,6 +110,57 @@ function resolveDamageVsToughness(damage: number, toughness: number): { shaken: 
   const raises = Math.floor(excess / 4)
 
   return { shaken: true, wounds: raises }
+}
+
+/**
+ * Aplica o resultado de dano (Atordoamento/Ferimentos) a um alvo seguindo as regras
+ * de Savage Worlds, diferenciando **Wild Cards** de **Extras**. Este é o único ponto
+ * onde dano é convertido em estado, garantindo que jogador e NPCs sigam a mesma regra
+ * (com a única diferença legítima sendo Wild Card × Extra).
+ *
+ * **Wild Card** (jogador e NPCs importantes, `isWildCard = true`):
+ *   - acumula Ferimentos até `maxWounds`; fica Incapacitado ao excedê-lo (4º ferimento
+ *     quando `maxWounds = 3`);
+ *   - se já está Atordoado e sofre novo Atordoamento (dano ≥ Resistência sem aumento),
+ *     o Atordoamento vira +1 Ferimento.
+ *
+ * **Extra** (capangas, `isWildCard = false`):
+ *   - um único Ferimento já o tira de combate (Incapacitado);
+ *   - se já está Atordoado e sofre novo Atordoamento, também é tirado de combate.
+ *
+ * Retorna quantos Ferimentos foram efetivamente aplicados e se o alvo foi Incapacitado.
+ */
+export function applyDamageToTarget(
+  target: { isShaken: boolean; wounds: number; maxWounds: number },
+  isWildCard: boolean,
+  result: { shaken: boolean; wounds: number }
+): { woundsInflicted: number; isIncapacitated: boolean } {
+  // Dano abaixo da Resistência: nenhum efeito.
+  if (!result.shaken && result.wounds <= 0) {
+    return { woundsInflicted: 0, isIncapacitated: false }
+  }
+
+  const wasAlreadyShaken = target.isShaken
+  target.isShaken = true
+
+  // ── Extra ── qualquer Ferimento OU um segundo Atordoamento o tira de combate.
+  if (!isWildCard) {
+    if (result.wounds > 0 || wasAlreadyShaken) {
+      target.wounds = Math.max(target.wounds, 1)
+      return { woundsInflicted: 1, isIncapacitated: true }
+    }
+    return { woundsInflicted: 0, isIncapacitated: false }
+  }
+
+  // ── Wild Card ──
+  let wounds = result.wounds
+  // Já Atordoado e novo Atordoamento sem aumento → converte em 1 Ferimento.
+  if (wounds <= 0 && wasAlreadyShaken) wounds = 1
+
+  if (wounds > 0) {
+    target.wounds = Math.min(target.wounds + wounds, target.maxWounds + 1)
+  }
+  return { woundsInflicted: wounds, isIncapacitated: target.wounds > target.maxWounds }
 }
 
 export function applyAction(state: GameState, action: PlayerAction): EngineResult {
@@ -216,13 +257,9 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
       const attackRaises = countRaises(attackResult.finalTotal, attackTN)
 
       const damageResult = rollDamage(damageFormula, strengthDie)
-      // Raise bonus: +1d6 per raise on attack
-      let raiseBonusDamage = 0
-      if (attackRaises > 0) {
-        for (let i = 0; i < attackRaises; i++) {
-          raiseBonusDamage += rollExplodingInline(6)
-        }
-      }
+      // Um aumento no ataque concede +1d6 de dano — apenas UM dado, independentemente
+      // de quantos aumentos foram obtidos (regra de Savage Worlds).
+      const raiseBonusDamage = attackRaises > 0 ? rollExplodingInline(6) : 0
 
       // Called Shot bonus damage (head or vitals: +4)
       const calledShotDamageBonus = (action.calledShot === 'head' || action.calledShot === 'vitals') ? 4 : 0
@@ -240,20 +277,13 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
       const effectiveToughness = Math.max(0, target.toughness - ap)
       const dmgResult = resolveDamageVsToughness(totalDamage, effectiveToughness)
 
-      // Called Shot limb: cap wounds at 1
-      const finalWounds = action.calledShot === 'limb' ? Math.min(dmgResult.wounds, 1) : dmgResult.wounds
-      const finalShaken = dmgResult.shaken || finalWounds > 0
+      // Called Shot em membro: limita os ferimentos por aumento a 1.
+      const cappedWounds = action.calledShot === 'limb' ? Math.min(dmgResult.wounds, 1) : dmgResult.wounds
 
-      if (finalShaken || finalWounds > 0) {
-        if (finalWounds > 0) {
-          target.wounds = Math.min(target.wounds + finalWounds, target.maxWounds + 1)
-          target.isShaken = true
-        } else {
-          applyShaken(target)
-        }
-      }
-
-      const isIncapacitated = target.wounds > target.maxWounds
+      // Aplica dano respeitando Wild Card × Extra (Extras caem com 1 ferimento).
+      const outcome = applyDamageToTarget(target, target.isWildCard, { shaken: dmgResult.shaken, wounds: cappedWounds })
+      const finalWounds = outcome.woundsInflicted
+      const isIncapacitated = outcome.isIncapacitated
 
       emittedEvents.push({
         type: 'attack_hit',
@@ -565,33 +595,26 @@ export function applyNpcAttack(
   const attackRaises = countRaises(attackResult.finalTotal, attackTN)
   const damageResult = rollDamage(entry.damageFormula, npcStrengthDie)
 
-  let raiseBonusDamage = 0
-  for (let i = 0; i < attackRaises; i++) {
-    raiseBonusDamage += rollExplodingInline(6)
-  }
+  // Um aumento no ataque concede +1d6 de dano — apenas UM dado (regra de Savage Worlds).
+  const raiseBonusDamage = attackRaises > 0 ? rollExplodingInline(6) : 0
 
   const totalDamage = damageResult.total + raiseBonusDamage
   const ap = entry.ap ?? 0
   const effectiveToughness = Math.max(0, nextState.player.toughness - ap)
   const dmgResult = resolveDamageVsToughness(totalDamage, effectiveToughness)
 
-  if (dmgResult.shaken || dmgResult.wounds > 0) {
-    if (dmgResult.wounds > 0) {
-      nextState.player.wounds = Math.min(nextState.player.wounds + dmgResult.wounds, nextState.player.maxWounds + 1)
-      nextState.player.isShaken = true
+  // O jogador é sempre Wild Card → mesma rotina de aplicação de dano usada contra NPCs.
+  const outcome = applyDamageToTarget(nextState.player, true, dmgResult)
 
-      // berserk / Berserk: entra em Fúria ao receber ferimento (se ainda não estiver)
-      if (nextState.player.edges.some((e) => e === 'berserk' || e === 'Berserk')
-        && !nextState.player.statusEffects.some((se) => se.id === 'berserk_rage')) {
-        nextState.player.statusEffects = [
-          ...nextState.player.statusEffects,
-          { id: 'berserk_rage', name: 'Fúria Berserk' }
-        ]
-        emittedEvents.push({ type: 'berserk_rage_activated', payload: {} })
-      }
-    } else {
-      applyShaken(nextState.player)
-    }
+  // berserk / Berserk: entra em Fúria ao receber ferimento (se ainda não estiver)
+  if (outcome.woundsInflicted > 0
+    && nextState.player.edges.some((e) => e === 'berserk' || e === 'Berserk')
+    && !nextState.player.statusEffects.some((se) => se.id === 'berserk_rage')) {
+    nextState.player.statusEffects = [
+      ...nextState.player.statusEffects,
+      { id: 'berserk_rage', name: 'Fúria Berserk' }
+    ]
+    emittedEvents.push({ type: 'berserk_rage_activated', payload: {} })
   }
 
   emittedEvents.push({
@@ -606,10 +629,10 @@ export function applyNpcAttack(
       damageTotal: totalDamage,
       raiseBonusDamage,
       playerToughness: nextState.player.toughness,
-      woundsInflicted: dmgResult.wounds,
+      woundsInflicted: outcome.woundsInflicted,
       playerShaken: nextState.player.isShaken,
       playerWounds: nextState.player.wounds,
-      playerIncapacitated: nextState.player.wounds > nextState.player.maxWounds,
+      playerIncapacitated: outcome.isIncapacitated,
       traitRoll: attackResult.traitRoll,
       wildRoll: attackResult.wildRoll,
       damageRolls: damageResult.dice
