@@ -1,6 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getNarrationLog, type NarrationLogEntry } from '../../lib/api'
 
+function formatEntryAsText(entry: NarrationLogEntry): string {
+  const lines: string[] = []
+  lines.push(`=== Turno ${entry.turn} — ${new Date(entry.timestamp).toLocaleString('pt-BR')} (${formatDuration(entry.durationMs)}) ===`)
+  lines.push(`Ação: [${actionTypeLabel(entry.playerAction.type)}] ${entry.playerAction.description}`)
+  if (entry.isFallback) lines.push('⚠ FALLBACK')
+  if (entry.engineEvents.length > 0) {
+    lines.push(`Engine: ${entry.engineEvents.map((e) => engineEventLabel(e.type)).join(', ')}`)
+  }
+  lines.push('')
+  lines.push(entry.narrative)
+  if (entry.npcs.length > 0) {
+    lines.push(`NPCs: ${entry.npcs.map((n) => `${n.name} (${n.action})`).join(', ')}`)
+  }
+  if (entry.itemChanges.length > 0) {
+    lines.push(`Itens: ${entry.itemChanges.map((c) => `${c.name} ${c.changeType}${c.quantity !== undefined ? ` ×${c.quantity}` : ''}`).join(', ')}`)
+  }
+  if (entry.statusChanges.length > 0) {
+    lines.push(`Status: ${entry.statusChanges.map((c) => `${c.name} ${c.changeType}`).join(', ')}`)
+  }
+  return lines.join('\n')
+}
+
 type Props = {
   sessionId: string
   isOpen: boolean
@@ -207,7 +229,20 @@ export function NarrationLogPanel({ sessionId, isOpen, onClose }: Props) {
   const [entries, setEntries] = useState<NarrationLogEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const copyAll = useCallback(async () => {
+    if (entries.length === 0) return
+    const text = entries
+      .slice()
+      .reverse()
+      .map(formatEntryAsText)
+      .join('\n\n')
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [entries])
 
   const load = useCallback(async () => {
     if (!sessionId) return
@@ -245,6 +280,15 @@ export function NarrationLogPanel({ sessionId, isOpen, onClose }: Props) {
             <span className="nlog-count">{entries.length} turnos</span>
           </div>
           <div className="nlog-panel-actions">
+            <button
+              className="nlog-copy-btn"
+              onClick={copyAll}
+              type="button"
+              title="Copiar todos os logs"
+              disabled={entries.length === 0}
+            >
+              {copied ? '✓' : '⎘'}
+            </button>
             <button className="nlog-refresh-btn" onClick={load} type="button" title="Atualizar">
               ↻
             </button>
