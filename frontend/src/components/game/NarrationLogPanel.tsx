@@ -7,7 +7,18 @@ function formatEntryAsText(entry: NarrationLogEntry): string {
   lines.push(`Ação: [${actionTypeLabel(entry.playerAction.type)}] ${entry.playerAction.description}`)
   if (entry.isFallback) lines.push('⚠ FALLBACK')
   if (entry.engineEvents.length > 0) {
-    lines.push(`Engine: ${entry.engineEvents.map((e) => engineEventLabel(e.type)).join(', ')}`)
+    lines.push(`Engine: ${entry.engineEvents.map((e) => {
+      const p = e.payload as Record<string, unknown>
+      const extra = p.result !== undefined ? ` (${p.result})` : p.wounds !== undefined ? ` +${p.wounds}W` : ''
+      return engineEventLabel(e.type) + extra
+    }).join(', ')}`)
+  }
+  if (entry.npcAttackEvents.length > 0) {
+    lines.push(`Ataques NPC: ${entry.npcAttackEvents.map((e) => {
+      const p = e.payload as Record<string, unknown>
+      const hit = e.type === 'npc_attack_hit'
+      return `${p.npcName ?? p.npcId} ${hit ? `acertou${p.wounds ? ` +${p.wounds}W` : ''}` : 'errou'}`
+    }).join(', ')}`)
   }
   lines.push('')
   lines.push(entry.narrative)
@@ -19,6 +30,18 @@ function formatEntryAsText(entry: NarrationLogEntry): string {
   }
   if (entry.statusChanges.length > 0) {
     lines.push(`Status: ${entry.statusChanges.map((c) => `${c.name} ${c.changeType}`).join(', ')}`)
+  }
+  if (entry.options.length > 0) {
+    lines.push('')
+    lines.push('Opções:')
+    entry.options.forEach((o, i) => {
+      const dice = o.diceCheck?.required
+        ? ` [🎲 ${o.diceCheck.skill ?? o.diceCheck.attribute ?? '?'} TN${o.diceCheck.tn ?? 4}]`
+        : ''
+      const feasible = o.feasible ? '' : ' (inviável)'
+      lines.push(`  ${i + 1}. [${actionTypeLabel(o.actionType)}${dice}${feasible}] ${o.text}`)
+      if (o.playerSpeech) lines.push(`     "${o.playerSpeech}"`)
+    })
   }
   return lines.join('\n')
 }
