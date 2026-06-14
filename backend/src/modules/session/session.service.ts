@@ -1228,6 +1228,9 @@ export class SessionService {
     }
 
     // 2. Salvar mensagem do jogador
+    const rawInput = normalizedAction.type === 'custom' ? normalizedAction.input : undefined
+    const isSpeechAction = typeof rawInput === 'string' && rawInput.startsWith('- ')
+    const speechText = isSpeechAction ? rawInput.slice(2).trim() : undefined
     const actionDescription = params.displayText || this.describeAction(normalizedAction)
     const playerMessage = await this.chatMessages.appendAndGet({
       sessionId: params.sessionId,
@@ -1291,7 +1294,8 @@ export class SessionService {
       response: await this.narrator.narrateTurn({
         playerAction: {
           type: normalizedAction.type,
-          description: actionDescription
+          description: actionDescription,
+          ...(speechText ? { playerSpeech: speechText } : {})
         },
         engineEvents: result.emittedEvents,
         world: worldDoc

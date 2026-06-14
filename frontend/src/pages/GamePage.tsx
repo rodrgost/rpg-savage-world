@@ -441,12 +441,18 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
   }, [message.messageId, isNew, charsPerTick])
 
   if (message.role === 'player') {
+    const isSpeech = typeof message.playerInput === 'string' && message.playerInput.startsWith('- ')
+    const displayText = isSpeech ? message.playerInput!.slice(2).trim() : message.playerInput
     return (
-      <div className="msg player">
+      <div className={`msg player${isSpeech ? ' player-speech' : ''}`}>
         <div className="player-content">
           <div className="player-text">
             <strong>{playerName ?? 'Você'}</strong>
-            <p>{message.playerInput}</p>
+            {isSpeech ? (
+              <p className="speech-text">"{displayText}"</p>
+            ) : (
+              <p>{displayText}</p>
+            )}
           </div>
           {playerImage && (
             <img
@@ -2013,8 +2019,15 @@ export function GamePage() {
     if (!sessionId || !input.trim()) return
     const text = input.trim()
     setError('')
-    setValidating(true)
     setPendingValidation(null)
+
+    // Fala direta: input começando com "-" é interpretado como diálogo do personagem
+    if (text.startsWith('- ') || text === '-') {
+      await executeValidatedAction(text)
+      return
+    }
+
+    setValidating(true)
     try {
       const validation = await validateCustomAction(sessionId, text)
       if (!validation.feasible) {
