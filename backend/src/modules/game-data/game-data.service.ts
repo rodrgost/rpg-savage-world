@@ -938,15 +938,17 @@ export class GameDataService {
 
     const world = await this.worlds.get(campaign.worldId)
     const worldName = world?.name?.trim() ?? ''
-    const worldLore = world?.lore?.trim() ?? ''
+    const worldLore = (world?.loreEn ?? world?.lore ?? '').trim()
     const campaignName = campaign.name?.trim() ?? ''
+    const storyDescription = (campaign.storyDescriptionEn ?? campaign.storyDescription ?? '').trim()
 
     try {
       const suggestion = await this.narrator.suggestCharacterFromDescription({
         characterConcept: params.characterConcept.trim(),
         worldName,
         worldLore,
-        campaignThematic: campaignName
+        campaignThematic: campaignName,
+        storyDescription
       })
 
       if (!suggestion.name || !suggestion.profession || suggestion.description.length < 80) {

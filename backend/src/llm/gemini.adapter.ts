@@ -1674,7 +1674,9 @@ export class GeminiAdapter implements Narrator {
     const worldName = req.worldName?.trim() ?? ''
     const worldLore = req.worldLore?.trim() ?? ''
     const campaignThematic = req.campaignThematic?.trim() ?? ''
+    const storyDescription = req.storyDescription?.trim() ?? ''
     const promptWorldLore = worldLore.length > 4000 ? `${worldLore.slice(0, 4000)}...` : worldLore
+    const promptStory = storyDescription.length > 2000 ? `${storyDescription.slice(0, 2000)}...` : storyDescription
 
     const sysPrompt = [
       'You are a character designer for a tabletop RPG.',
@@ -1703,6 +1705,7 @@ export class GeminiAdapter implements Narrator {
       '',
       ...(worldName ? [`World/universe: ${worldName}.`] : []),
       ...(campaignThematic ? [`Campaign thematic: ${campaignThematic}.`] : []),
+      ...(promptStory ? [`Adventure story: ${promptStory}`] : []),
       ...(promptWorldLore ? [`Universe lore: ${promptWorldLore}.`] : []),
       '',
       'Expand the player concept into a full character profile following the JSON schema above.',
