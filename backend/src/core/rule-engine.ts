@@ -1,7 +1,8 @@
 import type { CalledShotLocation, DieType, EngineResult, GameState, NPCCombatant, PlayerAction } from '../domain/types/gameState.js'
 import type { NpcAttackEntry } from '../domain/types/narrative.js'
 import { findSkillDefinition, getCanonicalSkillLabel, resolveSkillDie } from '../domain/savage-worlds/constants.js'
-import { rollTrait, rollDamage, countRaises } from './dice-engine.js'
+import { rollTrait, rollDamage, countRaises, rollExploding } from './dice-engine.js'
+import type { RollDetail } from './dice-engine.js'
 
 // ─── Savage Worlds Rule Engine ───
 
@@ -258,8 +259,10 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
 
       const damageResult = rollDamage(damageFormula, strengthDie)
       // Um aumento no ataque concede +1d6 de dano — apenas UM dado, independentemente
-      // de quantos aumentos foram obtidos (regra de Savage Worlds).
-      const raiseBonusDamage = attackRaises > 0 ? rollExplodingInline(6) : 0
+      // de quantos aumentos foram obtidos (regra de Savage Worlds). Marcado como 'bonus'
+      // para ser exibido como um dado próprio no detalhamento do dano.
+      const raiseBonusRoll: RollDetail | null = attackRaises > 0 ? { ...rollExploding(6), label: 'bonus' } : null
+      const raiseBonusDamage = raiseBonusRoll?.total ?? 0
 
       // Called Shot bonus damage (head or vitals: +4)
       const calledShotDamageBonus = (action.calledShot === 'head' || action.calledShot === 'vitals') ? 4 : 0
@@ -305,7 +308,7 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
           targetIncapacitated: isIncapacitated,
           traitRoll: attackResult.traitRoll,
           wildRoll: attackResult.wildRoll,
-          damageRolls: damageResult.dice
+          damageRolls: raiseBonusRoll ? [...damageResult.dice, raiseBonusRoll] : damageResult.dice
         }
       })
 
@@ -536,17 +539,6 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
   return { nextState, emittedEvents }
 }
 
-// Inline rollExploding to avoid circular-dep issues
-function rollExplodingInline(sides: number, rng: () => number = Math.random): number {
-  let total = 0
-  for (let i = 0; i < 20; i++) {
-    const r = Math.floor(rng() * sides) + 1
-    total += r
-    if (r !== sides) break
-  }
-  return total
-}
-
 // ─── NPC → Player Attack ───
 
 export function applyNpcAttack(
@@ -596,7 +588,9 @@ export function applyNpcAttack(
   const damageResult = rollDamage(entry.damageFormula, npcStrengthDie)
 
   // Um aumento no ataque concede +1d6 de dano — apenas UM dado (regra de Savage Worlds).
-  const raiseBonusDamage = attackRaises > 0 ? rollExplodingInline(6) : 0
+  // Marcado como 'bonus' para aparecer como dado próprio no detalhamento do dano.
+  const raiseBonusRoll: RollDetail | null = attackRaises > 0 ? { ...rollExploding(6), label: 'bonus' } : null
+  const raiseBonusDamage = raiseBonusRoll?.total ?? 0
 
   const totalDamage = damageResult.total + raiseBonusDamage
   const ap = entry.ap ?? 0
@@ -635,7 +629,7 @@ export function applyNpcAttack(
       playerIncapacitated: outcome.isIncapacitated,
       traitRoll: attackResult.traitRoll,
       wildRoll: attackResult.wildRoll,
-      damageRolls: damageResult.dice
+      damageRolls: raiseBonusRoll ? [...damageResult.dice, raiseBonusRoll] : damageResult.dice
     }
   })
 
