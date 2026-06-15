@@ -1844,13 +1844,13 @@ export function GamePage() {
               if (campaign.worldId) {
                 getWorld(campaign.worldId)
                   .then((world) => {
-                    setWorldInfo({ campaignName: campaign.name, worldName: world.name })
+                    setWorldInfo({ campaignName: campaign.name ?? '', worldName: world.name })
                   })
                   .catch(() => {
-                    setWorldInfo({ campaignName: campaign.name, worldName: '' })
+                    setWorldInfo({ campaignName: campaign.name ?? '', worldName: '' })
                   })
               } else {
-                setWorldInfo({ campaignName: campaign.name, worldName: '' })
+                setWorldInfo({ campaignName: campaign.name ?? '', worldName: '' })
               }
             })
             .catch(() => { /* ignore */ })
