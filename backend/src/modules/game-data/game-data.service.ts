@@ -497,13 +497,13 @@ export class GameDataService {
     if (!world) throw new NotFoundException('Mundo não encontrado')
     if (world.ownerId !== params.userId) throw new ForbiddenException('Sem permissão para este mundo')
 
-    const lore = await this.narrator.expandWorldLore({
+    const result = await this.narrator.expandWorldLore({
       name: world.name,
       description: world.description
     })
 
-    await this.worlds.updateLore(world.id, lore)
-    return { lore }
+    await this.worlds.updateLore(world.id, result.lore, result.loreEn)
+    return { lore: result.lore }
   }
 
   // ─── Campaign (campanha dentro de um mundo) ───
@@ -675,7 +675,7 @@ export class GameDataService {
       campaignName: campaign.name?.trim() || worldName
     })
 
-    await this.campaigns.updateStoryDescription(campaign.id, result.storyDescription, result.storyCharacters)
+    await this.campaigns.updateStoryDescription(campaign.id, result.storyDescription, result.storyCharacters, result.storyDescriptionEn)
     return { storyDescription: result.storyDescription, storyCharacters: result.storyCharacters }
   }
 
@@ -864,7 +864,7 @@ export class GameDataService {
     // Enrich with world lore if available
     const world = await this.worlds.get(campaign.worldId)
     const worldName = world?.name?.trim() ?? ''
-    const worldLore = world?.lore?.trim() ?? ''
+    const worldLore = (world?.loreEn ?? world?.lore ?? '').trim()
 
     log('suggestCharacterFromWorld', 'context ready', {
       campaignId: params.campaignId,
@@ -938,7 +938,7 @@ export class GameDataService {
 
     const world = await this.worlds.get(campaign.worldId)
     const worldName = world?.name?.trim() ?? ''
-    const worldLore = world?.lore?.trim() ?? ''
+    const worldLore = (world?.loreEn ?? world?.lore ?? '').trim()
     const campaignName = campaign.name?.trim() ?? ''
 
     try {

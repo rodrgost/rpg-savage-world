@@ -7,6 +7,7 @@ export type CampaignDoc = {
   ownerId: string
   visibility?: Visibility
   storyDescription: string
+  storyDescriptionEn?: string
   storyCharacters?: StoryCharacter[]
   image?: {
     mimeType: string
@@ -117,10 +118,11 @@ export class CampaignsRepo {
     await firestore.collection('campaigns').doc(campaignId).delete()
   }
 
-  async updateStoryDescription(campaignId: string, storyDescription: string, storyCharacters?: StoryCharacter[]): Promise<void> {
+  async updateStoryDescription(campaignId: string, storyDescription: string, storyCharacters?: StoryCharacter[], storyDescriptionEn?: string): Promise<void> {
     await firestore.collection('campaigns').doc(campaignId).set(
       {
         storyDescription,
+        ...(storyDescriptionEn ? { storyDescriptionEn } : {}),
         ...(storyCharacters !== undefined ? { storyCharacters } : {}),
         updatedAt: FieldValue.serverTimestamp()
       },

@@ -10,6 +10,7 @@ export type WorldDoc = {
   name: string
   description: string
   lore: string
+  loreEn?: string
   image?: {
     mimeType: string
     base64: string
@@ -99,10 +100,11 @@ export class WorldsRepo {
     await firestore.collection('worlds').doc(worldId).delete()
   }
 
-  async updateLore(worldId: string, lore: string): Promise<void> {
+  async updateLore(worldId: string, lore: string, loreEn?: string): Promise<void> {
     await firestore.collection('worlds').doc(worldId).set(
       {
         lore,
+        ...(loreEn ? { loreEn } : {}),
         updatedAt: FieldValue.serverTimestamp()
       },
       { merge: true }
