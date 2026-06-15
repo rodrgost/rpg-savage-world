@@ -1339,16 +1339,21 @@ export class GeminiAdapter implements Narrator {
 
   async expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult> {
     const sysPrompt = [
-      'You are an adventure builder. Write in Brazilian Portuguese.',
+      'You are an adventure builder.',
       'Objective: create from scratch a complete story from minimal context.',
       'Expected output: a valid JSON with the following fields:',
-      '  "name": short and evocative title for the story (3-8 words).',
-      '  "storyDescription": 3-6 paragraphs with context, conflicts, factions, locations, and 2-4 adventure hooks.',
+      '  "name": short and evocative title for the story (3-8 words) — in Brazilian Portuguese.',
+      '  "nameEn": same title translated to English.',
+      '  "storyDescription": 3-6 paragraphs with context, conflicts, factions, locations, and 2-4 adventure hooks — in Brazilian Portuguese.',
+      '  "storyDescriptionEn": same storyDescription translated to English.',
       '  "storyCharacters": array of 3 to 7 world NPCs relevant to the narrative, each with:',
       '    - "name": character name',
-      '    - "role": role in the story (e.g.: antagonist, mentor, ally, faction leader, neutral)',
-      '    - "description": brief character description (1-2 sentences)',
-      '    - "status": current situation in the story (e.g.: active, fugitive, dead, unknown)',
+      '    - "role": role in the story (e.g.: antagonista, mentor, aliado, líder de facção, neutro) — in Brazilian Portuguese',
+      '    - "roleEn": same role in English (e.g.: antagonist, mentor, ally, faction leader, neutral)',
+      '    - "description": brief character description (1-2 sentences) — in Brazilian Portuguese',
+      '    - "descriptionEn": same description in English',
+      '    - "status": current situation in the story (e.g.: ativo, foragido, morto, desconhecido) — in Brazilian Portuguese',
+      '    - "statusEn": same status in English (e.g.: active, fugitive, dead, unknown)',
       'Constraints: return ONLY the JSON, without preamble, greeting, comments, or separators.',
       'Start directly with { and end with }.'
     ].join('\n')
@@ -1370,7 +1375,7 @@ export class GeminiAdapter implements Narrator {
       const lastBrace = cleaned.lastIndexOf('}')
       const jsonStr = firstBrace !== -1 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned
 
-      let parsed: { name?: unknown; storyDescription?: unknown; storyCharacters?: unknown }
+      let parsed: { name?: unknown; nameEn?: unknown; storyDescription?: unknown; storyDescriptionEn?: unknown; storyCharacters?: unknown }
       try {
         parsed = JSON.parse(jsonStr)
       } catch {
@@ -1381,6 +1386,9 @@ export class GeminiAdapter implements Narrator {
       const storyDescription = sanitizeNarrativeOutput(
         typeof parsed.storyDescription === 'string' ? parsed.storyDescription : ''
       )
+      const storyDescriptionEn = typeof parsed.storyDescriptionEn === 'string' && parsed.storyDescriptionEn.trim()
+        ? sanitizeNarrativeOutput(parsed.storyDescriptionEn)
+        : undefined
 
       const rawChars = Array.isArray(parsed.storyCharacters) ? parsed.storyCharacters : []
       const storyCharacters: StoryCharacter[] = rawChars
@@ -1389,28 +1397,36 @@ export class GeminiAdapter implements Narrator {
         .map((c) => ({
           name: typeof c.name === 'string' ? c.name.trim() : '',
           role: typeof c.role === 'string' ? c.role.trim() : 'personagem',
+          roleEn: typeof c.roleEn === 'string' && c.roleEn.trim() ? c.roleEn.trim() : undefined,
           description: typeof c.description === 'string' ? c.description.trim() : '',
-          status: typeof c.status === 'string' ? c.status.trim() : 'desconhecido'
+          descriptionEn: typeof c.descriptionEn === 'string' && c.descriptionEn.trim() ? c.descriptionEn.trim() : undefined,
+          status: typeof c.status === 'string' ? c.status.trim() : 'desconhecido',
+          statusEn: typeof c.statusEn === 'string' && c.statusEn.trim() ? c.statusEn.trim() : undefined,
         }))
         .filter((c) => c.name.length > 0)
 
       const name = typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : undefined
+      const nameEn = typeof parsed.nameEn === 'string' && parsed.nameEn.trim() ? parsed.nameEn.trim() : undefined
 
-      return { storyDescription, storyCharacters, name }
+      return { storyDescription, storyDescriptionEn, storyCharacters, name, nameEn }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
       throw new Error(`Falha ao gerar história com ${this.providerLabel}: ${message}`)
     }
   }
 
-  async expandWorldLore(req: ExpandWorldLoreRequest): Promise<string> {
+  async expandWorldLore(req: ExpandWorldLoreRequest): Promise<{ lore: string; loreEn?: string }> {
     const sysPrompt = [
-      'You are a senior worldbuilder specialized in history. Write exclusively in Brazilian Portuguese.',
+      'You are a senior worldbuilder specialized in history.',
       '',
       'Write with clarity and precision — the text serves both those who have never heard of this universe and those who will play in it.',
       'When introducing for the first time any proper name, faction, technology, or concept exclusive to the universe, briefly explain it inline — one sentence is enough.',
       'Create internal coherence: proper names, locations, and factions mentioned in one section must reappear and reinforce each other in the others.',
-      'The writing can be atmospheric and literary, but never assume the reader already knows the setting.'
+      'The writing can be atmospheric and literary, but never assume the reader already knows the setting.',
+      '',
+      'Return a valid JSON object with exactly two keys:',
+      '  "lore": the full lore written in Brazilian Portuguese, using the section headings as instructed.',
+      '  "loreEn": a condensed English narration brief (500-900 words) covering the world\'s core identity, key factions, main locations, magic/technology rules, and the most important narrative tensions — optimized for a game master who needs a quick mental model of the setting. No section headings; flowing prose.'
     ].join('\n')
 
     const tema = [
@@ -1490,7 +1506,26 @@ export class GeminiAdapter implements Narrator {
         timeoutMs: this.timeoutMs,
         systemInstruction: sysPrompt
       })
-      return sanitizeNarrativeOutput(generated)
+
+      try {
+        const cleaned = generated.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
+        const firstBrace = cleaned.indexOf('{')
+        const lastBrace = cleaned.lastIndexOf('}')
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          const parsed = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1)) as Record<string, unknown>
+          const lore = typeof parsed.lore === 'string' && parsed.lore.trim()
+            ? sanitizeNarrativeOutput(parsed.lore)
+            : sanitizeNarrativeOutput(generated)
+          const loreEn = typeof parsed.loreEn === 'string' && parsed.loreEn.trim()
+            ? parsed.loreEn.trim()
+            : undefined
+          return { lore, loreEn }
+        }
+      } catch {
+        // fall through to plain text fallback
+      }
+
+      return { lore: sanitizeNarrativeOutput(generated) }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
       throw new Error(`Falha ao gerar lore com ${this.providerLabel}: ${message}`)

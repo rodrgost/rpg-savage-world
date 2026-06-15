@@ -909,10 +909,10 @@ export class SessionService {
     const narratorResponse = this.validateNarratorResponse({
       response: await this.narrator.narrateStart({
         world: world
-          ? { name: world.name, description: world.description, lore: world.lore }
+          ? { name: world.name, description: world.description, lore: world.loreEn ?? world.lore }
           : undefined,
         campaign: {
-          storyDescription: campaign.storyDescription ?? '',
+          storyDescription: campaign.storyDescriptionEn ?? campaign.storyDescription ?? '',
           name: campaign.name
         },
         character: {
@@ -1075,11 +1075,11 @@ export class SessionService {
     const narratorResponse = this.validateNarratorResponse({
       response: await this.narrator.narrateStart({
         world: world
-          ? { name: world.name, description: world.description, lore: world.lore }
+          ? { name: world.name, description: world.description, lore: world.loreEn ?? world.lore }
           : undefined,
         campaign: campaign
           ? {
-              storyDescription: campaign.storyDescription ?? '',
+              storyDescription: campaign.storyDescriptionEn ?? campaign.storyDescription ?? '',
               name: campaign.name
             }
           : { storyDescription: '' },
@@ -1306,7 +1306,7 @@ export class SessionService {
           ? { name: worldDoc.name, description: worldDoc.description, lore: worldDoc.lore }
           : undefined,
         campaign: campaignDoc
-          ? { name: campaignDoc.name, storyDescription: campaignDoc.storyDescription }
+          ? { name: campaignDoc.name, storyDescription: campaignDoc.storyDescriptionEn ?? campaignDoc.storyDescription }
           : undefined,
         context: {
           summaryText: context.summaryText,
