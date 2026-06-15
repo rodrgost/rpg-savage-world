@@ -71,6 +71,7 @@ export type SuggestCharacterFromDescriptionRequest = {
   worldName?: string
   worldLore?: string
   campaignThematic?: string
+  storyDescription?: string
 }
 export type SuggestedCharacter = {
   name: string
