@@ -71,13 +71,19 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
               key={world.id}
               onClick={() => navigate(`/worlds/${world.id}/edit`)}
             >
-              {world.image && (
-                <img
-                  alt={`Imagem do universo ${world.name || 'sem nome'}`}
-                  className="card-image card-image--world"
-                  src={`data:${world.image.mimeType};base64,${world.image.base64}`}
-                />
-              )}
+              <div className={`world-card-media ${world.image ? '' : 'world-card-media--empty'}`}>
+                {world.image && (
+                  <img
+                    alt={`Imagem do universo ${world.name || 'sem nome'}`}
+                    className="card-image card-image--world"
+                    src={`data:${world.image.mimeType};base64,${world.image.base64}`}
+                    loading="lazy"
+                  />
+                )}
+                <div className="world-card-media-overlay">
+                  <h3>{world.name || 'Universo sem nome'}</h3>
+                </div>
+              </div>
 
               <header className="world-card-header">
                 <div className="entity-card-meta">
@@ -86,7 +92,6 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                     {world.visibility === 'public' ? 'Público' : 'Privado'}
                   </span>
                 </div>
-                <h3>{world.name || 'Universo sem nome'}</h3>
               </header>
 
               <footer className="world-card-actions" onClick={(e) => e.stopPropagation()}>
