@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark;
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-serif: 'Merriweather', serif;
+  --font-serif: 'Playfair Display', serif;
 
   --content-max-width: 1180px;
   --content-max-width-game: 1360px;
@@ -9,35 +9,36 @@
   --panel-padding: clamp(20px, 2.6vw, 34px);
   --max-width: var(--content-max-width-game);
 
-  --bg-app: #0f0f0f;
-  --bg-surface: #1a1a1a;
-  --bg-surface-hover: #222222;
-  --glass-bg: rgba(26, 26, 26, 0.88);
+  --bg-app: #0f1115;
+  --bg-base: #0f1115;
+  --bg-surface: #1a1d23;
+  --bg-surface-hover: #242832;
+  --glass-bg: rgba(26, 29, 35, 0.88);
   --glass-border: rgba(255, 255, 255, 0.06);
-  --bg-field: #141414;
-  --bg-muted: #0c0c0c;
-  --bg-card: #1e1e1e;
-  --bg-elevated: #262626;
-  --bg-chip: #2a2a2a;
-  --bg-chip-active: #333333;
+  --bg-field: #15171c;
+  --bg-muted: #0c0d10;
+  --bg-card: #1c1f26;
+  --bg-elevated: #262b35;
+  --bg-chip: #2a2e38;
+  --bg-chip-active: #353a46;
 
-  --text-primary: #e8e8e8;
-  --text-secondary: #a0a0a0;
-  --text-muted: #666666;
-  --text-link: #c0c0c0;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #5b6577;
+  --text-link: #a5b4fc;
 
-  --border-default: #2e2e2e;
-  --border-strong: #3d3d3d;
-  --border-accent: #8c8c8c;
-  --border-subtle: #202020;
+  --border-default: #2a2f3a;
+  --border-strong: #3b4252;
+  --border-accent: #6366f1;
+  --border-subtle: #1e212a;
 
-  --accent: #8c8c8c;
-  --accent-hover: #aaaaaa;
-  --accent-soft: rgba(140, 140, 140, 0.10);
-  --accent-glow: rgba(140, 140, 140, 0.18);
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-soft: rgba(99, 102, 241, 0.12);
+  --accent-glow: rgba(99, 102, 241, 0.25);
 
-  --action-primary: #3a3a3a;
-  --action-primary-hover: #4e4e4e;
+  --action-primary: #4f46e5;
+  --action-primary-hover: #6366f1;
   --action-danger: #d32f2f;
   --action-danger-hover: #ef5350;
 
@@ -45,8 +46,8 @@
   --feedback-success: #69db7c;
   --feedback-warn: #ffd43b;
 
-  --gradient-hero: linear-gradient(135deg, #1a1a1a 0%, #111111 100%);
-  --gradient-accent: linear-gradient(135deg, #8c8c8c 0%, #c0c0c0 100%);
+  --gradient-hero: linear-gradient(135deg, #1a1d23 0%, #0f1115 100%);
+  --gradient-accent: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
 
   --shadow-sm: 0 1px 2px rgba(0,0,0,.25);
   --shadow-md: 0 4px 12px rgba(0,0,0,.35);
@@ -95,7 +96,7 @@ body,
 
 body {
   margin: 0;
-  background: #0f0f0f;
+  background: var(--bg-app);
   color: var(--text-primary);
   font-family: inherit;
   font-size: var(--font-base);
