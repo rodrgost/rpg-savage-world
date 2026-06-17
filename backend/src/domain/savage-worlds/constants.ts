@@ -62,6 +62,32 @@ export const SKILLS: readonly SkillDefinition[] = [
 
 export const CORE_SKILL_KEYS = SKILLS.map((s) => s.key)
 
+// Formas verbais/coloquiais que a LLM por vezes confunde com o label can\u00f4nico
+// (ex.: narra "Intimidar o guarda" e devolve "skill": "Intimidar" em vez de "Intimida\u00e7\u00e3o").
+const SKILL_VERB_ALIASES: Record<string, readonly string[]> = {
+  boating: ['Navegar'],
+  driving: ['Conduzir', 'Dirigir'],
+  piloting: ['Pilotar'],
+  fighting: ['Lutar'],
+  riding: ['Montar', 'Cavalgar'],
+  shooting: ['Atirar'],
+  stealth: ['Esconder-se', 'Furtar-se'],
+  thievery: ['Roubar', 'Furtar'],
+  hacking: ['Hackear'],
+  healing: ['Curar'],
+  language: ['Falar'],
+  notice: ['Perceber', 'Notar'],
+  repair: ['Reparar'],
+  research: ['Pesquisar'],
+  gambling: ['Apostar'],
+  intimidation: ['Intimidar'],
+  performance: ['Atuar'],
+  persuasion: ['Persuadir', 'Convencer'],
+  focus: ['Focar'],
+  spellcasting: ['Conjurar'],
+  survival: ['Sobreviver']
+}
+
 function normalizeSkillLookupValue(value: string): string {
   return value
     .normalize('NFD')
@@ -75,6 +101,10 @@ const SKILL_DEFINITION_BY_LOOKUP = new Map<string, SkillDefinition>()
 for (const skill of SKILLS) {
   SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(skill.key), skill)
   SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(skill.label), skill)
+
+  for (const alias of SKILL_VERB_ALIASES[skill.key] ?? []) {
+    SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(alias), skill)
+  }
 }
 
 export function findSkillDefinition(skillName: string | null | undefined): SkillDefinition | undefined {

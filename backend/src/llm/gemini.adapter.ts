@@ -1976,6 +1976,7 @@ export class GeminiAdapter implements Narrator {
       '- "tn": target number. Default 4. Increase for especially difficult situations (6, 8).',
       '- "reason": ALWAYS fill with a short narrative justification.',
       '- Use skill names in Brazilian Portuguese as listed in the PLAYER SKILLS section of the context.',
+      '- CRITICAL: "skill" must be the exact noun label from PLAYER SKILLS (e.g. "Intimidação", "Persuasão"), NEVER the verb form of the action narrated (e.g. NEVER "Intimidar", "Persuadir", "Pilotar", "Lutar"). The skill field names a TRAIT, not the player\'s action.',
       '',
       'GENERAL RULES:',
       '- "narrative": mandatory, full turn text (narration + direct speech combined).',
