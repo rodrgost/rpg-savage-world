@@ -1,13 +1,8 @@
 :root {
   color-scheme: dark;
-<<<<<<< HEAD
   font-family: 'Inter', 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-sans: 'Inter', 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-serif: 'Lora', 'Crimson Pro', 'Merriweather', Georgia, serif;
-=======
-  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-serif: 'Playfair Display', serif;
->>>>>>> 199b810ddc28410386ed62053793274694c73326
 
   --content-max-width: 1180px;
   --content-max-width-game: 1360px;
@@ -15,8 +10,8 @@
   --panel-padding: clamp(20px, 2.6vw, 34px);
   --max-width: var(--content-max-width-game);
 
-<<<<<<< HEAD
   --bg-app: #0A0C10;
+  --bg-base: #0A0C10;
   --bg-surface: #161920;
   --bg-surface-hover: #1D2129;
   --glass-bg: rgba(22, 25, 32, 0.72);
@@ -47,52 +42,13 @@
   --action-primary-hover: #9DA6FA;
   --action-danger: #EF4444;
   --action-danger-hover: #F87171;
-=======
-  --bg-app: #0f1115;
-  --bg-base: #0f1115;
-  --bg-surface: #1a1d23;
-  --bg-surface-hover: #242832;
-  --glass-bg: rgba(26, 29, 35, 0.88);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --bg-field: #15171c;
-  --bg-muted: #0c0d10;
-  --bg-card: #1c1f26;
-  --bg-elevated: #262b35;
-  --bg-chip: #2a2e38;
-  --bg-chip-active: #353a46;
-
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #5b6577;
-  --text-link: #a5b4fc;
-
-  --border-default: #2a2f3a;
-  --border-strong: #3b4252;
-  --border-accent: #6366f1;
-  --border-subtle: #1e212a;
-
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --accent-soft: rgba(99, 102, 241, 0.12);
-  --accent-glow: rgba(99, 102, 241, 0.25);
-
-  --action-primary: #4f46e5;
-  --action-primary-hover: #6366f1;
-  --action-danger: #d32f2f;
-  --action-danger-hover: #ef5350;
->>>>>>> 199b810ddc28410386ed62053793274694c73326
 
   --feedback-error: #F87171;
   --feedback-success: #4ADE80;
   --feedback-warn: #FACC15;
 
-<<<<<<< HEAD
   --gradient-hero: linear-gradient(135deg, #161920 0%, #0A0C10 100%);
   --gradient-accent: linear-gradient(135deg, #818CF8 0%, #A5B4FC 100%);
-=======
-  --gradient-hero: linear-gradient(135deg, #1a1d23 0%, #0f1115 100%);
-  --gradient-accent: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
->>>>>>> 199b810ddc28410386ed62053793274694c73326
 
   --shadow-sm: 0 1px 2px rgba(0,0,0,.25);
   --shadow-md: 0 4px 12px rgba(0,0,0,.35);
