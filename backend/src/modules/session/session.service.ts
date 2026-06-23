@@ -1320,7 +1320,9 @@ export class SessionService {
           inventory: context.stateBrief.inventory,
           activeStatusEffects: context.stateBrief.activeStatusEffects,
           playerSkills: context.stateBrief.playerSkills,
-          rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors)
+          rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors),
+          situation: context.stateBrief.situation,
+          npcCatalog: context.stateBrief.npcCatalog
         },
         recentMessages: context.recentMessages,
         narrativeStyle: sessionNarrativeStyle ?? result.nextState.meta.narrativeStyle,

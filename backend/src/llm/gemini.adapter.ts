@@ -3111,11 +3111,25 @@ export class GeminiAdapter implements Narrator {
       ? formatEngineEventsForPrompt(req.engineEvents)
       : 'No mechanical result'
 
+    const situationLabel = req.context.situation === 'combat'
+      ? 'COMBAT'
+      : req.context.situation === 'dialogo'
+        ? 'DIALOGUE'
+        : 'EXPLORATION'
+
+    const npcCatalogList = (req.context.npcCatalog ?? []).length
+      ? (req.context.npcCatalog ?? []).map(n => {
+          const desc = n.description ? ` — ${n.description}` : ''
+          return `- ${n.name} (${n.id}) [default disposition: ${n.dispositionDefault}]${desc}`
+        }).join('\n')
+      : null
+
     const currentTurnPrompt = [
       'GAME TURN — Narrate the consequence of the player\'s action.',
       '',
       '── CURRENT STATE ──',
       `Location: ${req.context.location}`,
+      `Scene: ${situationLabel}`,
       `Wounds: ${req.context.wounds} | Fatigue: ${req.context.fatigue} | Shaken: ${req.context.isShaken ? 'Yes' : 'No'} | Bennies: ${req.context.bennies}`,
       '',
       '── INVENTORY ──',
@@ -3127,6 +3141,7 @@ export class GeminiAdapter implements Narrator {
       '── PRESENT NPCS (copy IDs exactly — never modify them or reuse for new NPCs) ──',
       npcList,
       ...(defeatedNpcList ? ['', '── DEFEATED NPCS (already eliminated — DO NOT reference as active threats) ──', defeatedNpcList] : []),
+      ...(npcCatalogList ? ['', '── WORLD NPC CATALOG (named NPCs of the world — use canonical IDs when referencing them) ──', npcCatalogList] : []),
       '',
       '── PLAYER ACTION ──',
       `Type: ${req.playerAction.type}`,
