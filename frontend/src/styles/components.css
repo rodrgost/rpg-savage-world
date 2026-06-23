@@ -501,6 +501,21 @@ button:disabled {
   .topbar-session-meta {
     text-align: left;
   }
+
+  /* Touch targets >= 44px for dice/stepper controls (mobile checklist) */
+  .stepper-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .option-btn {
+    min-height: 44px;
+  }
+
+  .btn-dice-cancel,
+  .btn-dice-confirm {
+    min-height: 44px;
+  }
 }
 
 .muted {
@@ -850,6 +865,7 @@ button:disabled {
 
 .msg.narrator .narrative-text,
 .markdown-view {
+  font-family: var(--font-serif);
   font-size: 1.05rem;
   line-height: 1.8;
   color: var(--text-primary);

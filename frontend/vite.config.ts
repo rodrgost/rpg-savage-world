@@ -14,8 +14,13 @@ export default defineConfig({
         short_name: 'Mesa Infinita',
         description: 'RPG Adaptável com IA — gerencie campanhas, personagens e sessões',
         lang: 'pt-BR',
+<<<<<<< HEAD
         theme_color: '#0A0C10',
         background_color: '#0A0C10',
+=======
+        theme_color: '#0f1115',
+        background_color: '#0f1115',
+>>>>>>> 199b810ddc28410386ed62053793274694c73326
         display: 'standalone',
         display_override: ['standalone', 'minimal-ui'],
         orientation: 'any',

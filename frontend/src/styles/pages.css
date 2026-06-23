@@ -1505,6 +1505,60 @@
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+<<<<<<< HEAD
+=======
+.page-worlds .world-card-media {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.page-worlds .world-card-media .card-image--world {
+  border-bottom: none;
+}
+
+.page-worlds .world-card-media--empty {
+  background: var(--bg-elevated);
+  padding: var(--space-4);
+}
+
+.page-worlds .world-card-media-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: var(--space-5) var(--space-4) var(--space-3);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+}
+
+.page-worlds .world-card-media--empty .world-card-media-overlay {
+  position: static;
+  background: none;
+  padding: 0;
+}
+
+.page-worlds .world-card-media-overlay h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.page-worlds .world-card-header {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.page-worlds .world-card-actions {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-default);
+}
+
+.page-worlds .world-card-actions button {
+  width: 100%;
+}
+
+>>>>>>> 199b810ddc28410386ed62053793274694c73326
 .page-worlds .world-actions-panel {
   margin-top: var(--space-4);
 }
@@ -1682,11 +1736,15 @@
 
 .page-game .form-grid {
   margin-top: 0;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--glass-border);
   padding-top: var(--space-1);
   padding-bottom: calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
-  position: relative;
+  position: sticky;
+  bottom: 0;
   z-index: 10;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .page-game .form-grid .field-label {

@@ -127,6 +127,7 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                   alt={`Avatar de ${character.name}`}
                   className="card-image card-image--character"
                   src={`data:${character.image.mimeType};base64,${character.image.base64}`}
+                  loading="lazy"
                 />
               )}
 

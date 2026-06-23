@@ -153,6 +153,7 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
               key={world.id}
               onClick={() => navigate(`/worlds/${world.id}/edit`)}
             >
+<<<<<<< HEAD
               <div className="card-image-frame">
                 {world.image ? (
                   <img
@@ -165,6 +166,21 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                   <div className="card-image card-image--world card-image--placeholder" aria-hidden="true" />
                 )}
                 <span className="card-image-overlay" aria-hidden="true" />
+=======
+              <div className={`world-card-media ${world.image ? '' : 'world-card-media--empty'}`}>
+                {world.image && (
+                  <img
+                    alt={`Imagem do universo ${world.name || 'sem nome'}`}
+                    className="card-image card-image--world"
+                    src={`data:${world.image.mimeType};base64,${world.image.base64}`}
+                    loading="lazy"
+                  />
+                )}
+                <div className="world-card-media-overlay">
+                  <h3>{world.name || 'Universo sem nome'}</h3>
+                </div>
+              </div>
+>>>>>>> 199b810ddc28410386ed62053793274694c73326
 
                 <div className="world-card-top">
                   <span className={`badge ${world.visibility === 'public' ? 'badge--success' : 'badge--warn'}`}>
@@ -172,6 +188,10 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                   </span>
                   <OwnerAvatar label={resolvedOwnerLabel} photoUrl={resolvedOwnerPhoto} />
                 </div>
+<<<<<<< HEAD
+=======
+              </header>
+>>>>>>> 199b810ddc28410386ed62053793274694c73326
 
                 <div className="world-card-bottom">
                   <h3>{world.name || 'Universo sem nome'}</h3>
