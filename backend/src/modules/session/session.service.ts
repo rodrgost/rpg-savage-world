@@ -1350,6 +1350,28 @@ export class SessionService {
       narrative: narratorResponse.narrative
     })
 
+    // 5.4. Persistir derrotas declaradas pela narrativa.
+    // Quando a IA marca um NPC com status defeated/dead/incapacitated (ações que NÃO passam
+    // pelo rule-engine, ex.: repelir com artefato), removemos o NPC da cena e o registramos
+    // em defeatedNpcIds — espelhando o comportamento do engine para ataques mecânicos.
+    // IMPORTANTE: nunca "ressuscitamos" um NPC aqui; status 'active' vindo da IA é ignorado,
+    // impedindo que a narrativa traga de volta um inimigo já derrotado.
+    const NARRATIVE_DOWN_STATUSES = new Set(['defeated', 'dead', 'incapacitated'])
+    const narrativeDownIds = new Set(
+      narratorResponse.npcs
+        .filter((n) => n.status && NARRATIVE_DOWN_STATUSES.has(n.status))
+        .map((n) => n.id)
+    )
+    if (narrativeDownIds.size > 0) {
+      const mergedDefeated = new Set(finalState.defeatedNpcIds ?? [])
+      for (const id of narrativeDownIds) mergedDefeated.add(id)
+      finalState = {
+        ...finalState,
+        npcs: finalState.npcs.filter((n) => !narrativeDownIds.has(n.id)),
+        defeatedNpcIds: [...mergedDefeated]
+      }
+    }
+
     // 5.5. Processar ataques de NPCs contra o jogador
     // No Savage Worlds cada personagem age no seu próprio turno de iniciativa.
     // Quando o jogador ataca (seja via action 'attack' ou outro tipo que resulte em ataque),
@@ -1358,29 +1380,10 @@ export class SessionService {
     // Verifica tanto o tipo da ação quanto os eventos emitidos para capturar todos os casos de ataque.
     const hasPlayerAttack = normalizedAction.type === 'attack' 
       || result.emittedEvents.some(ev => ev.type === 'attack_hit' || ev.type === 'attack_miss')
-    let pendingNpcAttacks: NpcAttackEntry[] = hasPlayerAttack ? [] : (narratorResponse.npcAttacks ?? [])
-    // Fase 3: se npcAttacks vazio e há NPCs hostis ativos na cena, auto-gerar ataques
-    if (!hasPlayerAttack && pendingNpcAttacks.length === 0) {
-      const defeatedIds = new Set(finalState.defeatedNpcIds ?? [])
-      const autoAttacks: NpcAttackEntry[] = finalState.npcs
-        .filter((n) =>
-          n.disposition === 'hostile' &&
-          (!n.location || n.location === finalState.worldState.activeLocation) &&
-          n.status !== 'incapacitated' && n.status !== 'defeated' && n.status !== 'dead' &&
-          !defeatedIds.has(n.id) &&
-          n.damageFormula
-        )
-        .map((n) => ({
-          npcId: n.id,
-          skillDie: (n.attackSkillDie ?? 6) as NpcAttackEntry['skillDie'],
-          damageFormula: n.damageFormula!,
-          ap: n.ap ?? 0
-        }))
-      if (autoAttacks.length > 0) {
-        warn('applyNpcAttack', `npcAttacks vazio com ${autoAttacks.length} NPC(s) hostil(is) ativo(s) — ataques auto-gerados`)
-        pendingNpcAttacks = autoAttacks
-      }
-    }
+    // Ataques de NPC são autoridade EXCLUSIVA do narrador (LLM): só ocorrem quando o LLM
+    // os declara explicitamente em "npcAttacks". Não há mais auto-geração de ataques quando
+    // a lista vem vazia — um NPC hostil presente na cena não ataca por conta própria.
+    const pendingNpcAttacks: NpcAttackEntry[] = hasPlayerAttack ? [] : (narratorResponse.npcAttacks ?? [])
     const npcAttackEvents: Array<{ type: string; payload: unknown }> = []
     for (const entry of pendingNpcAttacks) {
       // Validar: NPC deve estar na cena, ser diferente do jogador, e skillDie deve ser DieType válido
@@ -1389,6 +1392,17 @@ export class SessionService {
       )
       if (!sceneNpc) {
         warn('applyNpcAttack', `NPC "${entry.npcId}" não encontrado na cena — ataque ignorado`)
+        continue
+      }
+      // Impedir que um NPC derrotado/incapacitado/morto ataque o jogador.
+      // Mesma regra do gerador automático de ataques: um inimigo fora de combate não age.
+      if (
+        (finalState.defeatedNpcIds ?? []).includes(entry.npcId) ||
+        sceneNpc.status === 'incapacitated' ||
+        sceneNpc.status === 'defeated' ||
+        sceneNpc.status === 'dead'
+      ) {
+        warn('applyNpcAttack', `NPC "${entry.npcId}" derrotado/incapacitado — ataque ignorado`)
         continue
       }
       // Garantir que o atacante não seja o próprio jogador (prevenção extra)

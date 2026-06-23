@@ -38,7 +38,8 @@ const ActionSchema = z.discriminatedUnion('type', [
 ])
 
 const ApplyTurnBody = z.object({
-  action: ActionSchema
+  action: ActionSchema,
+  displayText: z.string().min(1).optional()
 })
 
 const ChooseOptionBody = z.object({
@@ -114,7 +115,7 @@ export class SessionController {
   @Post('/:sessionId/actions')
   async applyTurn(@CurrentUser('uid') userId: string, @Param('sessionId') sessionId: string, @Body() body: unknown) {
     const parsed = ApplyTurnBody.parse(body)
-    return await this.sessions.applyTurn({ ownerId: userId, sessionId, action: parsed.action })
+    return await this.sessions.applyTurn({ ownerId: userId, sessionId, action: parsed.action, displayText: parsed.displayText })
   }
 
   @Post('/:sessionId/actions/stream')
@@ -136,7 +137,7 @@ export class SessionController {
 
     try {
       const result = await this.sessions.applyTurnStreamed(
-        { ownerId: userId, sessionId, action: parsed.action },
+        { ownerId: userId, sessionId, action: parsed.action, displayText: parsed.displayText },
         (engineData) => {
           res.write(JSON.stringify({ phase: 'engine', ...engineData }) + '\n')
           flushIfSupported(res)

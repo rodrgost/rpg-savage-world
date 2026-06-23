@@ -26,6 +26,7 @@ import type {
   ValidateActionResponse
 } from '../domain/types/narrative.js'
 import { randomUUID } from 'node:crypto'
+import { NARRATOR_RESPONSE_SCHEMA } from './schemas/narrator-response.schema.js'
 import { findSkillDefinition, getCanonicalSkillLabel } from '../domain/savage-worlds/constants.js'
 import { logLlmRequest, logLlmResponse, logLlmError, log, warn, error as logErr } from '../utils/file-logger.js'
 import { classifyTrivialAction } from '../core/trivial-action.js'
@@ -70,6 +71,8 @@ type GenerateTextOptions = {
   timeoutMs?: number
   maxOutputTokens?: number
   responseMimeType?: string
+  /** Schema (subconjunto OpenAPI aceito pelo Gemini) para forçar JSON estruturado. Só tem efeito com responseMimeType 'application/json'. */
+  responseSchema?: Record<string, unknown>
   temperature?: number
   /** Quando presente, enviado como campo separado systemInstruction na API Gemini */
   systemInstruction?: string
@@ -90,6 +93,12 @@ type NarratorPromptMode = 'start' | 'turn'
 type SanitizedNarratorResponseOptions = {
   fillFallbackOptions?: boolean
   allowNarrativeFallback?: boolean
+  /**
+   * Nomes dos itens atualmente no inventário do jogador. Quando fornecido, opções
+   * cujos requiredItems não estejam disponíveis são marcadas feasible=false
+   * (guarda determinístico de continuidade). Comparação ignora acento/caixa/pontuação.
+   */
+  availableItemNames?: string[]
 }
 
 type JsonParseSource = 'direct' | 'fragment' | 'repaired' | 'regex'
@@ -950,6 +959,7 @@ export class GeminiAdapter implements Narrator {
     const maxOutputTokens = options.maxOutputTokens ?? this.maxOutputTokens
     const timeoutMs = options.timeoutMs ?? this.timeoutMs
     const responseMimeType = options.responseMimeType
+    const responseSchema = options.responseSchema
     const temperature = options.temperature ?? this.temperature
     const systemInstruction = options.systemInstruction
     const thinkingBudget = options.thinkingBudget
@@ -986,6 +996,7 @@ export class GeminiAdapter implements Narrator {
             temperature,
             maxOutputTokens,
             ...(responseMimeType ? { responseMimeType } : {}),
+            ...(responseSchema ? { responseSchema } : {}),
             ...(thinkingBudget !== undefined
               ? { thinkingConfig: { thinkingBudget } }
               : {})
@@ -1888,7 +1899,6 @@ export class GeminiAdapter implements Narrator {
       '    {',
       '      "id": "<uuid>",',
       '      "text": "<narrative description of the option (action label, 1 short sentence)>",',
-      '      "playerSpeech": "<optional — what the player character says out loud when choosing this option. Only for dialogue, confrontation, negotiation, persuasion, or social actions. OMIT for attack, travel, skill tests with no speech. Max 1 sentence, first person, same language as narrative>",',
       '      "actionType": "<mechanical action type: custom|trait_test|attack|travel|flag>",',
       '      "actionPayload": { <partial fields to build the mechanical action> },',
       '      "requiredItems": ["<inventory item name, if required for the action>"],',
@@ -1918,18 +1928,12 @@ export class GeminiAdapter implements Narrator {
       '  ]',
       '},',
       '',
-      'playerSpeech FIELD RULES:',
-      '- Include ONLY when the option naturally involves the player character speaking out loud.',
-      '- ✅ USE for: dialogue, confrontation, negotiation, persuasion, taunt, plea, declaration, question directed at an NPC.',
-      '- ❌ OMIT for: attack, travel, skill tests (Percepção, Furtividade, Luta...), inspect/search, inventory actions.',
-      '- When used: 1 sentence max, first person, in the same language as the narrative. Write as direct speech (no attribution like "você diz:"). Example: "Sei que você está escondendo algo."',
-      '',
       'diceCheck FIELD RULES (REQUIRED in EVERY option):',
       '- Only require a roll when BOTH: (1) outcome is genuinely uncertain, AND (2) failure has interesting consequences. If either is false → required=false.',
       '- WHEN IN DOUBT: required=false. Dice are the EXCEPTION. Intention-only options ("Try to help", "Look for a way out", "Check the surroundings") → required: false.',
       '- ACTIONTYPE RULE: if diceCheck.required=true, actionType MUST be "trait_test" or "attack" — NEVER "custom". Using "custom" with required=true causes a system promotion that may lose payload data.',
       '',
-     /*  '- Ações que NÃO exigem teste (qualquer personagem faz automaticamente):',
+      '- Ações que NÃO exigem teste (qualquer personagem faz automaticamente):',
       '  • Atender o telefone / celular / chamada',
       '  • Abrir uma porta destrancada ou desimpedida',
       '  • Sentar, deitar, levantar-se',
@@ -1951,8 +1955,17 @@ export class GeminiAdapter implements Narrator {
       '  • Aceitar ou recusar proposta / informação de NPC',
       '  • Aguardar/observar passivamente sem alvo oculto específico (ficar no carro, vigiar de longe)',
       '  • Viajar para um local conhecido sem obstáculos — SEMPRE actionType "travel" e required: false',
+      '  • Pedir desculpas, se apresentar, agradecer ou fazer pequena conversa social sem intenção de persuadir/obter algo',
+      '  • Oferecer um item em troca quando a outra parte já está disposta a negociar (sem resistência ou contraproposta difícil)',
+      '  • Trocar de roupa, vestir/tirar equipamento simples, guardar ou organizar item na mochila',
+      '  • Acender uma lanterna, isqueiro ou vela já em posse, sem vento ou obstáculo',
+      '  • Amarrar cadarço, ajustar cinto ou mochila, pequenos ajustes de equipamento pessoal',
+      '  • Ligar um veículo já destravado e com chave disponível, em terreno plano e sem perseguição',
+      '  • Ajustar rádio do carro, acender faróis, trocar marcha em terreno plano e sem pressa',
+      '  • Consultar um livro, manual, mapa ou anotação já disponível, sem código oculto ou informação propositalmente escondida',
+      '  • Perguntar algo a uma pessoa disposta a responder (sem segredo guardado, mentira a desmascarar ou resistência)',
       '  ATENÇÃO: se houver elemento de resistência, risco ou incerteza real no contexto, mesmo ações comuns podem exigir teste.',
-      '  Ex.: abrir uma porta pode exigir Ladinagem se estiver trancada; pular pode exigir Atletismo se for um abismo.',
+      '  Ex.: abrir uma porta pode exigir Ladinagem se estiver trancada; pular pode exigir Atletismo se for um abismo; ligar um carro pode exigir Mecânica se a bateria estiver fraca ou houver perseguição.',
       '',
       '- Ações que EXIGEM teste (risco genuíno + falha com consequência interessante):',
       '  • Perceber algo oculto ou sutil → skill: "Percepção"',
@@ -1970,7 +1983,7 @@ export class GeminiAdapter implements Narrator {
       '  • Combate à distância → skill: "Tiro" (use actionType "attack")',
       '  ATENÇÃO: use actionType "trait_test" APENAS quando o teste é o FOCO PRINCIPAL da ação.',
       '  Ações custom quase sempre têm required: false — a narrativa resolve o resultado.',
-      '', */
+      '',
       '- SPECIAL RULE — actionType "travel": diceCheck.required must ALWAYS be false. Travel is narrative; describe obstacles in the narrative, not in diceCheck.',
       '- "modifier": situational adjustment (-2 for high difficulty, -4 for near-impossible, +2 for advantage). Default: 0.',
       '- "tn": target number. Default 4. Increase for especially difficult situations (6, 8).',
@@ -1984,6 +1997,7 @@ export class GeminiAdapter implements Narrator {
       '- If you return empty options or fewer than 4 items, the response will be considered invalid.',
       '- If a hostile NPC is present OR if your narrative this turn introduced hostile NPCs (which you MUST have registered in "npcs" with newlyIntroduced: true), include at least 1 combat option (actionType "attack"). NEVER use as targetId an NPC listed in DEFEATED NPCS — those enemies are out of combat.',
       '- The "feasible" field must be false if the player lacks the required items/conditions.',
+      '- 🔴 REQUIRED ITEMS & FEASIBILITY: if an option uses a specific item, that item MUST be listed in "requiredItems" AND must exist in the current ── INVENTORY ── list (match by name). If the item is NOT in the current inventory, set feasible=false with a feasibilityReason naming the missing item. NEVER offer a feasible option that depends on an item the player no longer has (e.g. an artifact dropped, consumed, or confiscated in a previous turn). When unsure an item is still held, treat it as absent.',
       '- For actionType "trait_test", include "skill" or "attribute" in the actionPayload.',
       '- For actionType "attack", include "targetId" and "damageFormula" in the actionPayload.',
       '  damageFormula examples: "str" (punch/unarmed), "str+d4" (knife/dagger), "str+d6" (short sword/club/light axe), "str+d8" (long sword/heavy axe), "str+d10" (great sword/two-handed weapon), "2d6" (pistol), "2d8" (rifle).',
@@ -2016,6 +2030,9 @@ export class GeminiAdapter implements Narrator {
         'MAXIMUM 3 SHORT sentences. 1 single paragraph.',
         'Sentences must be SHORT and DIRECT — no comma-chained clauses.',
         'Any response with more than 3 sentences violates this instruction.',
+        'STYLE: plain and factual. State what happens — no atmospheric build-up or scene-setting preamble.',
+        'FORBIDDEN openings: descriptions of silence, sound, smell, light, or air ("O silêncio...", "Um zumbido...", "O ar..."). Start with the concrete fact or the consequence of the action.',
+        'No poetic metaphors and no personification of objects or environment. Name things directly.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
     } else if (narrativeStyle === 'balanced') {
@@ -2074,14 +2091,24 @@ export class GeminiAdapter implements Narrator {
       )
 
       // Narrative voice instruction based on universe lore
-      lines.push(
-        '',
-        '=== NARRATIVE VOICE ===',
-        'Use the universe sections above to calibrate vocabulary and tone. Never use generic RPG language ("you advance courageously", "the enemy is defeated") — prefer concrete images from this world.',
-        '- Neutral rulebook tone is FORBIDDEN. The narrative must carry the accent of this universe.',
-        '- If the universe has an atmosphere of decay, use decay — worn-out words, rust, silences. If it has grandeur, use grandeur — scale, myth, weight.',
-        '- The narrative voice must be felt in word choices and metaphors, never declared.'
-      )
+      if (narrativeStyle === 'concise') {
+        lines.push(
+          '',
+          '=== NARRATIVE VOICE ===',
+          'Use the universe sections above only to calibrate vocabulary (names, terms, references) so the narrative fits this world.',
+          '- Avoid generic RPG clichés ("you advance courageously", "the enemy is defeated").',
+          '- Stay direct and concrete: state facts and consequences, not atmosphere. Do NOT add metaphors, sensory build-up, or mood descriptions — the CONCISE style above takes priority over tone.'
+        )
+      } else {
+        lines.push(
+          '',
+          '=== NARRATIVE VOICE ===',
+          'Use the universe sections above to calibrate vocabulary and tone. Never use generic RPG language ("you advance courageously", "the enemy is defeated") — prefer concrete images from this world.',
+          '- Neutral rulebook tone is FORBIDDEN. The narrative must carry the accent of this universe.',
+          '- If the universe has an atmosphere of decay, use decay — worn-out words, rust, silences. If it has grandeur, use grandeur — scale, myth, weight.',
+          '- The narrative voice must be felt in word choices and metaphors, never declared.'
+        )
+      }
     }
 
     // Inject campaign context (specific story)
@@ -2174,6 +2201,7 @@ export class GeminiAdapter implements Narrator {
       '',
       'NARRATIVE PLAUSIBILITY:',
       '  • MECHANICAL RESULT is binding: success never becomes failure, failure never becomes clean success.',
+      '  • 🔴 ITEM-PREMISE OVERRIDE (takes precedence over the MECHANICAL RESULT): if the player\'s chosen action depends on a specific item that is NOT in the current ── INVENTORY ── list, do NOT narrate that item being used and do NOT fabricate it. Narrate instead that the character reaches for it and it is gone/unavailable, and make the resulting options reflect that. This overrides a mechanical "success" because the premise of the action is invalid — a success cannot be granted for using an item the player does not have.',
       '  • On success: preserve the positive consequence; optionally add cost, friction, or dilemma.',
       '  • On failure: preserve the negative consequence; optionally reveal a clue or open a worse path.',
       '  • Use results to seed future plots naturally (social debt, alerted enemy, incomplete clue).',
@@ -2202,7 +2230,7 @@ export class GeminiAdapter implements Narrator {
     raw: Record<string, unknown>,
     opts: SanitizedNarratorResponseOptions = {}
   ): NarratorTurnResponse {
-    const { fillFallbackOptions = true, allowNarrativeFallback = true } = opts
+    const { fillFallbackOptions = true, allowNarrativeFallback = true, availableItemNames } = opts
     const narrative = typeof raw.narrative === 'string'
       ? sanitizeNarrativeOutput(raw.narrative) || (allowNarrativeFallback ? 'A história continua...' : '')
       : (allowNarrativeFallback ? 'A história continua...' : '')
@@ -2536,6 +2564,30 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
+    // Guarda determinístico de continuidade: uma opção que exige um item ausente
+    // do inventário não pode ser viável. Evita que a IA ofereça (e o engine resolva)
+    // ações com itens que o jogador não possui mais. Comparação ignora acento/caixa/pontuação.
+    if (availableItemNames) {
+      const availableKeys = new Set(
+        availableItemNames.map((name) => normalizeLookupKey(name)).filter((key) => key.length > 0)
+      )
+      for (const option of options) {
+        if (!option.feasible) continue
+        const required = option.requiredItems ?? []
+        if (!required.length) continue
+        const missing = required.filter((item) => {
+          const key = normalizeLookupKey(item)
+          return key.length > 0 && !availableKeys.has(key)
+        })
+        if (missing.length) {
+          option.feasible = false
+          option.feasibilityReason = `Item indisponível no inventário: ${missing.join(', ')}`
+          if (option.diceCheck) option.diceCheck = { ...option.diceCheck, required: false }
+          warn('sanitizeNarratorResponse', `Opção marcada inviável por item ausente: "${option.text}" (faltando: ${missing.join(', ')})`)
+        }
+      }
+    }
+
     return {
       narrative,
       segments,
@@ -2621,7 +2673,9 @@ export class GeminiAdapter implements Narrator {
       mode?: NarratorPromptMode
       narrativeStyle?: 'concise' | 'balanced'
       simpleVocabulary?: boolean
-    } = {}
+    } = {},
+    /** Contexto de runtime usado apenas na sanitização (não afeta o system prompt nem seu cache). */
+    sanitizeContext: { availableItemNames?: string[] } = {}
   ): Promise<NarratorTurnResponse> {
     const narratorMode = systemPromptOpts.mode ?? 'turn'
     const systemPrompt = this.getCachedNarratorSystemPrompt(systemPromptOpts)
@@ -2650,6 +2704,8 @@ export class GeminiAdapter implements Narrator {
           maxOutputTokens: attemptMaxTokens,
           timeoutMs: this.narratorTimeoutMs,
           responseMimeType: 'application/json',
+          // responseSchema só é interpretado pela API Gemini; o provider DeepSeek ignora.
+          ...(this.provider === 'deepseek' ? {} : { responseSchema: NARRATOR_RESPONSE_SCHEMA }),
           temperature: attempt.temperature,
           systemInstruction: attempt.systemInstruction
         }, index + 1)
@@ -2681,7 +2737,8 @@ export class GeminiAdapter implements Narrator {
 
         const sanitized = this.sanitizeNarratorResponse(parsed.value, {
           fillFallbackOptions: false,
-          allowNarrativeFallback: false
+          allowNarrativeFallback: false,
+          availableItemNames: sanitizeContext.availableItemNames
         })
 
         const validationResult = this.isNarratorResponseStructurallyValid(sanitized)
@@ -3094,7 +3151,8 @@ export class GeminiAdapter implements Narrator {
           mode: 'turn',
           narrativeStyle: req.narrativeStyle,
           simpleVocabulary: req.simpleVocabulary
-        }
+        },
+        { availableItemNames: req.context.inventory.map((i) => i.name) }
       )
     } catch (error) {
       logLlmError('narrateTurn', error)

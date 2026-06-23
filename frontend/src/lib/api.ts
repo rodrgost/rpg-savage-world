@@ -728,6 +728,7 @@ export async function executeTraitTest(
     attribute?: string
     modifier?: number
     description?: string
+    displayText?: string
   },
   onEnginePhase?: (data: EnginePhaseData) => void,
   signal?: AbortSignal
@@ -739,7 +740,8 @@ export async function executeTraitTest(
       ...(params.attribute ? { attribute: params.attribute } : {}),
       modifier: params.modifier ?? 0,
       description: params.description
-    }
+    },
+    ...(params.displayText ? { displayText: params.displayText } : {})
   }
   if (onEnginePhase) {
     return await apiStreamRequest<SessionPayload>(

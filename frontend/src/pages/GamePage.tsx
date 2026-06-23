@@ -660,9 +660,12 @@ function ActionOptions({
               )}
               {hasDice && dc && (
                 <span className="dice-check-info">
-                  Teste: {trait.label}
-                  {dc.modifier ? ` (${dc.modifier > 0 ? '+' : ''}${dc.modifier})` : ''}
-                  {' · TN '}{dc.tn ?? 4}
+                  <span className="dice-check-label">Teste:</span>{' '}
+                  <span className="dice-check-value">
+                    {trait.label}
+                    {dc.modifier ? ` (${dc.modifier > 0 ? '+' : ''}${dc.modifier})` : ''}
+                    {' · TN '}{dc.tn ?? 4}
+                  </span>
                 </span>
               )}
               {!option.feasible && option.feasibilityReason && (
@@ -1703,6 +1706,7 @@ export function GamePage() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showNarrationLog, setShowNarrationLog] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [hudExpanded, setHudExpanded] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null)
   const [worldInfo, setWorldInfo] = useState<{ campaignName: string; worldName: string } | null>(null)
@@ -2076,7 +2080,8 @@ export function GamePage() {
             skill: dc.skill ?? undefined,
             attribute: dc.attribute ?? undefined,
             modifier: dc.modifier ?? 0,
-            description: text
+            description: text,
+            displayText: text
           },
           handleEnginePhase,
           signal
@@ -2088,7 +2093,8 @@ export function GamePage() {
             sessionId,
             skill: combatSkill,
             modifier: dc?.modifier ?? 0,
-            description: text
+            description: text,
+            displayText: text
           },
           handleEnginePhase,
           signal
@@ -2255,7 +2261,7 @@ export function GamePage() {
       {youtubeUrl && <YouTubeAmbient youtubeUrl={youtubeUrl} />}
 
       {/* ── HUD: título + status + ações numa única barra ── */}
-      <div className="game-hud">
+      <div className={`game-hud ${hudExpanded ? 'hud-expanded' : ''}`}>
         <button
           type="button"
           className="game-back-btn"
@@ -2281,54 +2287,66 @@ export function GamePage() {
               <span className="location-tag" title="Localização atual"><span className="hud-icon">📍</span>{state.worldState.activeLocation}</span>
             </div>
             <span className="hud-spacer" />
-            <div className="subheader-actions">
-              <button
-                type="button"
-                className="subheader-btn"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                title="Ficha do Personagem"
-              >
-                📋 {state.player.name ?? 'Ficha'}
-              </button>
-              <button
-                type="button"
-                className="subheader-btn"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                title="Ações avançadas"
-              >
-                ⚔️ Ações
-              </button>
-              <button
-                type="button"
-                className="subheader-btn"
-                onClick={() => setShowNarrationLog(!showNarrationLog)}
-                title="Log de Narração"
-              >
-                🗒 Log
-              </button>
-              <select
-                className="subheader-btn"
-                value={typewriterSpeed}
-                onChange={(e) => setTypewriterSpeed(Number(e.target.value))}
-                title="Velocidade do narrador"
-              >
-                <option value={0}>⚡ Instantâneo</option>
-                <option value={1}>🐢 Lento</option>
-                <option value={3}>💬 Normal</option>
-                <option value={6}>🚀 Rápido</option>
-              </select>
-              {bennies > 0 && (
+            <button
+              type="button"
+              className="hud-expand-toggle"
+              onClick={() => setHudExpanded(!hudExpanded)}
+              title={hudExpanded ? 'Recolher ações' : 'Mostrar ações'}
+              aria-expanded={hudExpanded}
+            >
+              {hudExpanded ? '▾' : '▸'}
+            </button>
+
+            {hudExpanded && (
+              <div className="subheader-actions hud-actions-row">
                 <button
                   type="button"
-                  className="subheader-btn accent"
-                  onClick={() => handleSpendBenny('reroll')}
-                  disabled={loading}
-                  title="Gastar Benny para re-rolar"
+                  className="subheader-btn pill-ficha"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  title="Ficha do Personagem"
                 >
-                  🎲 Benny
+                  📋 {state.player.name ?? 'Ficha'}
                 </button>
-              )}
-            </div>
+                <button
+                  type="button"
+                  className="subheader-btn pill-actions"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  title="Ações avançadas"
+                >
+                  ⚔️ Ações
+                </button>
+                <button
+                  type="button"
+                  className="subheader-btn pill-log"
+                  onClick={() => setShowNarrationLog(!showNarrationLog)}
+                  title="Log de Narração"
+                >
+                  🗒 Log
+                </button>
+                <select
+                  className="subheader-btn pill-speed"
+                  value={typewriterSpeed}
+                  onChange={(e) => setTypewriterSpeed(Number(e.target.value))}
+                  title="Velocidade do narrador"
+                >
+                  <option value={0}>⚡ Instantâneo</option>
+                  <option value={1}>🐢 Lento</option>
+                  <option value={3}>💬 Normal</option>
+                  <option value={6}>🚀 Rápido</option>
+                </select>
+                {bennies > 0 && (
+                  <button
+                    type="button"
+                    className="subheader-btn accent pill-benny"
+                    onClick={() => handleSpendBenny('reroll')}
+                    disabled={loading}
+                    title="Gastar Benny para re-rolar"
+                  >
+                    🎲 Benny
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

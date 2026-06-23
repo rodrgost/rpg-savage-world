@@ -34,7 +34,16 @@ type TrivialPattern = {
   pattern: RegExp
   /** Motivo narrativo curto para preencher diceCheck.reason */
   reason: string
+  /**
+   * Regex opcional de cancelamento: se casar com o input, a ação NÃO é
+   * considerada trivial. Veta contextos ativos que o `pattern` largo
+   * capturaria por engano (ex.: "observar o ambiente em busca de emboscadas").
+   */
+  exclude?: RegExp
 }
+
+/** Contexto que torna "pegar/receber um item" uma ação ativa com risco. */
+const TAKE_EXCLUDE = /\b(?:guarda|escondid|trancad|protegid|vigiad|adormecid|distrai|furtiv|sorrateir|sem ser visto|sem ser notado|do bolso|dos bolsos|do cinto|do pescoco|do pescoço|roubar|furtar|surrupiar)/
 
 const TRIVIAL_PATTERNS: TrivialPattern[] = [
   // Telefone / chamada
@@ -94,7 +103,9 @@ const TRIVIAL_PATTERNS: TrivialPattern[] = [
   },
   {
     pattern: /\b(apertar|pressionar|clicar)\b.{0,20}\b(o botao|o botão|o interruptor|a chave)\b/,
-    reason: 'Pressionar um botão simples é automático'
+    reason: 'Pressionar um botão simples é automático',
+    // Botão desconhecido/suspeito pode estar armadilhado — mesmo raciocínio que exclui "abrir porta trancada"
+    exclude: /\b(?:desconhecid|estranh|suspeit|misterios|armadilh|nao identificad|não identificad|perigos)/
   },
 
   // Beber / comer item já em mãos (sem busca)
@@ -116,11 +127,14 @@ const TRIVIAL_PATTERNS: TrivialPattern[] = [
   // Aceitar / receber / pegar item entregue por NPC (sem busca ativa)
   {
     pattern: /\b(aceitar|receber|pegar|tomar|apanhar)\b.{0,35}\b(envelope|carta|pacote|bilhete|nota|objeto|item|chave|documento|ficha|papel|parcel)\b/,
-    reason: 'Receber algo entregue diretamente é automático'
+    reason: 'Receber algo entregue diretamente é automático',
+    // Pegar algo guardado/protegido/furtivamente NÃO é receber — exige Furtividade/Ladinagem
+    exclude: TAKE_EXCLUDE
   },
   {
     pattern: /\b(aceitar|receber|pegar)\b.{0,20}\b(o que|o item|a encomenda|a entrega|o presente)\b/,
-    reason: 'Receber algo entregue diretamente é automático'
+    reason: 'Receber algo entregue diretamente é automático',
+    exclude: TAKE_EXCLUDE
   },
 
   // Aguardar / observar passivamente sem alvo oculto
@@ -130,19 +144,24 @@ const TRIVIAL_PATTERNS: TrivialPattern[] = [
   },
   {
     pattern: /\b(observar|vigiar|monitorar)\b.{0,30}\b(o movimento|os arredores|o local|o ambiente|a area|a área|de longe|a distancia|à distância)\b/,
-    reason: 'Observação passiva do ambiente não requer teste'
+    reason: 'Observação passiva do ambiente não requer teste',
+    // Observar COM propósito (achar emboscada/pista/ameaça oculta) é teste de Percepção, não observação ociosa
+    exclude: /\b(?:em busca de|procurando|atras de|atrás de|por sinais|por pistas|por vestigios|por vestígios|emboscada|inimigo|ameaca|ameaça|perigo|escondid|oculto|oculta|furtiv|rastros|pegadas|armadilh)/
   },
 
-  // Ignorar / evitar (sem ação ativa)
+  // Ignorar (sem ação ativa). "Evitar" foi removido: evitar uma armadilha/guardas
+  // é esquiva ativa (Reflexos/Acrobacia/Furtividade), não a mesma coisa que ignorar.
   {
-    pattern: /^(ignorar|evitar|nao dar atencao|não dar atenção|deixar para la|deixar para lá)\b/,
+    pattern: /^(ignorar|nao dar atencao|não dar atenção|deixar para la|deixar para lá|nao se importar|não se importar)\b/,
     reason: 'Ignorar algo não requer teste'
   },
 
   // Entrar / sair de local acessível (sem obstáculo)
   {
     pattern: /\b(entrar no|sair do|sair de dentro do|entrar na|sair da)\b.{0,20}\b(carro|veiculo|veículo|quarto|motel|loja|restaurante)\b/,
-    reason: 'Entrar ou sair de local acessível é automático'
+    reason: 'Entrar ou sair de local acessível é automático',
+    // Só é trivial se o acesso estiver livre — local trancado/bloqueado/vigiado exige teste
+    exclude: /\b(?:trancad|bloquead|lacrad|vigiad|guardad|fechad)/
   },
 
   // Distrair jogando/arremessando objeto para longe
@@ -165,8 +184,8 @@ const TRIVIAL_PATTERNS: TrivialPattern[] = [
 export function classifyTrivialAction(input: string): TrivialResult {
   const normalized = normalize(input)
 
-  for (const { pattern, reason } of TRIVIAL_PATTERNS) {
-    if (pattern.test(normalized)) {
+  for (const { pattern, reason, exclude } of TRIVIAL_PATTERNS) {
+    if (pattern.test(normalized) && !(exclude && exclude.test(normalized))) {
       return { trivial: true, reason }
     }
   }
