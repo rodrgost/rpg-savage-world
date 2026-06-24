@@ -1982,8 +1982,11 @@ export class GeminiAdapter implements Narrator {
       '  • Ajustar rádio do carro, acender faróis, trocar marcha em terreno plano e sem pressa',
       '  • Consultar um livro, manual, mapa ou anotação já disponível, sem código oculto ou informação propositalmente escondida',
       '  • Perguntar algo a uma pessoa disposta a responder (sem segredo guardado, mentira a desmascarar ou resistência)',
+      '  • Pesquisar ou procurar informação publicamente acessível (internet, arquivo aberto, banco de dados sem restrição, fonte de consulta disponível) — a informação não está propositalmente oculta ou protegida',
+      '  • Procurar algo visível ou abertamente acessível no ambiente (não oculto, não escondido deliberadamente)',
       '  ATENÇÃO: se houver elemento de resistência, risco ou incerteza real no contexto, mesmo ações comuns podem exigir teste.',
       '  Ex.: abrir uma porta pode exigir Ladinagem se estiver trancada; pular pode exigir Atletismo se for um abismo; ligar um carro pode exigir Mecânica se a bateria estiver fraca ou houver perseguição.',
+      '  "Pesquisar", "consultar" e "procurar" SÓ exigem teste de Pesquisa quando a informação/objeto está propositalmente oculto, protegido ou de difícil acesso — se a fonte é aberta e acessível, required=false.',
       '',
       '- Ações que EXIGEM teste (risco genuíno + falha com consequência interessante):',
       '  • Perceber algo oculto ou sutil → skill: "Percepção"',
@@ -1993,7 +1996,7 @@ export class GeminiAdapter implements Narrator {
       '  • Intimidar alguém → skill: "Intimidação"',
       '  • Curar ferimentos → actionType: "heal", actionPayload: {} (não use trait_test para cura)',
       '  • Abrir fechadura trancada, desarmar armadilha → skill: "Ladinagem"',
-      '  • Investigar pistas em cena, pesquisar informação escondida → skill: "Pesquisa"',
+      '  • Investigar pistas em cena, pesquisar informação propositalmente oculta, protegida ou de difícil acesso → skill: "Pesquisa"',
       '  • Conhecimento arcano / sobrenatural → skill: "Ocultismo"',
       '  • Resistir a veneno, doença, fadiga → attribute: "vigor"',
       '  • Resistir a medo, tentação → attribute: "spirit"',
@@ -2115,9 +2118,11 @@ export class GeminiAdapter implements Narrator {
         lines.push(
           '',
           '=== NARRATIVE VOICE ===',
-          'Use the universe sections above only to calibrate vocabulary (names, terms, references) so the narrative fits this world.',
+          'The universe text above may contain atmospheric, literary, or sensory writing — IGNORE its style and tone completely.',
+          'Extract from it ONLY proper nouns: place names, faction names, technology names, cultural terms, character names.',
+          'Do NOT mirror any sensory or environmental language from the lore (smells, air quality, sounds, textures, light, electricity, etc.).',
           '- Avoid generic RPG clichés ("you advance courageously", "the enemy is defeated").',
-          '- Stay direct and concrete: state facts and consequences, not atmosphere. Do NOT add metaphors, sensory build-up, or mood descriptions — the CONCISE style above takes priority over tone.'
+          '- Stay direct and concrete: state facts and consequences only.'
         )
       } else {
         lines.push(
@@ -2913,6 +2918,11 @@ export class GeminiAdapter implements Narrator {
       '  • Walk along a safe path without threats',
       '  • Rest, breathe, wait',
       '  • Examine an item already in hand / check inventory',
+      '  • Search for / look up information from an accessible source (internet, open file, reference book, available database) — the information is NOT deliberately hidden or protected',
+      '  • Consult an available document, map, or reference without hidden or protected content',
+      '  • Ask an NPC willing to respond (without guarded secret, deception to uncover, or resistance)',
+      '  • Search for something visible or openly accessible in the environment (not deliberately hidden)',
+      '  NOTE: "search", "look up", "consult", "procurar" only require a roll when the information/object is HIDDEN, protected, or the source is unwilling — use skill "Pesquisa" only in those cases.',
       '',
       '- Actions that REQUIRE a roll:',
       '  • Perceive something hidden → skill: "Percepção"',
@@ -2922,13 +2932,14 @@ export class GeminiAdapter implements Narrator {
       '  • Intimidate → skill: "Intimidação"',
       '  • Heal wounds → actionType: "heal", actionPayload: {} (do not use trait_test for healing)',
       '  • Pick a lock, disarm a trap → skill: "Ladinagem"',
-      '  • Investigate clues → skill: "Pesquisa"',
+      '  • Investigate hidden clues, research concealed or protected information → skill: "Pesquisa"',
       '  • Resist poison/disease → attribute: "vigor"',
       '  • Resist fear → attribute: "spirit"',
       '  • Combat → actionType "attack"',
       '',
       '  Contextual note: "open the door" may require Ladinagem if context indicates it is locked;',
-      '  "jump" may require Atletismo if it is a real chasm.',
+      '  "jump" may require Atletismo if it is a real chasm;',
+      '  "search/look up" requires Pesquisa only when information is deliberately hidden or protected.',
       '',
       '- For combat → actionType: "attack", include targetId and damageFormula in actionPayload.',
       '  damageFormula examples: "str" (punch/unarmed), "str+d4" (knife), "str+d6" (short sword), "str+d8" (long sword), "str+d10" (great sword), "2d6" (pistol), "2d8" (rifle).',
@@ -3165,7 +3176,10 @@ export class GeminiAdapter implements Narrator {
 
     // ── Montar a última mensagem user com contexto dinâmico do turno ──
     const inventoryList = req.context.inventory.length
-      ? req.context.inventory.map(i => `- ${i.name} (x${i.quantity}): ${i.description}`).join('\n')
+      ? req.context.inventory.map(i => {
+          const desc = (i.description ?? '').trim()
+          return desc ? `- ${i.name} (x${i.quantity}): ${desc}` : `- ${i.name} (x${i.quantity})`
+        }).join('\n')
       : 'No items'
 
     const statusList = req.context.activeStatusEffects.length
@@ -3196,11 +3210,25 @@ export class GeminiAdapter implements Narrator {
       ? formatEngineEventsForPrompt(req.engineEvents)
       : 'No mechanical result'
 
+    const situationLabel = req.context.situation === 'combat'
+      ? 'COMBAT'
+      : req.context.situation === 'dialogo'
+        ? 'DIALOGUE'
+        : 'EXPLORATION'
+
+    const npcCatalogList = (req.context.npcCatalog ?? []).length
+      ? (req.context.npcCatalog ?? []).map(n => {
+          const desc = n.description ? ` — ${n.description}` : ''
+          return `- ${n.name} (${n.id}) [default disposition: ${n.dispositionDefault}]${desc}`
+        }).join('\n')
+      : null
+
     const currentTurnPrompt = [
       'GAME TURN — Narrate the consequence of the player\'s action.',
       '',
       '── CURRENT STATE ──',
       `Location: ${req.context.location}`,
+      `Scene: ${situationLabel}`,
       `Wounds: ${req.context.wounds} | Fatigue: ${req.context.fatigue} | Shaken: ${req.context.isShaken ? 'Yes' : 'No'} | Bennies: ${req.context.bennies}`,
       '',
       '── INVENTORY ──',
@@ -3212,6 +3240,7 @@ export class GeminiAdapter implements Narrator {
       '── PRESENT NPCS (each line shows displayName + hash id; copy the id exactly and reuse the same displayName — never modify them or reuse for new NPCs) ──',
       npcList,
       ...(defeatedNpcList ? ['', '── DEFEATED NPCS (already eliminated — DO NOT reference as active threats) ──', defeatedNpcList] : []),
+      ...(npcCatalogList ? ['', '── WORLD NPC CATALOG (named NPCs of the world — use canonical IDs when referencing them) ──', npcCatalogList] : []),
       '',
       '── PLAYER ACTION ──',
       `Type: ${req.playerAction.type}`,

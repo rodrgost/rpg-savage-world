@@ -1322,7 +1322,9 @@ export class SessionService {
           inventory: context.stateBrief.inventory,
           activeStatusEffects: context.stateBrief.activeStatusEffects,
           playerSkills: context.stateBrief.playerSkills,
-          rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors)
+          rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors),
+          situation: context.stateBrief.situation,
+          npcCatalog: context.stateBrief.npcCatalog
         },
         recentMessages: context.recentMessages,
         narrativeStyle: sessionNarrativeStyle ?? result.nextState.meta.narrativeStyle,
@@ -1679,13 +1681,16 @@ export class SessionService {
     return changes.filter((c) => {
       if (c.changeType !== 'gained') return true // lost/used sempre passam
       const nameKey = c.name.toLowerCase().trim()
+      // Categorias não-empilháveis: um por personagem, não podem ser ganhas mais de uma vez
       const nonStackableCategories = new Set(['weapon', 'armor', 'vehicle', 'property'])
       if (inventoryNames.has(nameKey) && nonStackableCategories.has(c.category ?? '')) {
         warn('deduplicateItemChanges', `Item já no inventário, ignorando gained: "${c.name}"`)
         return false
       }
-      if (recentGainedNames.has(nameKey)) {
-        warn('deduplicateItemChanges', `Item já concedido recentemente, ignorando: "${c.name}"`)
+      // Apenas bloqueia re-concessão de itens não-empilháveis de mensagens recentes.
+      // Itens empilháveis (dinheiro, munição, consumíveis) podem ser ganhos novamente.
+      if (recentGainedNames.has(nameKey) && nonStackableCategories.has(c.category ?? '')) {
+        warn('deduplicateItemChanges', `Item não-empilhável já concedido recentemente, ignorando: "${c.name}"`)
         return false
       }
       return true

@@ -279,6 +279,10 @@ export type NarrateTurnRequest = {
     playerSkills?: Record<string, string>
     /** Digest compacto das regras do jogo + traços do personagem */
     rulesDigest?: string
+    /** Situação atual da cena — orienta o tom narrativo */
+    situation?: 'exploracao' | 'combat' | 'dialogo'
+    /** Catálogo de NPCs nomeados do mundo — permite referenciar NPCs canônicos por ID */
+    npcCatalog?: Array<{ id: string; name: string; description?: string; dispositionDefault: string }>
   }
   recentMessages: Array<{ role: string; narrative?: string; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
   narrativeStyle?: NarrativeStyle
