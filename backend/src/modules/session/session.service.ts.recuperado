@@ -62,7 +62,7 @@ const ATTRIBUTE_ALIAS_TO_KEY: Readonly<Record<string, AttributeName>> = {
 function normalizeLookupValue(value: string | null | undefined): string {
   return (value ?? '')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .trim()
     .toLowerCase()
 }
@@ -1377,10 +1377,10 @@ export class SessionService {
     // 5.5. Processar ataques de NPCs contra o jogador
     // No Savage Worlds cada personagem age no seu próprio turno de iniciativa.
     // Quando o jogador ataca (seja via action 'attack' ou outro tipo que resulte em ataque),
-    // o NPC já recebeu dano neste turno — processar npcAttacks simultaneamente resultaria 
+    // o NPC já recebeu dano neste turno — processar npcAttacks simultaneamente resultaria
     // no jogador sofrendo dano no mesmo turno em que atacou, o que é incorreto mecanicamente.
     // Verifica tanto o tipo da ação quanto os eventos emitidos para capturar todos os casos de ataque.
-    const hasPlayerAttack = normalizedAction.type === 'attack' 
+    const hasPlayerAttack = normalizedAction.type === 'attack'
       || result.emittedEvents.some(ev => ev.type === 'attack_hit' || ev.type === 'attack_miss')
     // Ataques de NPC são autoridade EXCLUSIVA do narrador (LLM): só ocorrem quando o LLM
     // os declara explicitamente em "npcAttacks". Não há mais auto-geração de ataques quando

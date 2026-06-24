@@ -845,7 +845,7 @@ button:disabled {
 
 /* ─── Narrator message (atmosférico) ─── */
 .msg.narrator {
-  border-left: 3px solid var(--accent-gold-muted);
+  border-left: 3px solid #c9963a;
   padding-left: var(--space-4);
   background: linear-gradient(90deg, rgba(201, 150, 58, 0.05) 0%, transparent 60%);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
@@ -858,7 +858,7 @@ button:disabled {
   font-size: var(--font-xs);
   font-variant: small-caps;
   letter-spacing: 0.08em;
-  color: var(--accent-gold-muted);
+  color: #c9963a;
   opacity: 0.85;
   margin-bottom: var(--space-2);
 }
@@ -957,7 +957,7 @@ button:disabled {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-gold-muted);
+  background: #c9963a;
   opacity: 0.4;
   animation: typingBlink 1.2s ease-in-out infinite;
 }
@@ -1281,11 +1281,11 @@ button:disabled {
 }
 
 .option-btn.has-dice-check::before {
-  background: var(--accent-gold);
+  background: #f59e0b;
 }
 
 .option-btn.has-dice-check:hover:not(:disabled) {
-  border-color: var(--accent-gold-dark);
+  border-color: #d97706;
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(22, 14, 4, 0.98) 100%);
   box-shadow: 0 4px 16px rgba(245, 158, 11, 0.18);
 }
@@ -1297,7 +1297,7 @@ button:disabled {
 
 .dice-check-info {
   font-size: var(--font-xs);
-  color: var(--accent-gold);
+  color: #f59e0b;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -1316,7 +1316,7 @@ button:disabled {
 
 .dice-confirm-modal {
   background: var(--bg-card, #1e1e2e);
-  border: 2px solid var(--accent-gold);
+  border: 2px solid #f59e0b;
   border-radius: var(--radius-md, 12px);
   padding: 24px;
   max-width: 420px;
@@ -1338,7 +1338,7 @@ button:disabled {
 .dice-confirm-title {
   margin: 0 0 8px;
   font-size: 1.2rem;
-  color: var(--accent-gold);
+  color: #f59e0b;
 }
 
 .dice-confirm-action {
@@ -1378,7 +1378,7 @@ button:disabled {
 }
 
 .dice-die-value {
-  color: var(--accent-gold);
+  color: #f59e0b;
 }
 
 .mod-negative {
@@ -1397,7 +1397,7 @@ button:disabled {
   line-height: 1.5;
   padding: 8px 12px;
   background: rgba(245, 158, 11, 0.06);
-  border-left: 3px solid var(--accent-gold);
+  border-left: 3px solid #f59e0b;
   border-radius: 0 var(--radius-sm, 4px) var(--radius-sm, 4px) 0;
 }
 
@@ -1427,7 +1427,7 @@ button:disabled {
   padding: 10px 24px;
   border: none;
   border-radius: var(--radius-sm, 8px);
-  background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-dark));
+  background: linear-gradient(135deg, #f59e0b, #d97706);
   color: #000;
   font-weight: 700;
   cursor: pointer;
@@ -1437,7 +1437,7 @@ button:disabled {
 }
 
 .btn-dice-confirm:hover {
-  background: linear-gradient(135deg, var(--accent-gold-hover), var(--accent-gold));
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
   box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
   transform: translateY(-1px);
 }
@@ -1557,8 +1557,8 @@ button:disabled {
 
 .dice-value.aced {
   background: rgba(245, 158, 11, 0.18);
-  border-color: var(--accent-gold);
-  color: var(--accent-gold);
+  border-color: #f59e0b;
+  color: #f59e0b;
   box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
   transform: scale(1.08);
 }
@@ -1579,7 +1579,7 @@ button:disabled {
 }
 
 .dice-mod {
-  color: var(--accent-gold);
+  color: #f59e0b;
 }
 
 .dice-final {
@@ -1618,7 +1618,7 @@ button:disabled {
 
 .attack-result-status.shaken {
   background: rgba(245, 158, 11, 0.15);
-  color: var(--accent-gold);
+  color: #f59e0b;
 }
 
 .attack-result-status.wounded {
@@ -1703,13 +1703,13 @@ button:disabled {
   overflow: hidden;
 }
 
-/* ─── Game HUD (duas linhas: status + ações) ─── */
+/* ─── Game HUD (barra única: título + status + ações) ─── */
 .game-hud {
   display: flex;
   align-items: center;
-  gap: 8px 14px;
-  flex-wrap: wrap;
-  padding: 6px 0;
+  gap: 10px;
+  flex-wrap: nowrap;
+  padding: 4px 0;
   border-bottom: 1px solid var(--glass-border);
   position: sticky;
   top: 0;
@@ -1718,32 +1718,33 @@ button:disabled {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   min-width: 0;
+  overflow: hidden;
 }
 
-.hud-benny-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-  background: transparent;
-  border: 1px solid rgba(59, 130, 246, 0.35);
-  border-radius: var(--radius-full);
-  padding: 1px 7px;
-  color: #93c5fd;
-  font-size: var(--font-xs);
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+.game-hud-title {
+  font-size: var(--font-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  flex-shrink: 1;
+  min-width: 0;
+  background: var(--gradient-accent);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.hud-benny-btn:hover:not(:disabled) {
-  border-color: #3B82F6;
-  background: rgba(59, 130, 246, 0.12);
-  color: #bfdbfe;
+.hud-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-default);
+  flex-shrink: 0;
 }
 
-.hud-benny-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.hud-spacer {
+  flex: 1;
 }
 
 /* ─── Game Header (legado — mantido para compatibilidade) ─── */
@@ -3173,7 +3174,7 @@ button:disabled {
   padding: 6px 8px;
   background: var(--bg-field);
   border-radius: var(--radius-xs);
-  border-left: 2px solid var(--accent-gold-muted);
+  border-left: 2px solid #c9963a;
 }
 
 .nlog-options { display: flex; flex-direction: column; gap: 4px; }
@@ -3217,7 +3218,7 @@ button:disabled {
 
 .nlog-option-dice {
   font-size: 10px;
-  color: var(--accent-gold);
+  color: #f59e0b;
   font-weight: 600;
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.2);

@@ -362,7 +362,7 @@
   font-size: clamp(2.6rem, 5vw, 4.4rem);
   line-height: 0.95;
   letter-spacing: -0.04em;
-  background: linear-gradient(135deg, #fff 0%, #aaaaaa 100%);
+  background: linear-gradient(135deg, #fff 0%, var(--text-muted) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -1611,18 +1611,60 @@
 
 .page-game .game-hud {
   flex-shrink: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+/* Round E: linha única — título encolhe com reticências em vez de quebrar em 3 linhas */
+.page-game .game-hud-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .page-game .subheader-status {
   flex-wrap: nowrap;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.page-game .hud-expand-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.7rem;
+  line-height: 1;
+  transition: all 150ms ease;
+}
+
+.page-game .hud-expand-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .page-game .hud-actions-row {
   flex-basis: 100%;
   width: 100%;
+  margin-top: var(--space-1);
   padding-top: var(--space-1);
   border-top: 1px solid var(--border-subtle);
+}
+
+/* ações exibidas dentro do próprio header, quebrando para uma 2ª linha interna */
+.page-game .game-hud.hud-expanded {
+  flex-wrap: wrap;
+  overflow: visible;
 }
 
 .page-game .chat-log {
@@ -1688,14 +1730,14 @@
 .page-game .scroll-top-btn {
   padding: 6px 12px !important;
   font-size: 0.85rem;
-  background-color: var(--accent-gold-deep);
+  background-color: var(--accent);
   color: #000;
-  border-color: var(--accent-gold-deep);
+  border-color: var(--accent);
 }
 
 .page-game .scroll-top-btn:hover {
-  background-color: var(--accent-gold-deep-hover);
-  border-color: var(--accent-gold-deep-hover);
+  background-color: var(--accent);
+  border-color: var(--accent);
 }
 
 @media (max-width: 960px) {
@@ -1737,18 +1779,25 @@
   }
 
   .game-hud {
-    gap: 4px 8px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    gap: 6px 8px;
+  }
+
+  .game-hud .hud-divider {
+    display: none;
+  }
+
+  .game-hud .game-hud-title {
+    flex: 1 1 auto;
   }
 
   .game-hud .subheader-status {
+    flex-shrink: 0;
     gap: 4px 8px;
   }
 
   .game-hud .subheader-status .hud-label {
-    display: none;
-  }
-
-  .game-hud .hud-benny-btn .hud-label {
     display: none;
   }
 

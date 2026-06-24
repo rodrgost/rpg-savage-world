@@ -283,7 +283,39 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
       // Aplica dano respeitando Wild Card × Extra (Extras caem com 1 ferimento).
       const outcome = applyDamageToTarget(target, target.isWildCard, { shaken: dmgResult.shaken, wounds: cappedWounds })
       const finalWounds = outcome.woundsInflicted
-      const isIncapacitated = outcome.isIncapacitated
+      let isIncapacitated = outcome.isIncapacitated
+
+      // NPC Wild Card Soak: tenta absorver ferimentos antes de confirmar incapacitação.
+      if (target.isWildCard && finalWounds > 0 && target.bennies > 0) {
+        target.bennies -= 1
+        const npcVigorDie = (target.attributes.vigor ?? 4) as DieType
+        const npcSoakPenalty = -Math.min(target.wounds, 3)
+        const npcSoakResult = rollTrait(npcVigorDie, true, npcSoakPenalty)
+
+        let woundsSoakedNpc = 0
+        if (npcSoakResult.isSuccess) {
+          woundsSoakedNpc = 1 + npcSoakResult.raises
+          target.wounds = Math.max(0, target.wounds - woundsSoakedNpc)
+        }
+        isIncapacitated = target.wounds > target.maxWounds
+
+        emittedEvents.push({
+          type: 'npc_soak_roll',
+          payload: {
+            npcId: target.id,
+            npcName: target.name,
+            vigorDie: npcVigorDie,
+            modifier: npcSoakPenalty,
+            traitRoll: npcSoakResult.traitRoll,
+            wildRoll: npcSoakResult.wildRoll,
+            finalTotal: npcSoakResult.finalTotal,
+            isSuccess: npcSoakResult.isSuccess,
+            woundsSoaked: woundsSoakedNpc,
+            remainingWounds: target.wounds,
+            remainingBennies: target.bennies
+          }
+        })
+      }
 
       emittedEvents.push({
         type: 'attack_hit',
@@ -336,11 +368,6 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
         nextState.player.wounds = Math.max(0, nextState.player.wounds - woundsSoaked)
       }
 
-      // Soak can also remove Shaken
-      if (soakResult.isSuccess && nextState.player.isShaken && nextState.player.wounds === 0) {
-        nextState.player.isShaken = false
-      }
-
       emittedEvents.push({
         type: 'soak_roll',
         payload: {
@@ -353,7 +380,7 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
           woundsSoaked,
           remainingWounds: nextState.player.wounds,
           remainingBennies: nextState.player.bennies,
-          shakenRemoved: !nextState.player.isShaken
+          shakenRemoved: false
         }
       })
       break

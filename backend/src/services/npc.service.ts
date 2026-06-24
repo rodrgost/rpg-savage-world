@@ -4,7 +4,7 @@ import type { NPCMention } from '../domain/types/narrative.js'
 function normalizeNpcLookup(value: string | null | undefined): string {
   return (value ?? '')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^\p{L}\d]+/gu, ' ')
     .trim()
@@ -23,7 +23,7 @@ export class NpcService {
    */
   resolveNpcFromCatalog(
     catalog: NpcDefinition[],
-    mention: Pick<NPCMention, 'id' | 'name' | 'disposition'>,
+    mention: Pick<NPCMention, 'id' | 'name' | 'displayName' | 'disposition'>,
     location: string
   ): NPCCombatant | null {
     if (!catalog.length) return null
@@ -49,7 +49,8 @@ export class NpcService {
   ): NPCCombatant {
     return {
       id: def.id,
-      name: def.name,
+      name: def.displayName ?? def.name,
+      displayName: def.displayName ?? def.name,
       isWildCard: def.isWildCard,
       attributes: def.attributes ?? {},
       skills: def.skills ?? {},
@@ -76,12 +77,14 @@ export class NpcService {
    * Cria um stub genérico para NPCs não catalogados (comportamento legado).
    */
   buildNpcStub(
-    mention: Pick<NPCMention, 'id' | 'name' | 'disposition'>,
+    mention: Pick<NPCMention, 'id' | 'name' | 'displayName' | 'disposition'>,
     location: string
   ): NPCCombatant {
+    const display = mention.displayName ?? mention.name
     return {
       id: mention.id,
-      name: mention.name,
+      name: display,
+      displayName: display,
       isWildCard: false,
       attributes: {},
       skills: {},

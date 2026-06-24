@@ -845,9 +845,9 @@ button:disabled {
 
 /* ─── Narrator message (atmosférico) ─── */
 .msg.narrator {
-  border-left: 3px solid var(--accent-gold-muted);
+  border-left: 3px solid var(--accent);
   padding-left: var(--space-4);
-  background: linear-gradient(90deg, rgba(201, 150, 58, 0.05) 0%, transparent 60%);
+  background: linear-gradient(90deg, rgba(129, 140, 248, 0.05) 0%, transparent 60%);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
@@ -858,7 +858,7 @@ button:disabled {
   font-size: var(--font-xs);
   font-variant: small-caps;
   letter-spacing: 0.08em;
-  color: var(--accent-gold-muted);
+  color: var(--accent);
   opacity: 0.85;
   margin-bottom: var(--space-2);
 }
@@ -942,7 +942,7 @@ button:disabled {
 
 /* ─── Loading / Typing Indicator ─── */
 .msg.loading {
-  border-left: 3px solid rgba(201, 150, 58, 0.35);
+  border-left: 3px solid rgba(129, 140, 248, 0.35);
   padding-left: var(--space-4);
 }
 
@@ -957,7 +957,7 @@ button:disabled {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-gold-muted);
+  background: var(--accent);
   opacity: 0.4;
   animation: typingBlink 1.2s ease-in-out infinite;
 }
@@ -1119,7 +1119,7 @@ button:disabled {
 
 .status-change.removed {
   background: rgba(156, 163, 175, 0.15);
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 
 /* ─── Action Options ─── */
@@ -1219,7 +1219,7 @@ button:disabled {
 .msg.system-summary {
   background: none;
   border: none;
-  border-left: 4px solid #8b5cf6;
+  border-left: 4px solid var(--accent);
   border-radius: 0;
   padding: 10px 14px;
   margin: 8px 0;
@@ -1231,7 +1231,7 @@ button:disabled {
   gap: 8px;
   margin-bottom: 8px;
   font-size: var(--font-sm);
-  color: #a78bfa;
+  color: var(--accent-hover);
 }
 
 .summary-icon {
@@ -1240,7 +1240,7 @@ button:disabled {
 
 .summary-text {
   font-size: var(--font-xs);
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary, var(--text-secondary));
   line-height: 1.6;
   font-style: italic;
 }
@@ -1275,19 +1275,19 @@ button:disabled {
 
 /* ─── Dice Check Badge on Option Buttons ─── */
 .option-btn.has-dice-check {
-  border-color: rgba(245, 158, 11, 0.45);
+  border-color: rgba(129, 140, 248, 0.45);
   border-width: 1px;
-  background: linear-gradient(135deg, rgba(18, 14, 6, 0.98) 0%, rgba(245, 158, 11, 0.07) 100%);
+  background: linear-gradient(135deg, rgba(18, 14, 6, 0.98) 0%, rgba(129, 140, 248, 0.07) 100%);
 }
 
 .option-btn.has-dice-check::before {
-  background: var(--accent-gold);
+  background: var(--accent);
 }
 
 .option-btn.has-dice-check:hover:not(:disabled) {
-  border-color: var(--accent-gold-dark);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(22, 14, 4, 0.98) 100%);
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.18);
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(129, 140, 248, 0.14) 0%, rgba(22, 14, 4, 0.98) 100%);
+  box-shadow: 0 4px 16px rgba(129, 140, 248, 0.18);
 }
 
 .dice-check-badge {
@@ -1297,7 +1297,7 @@ button:disabled {
 
 .dice-check-info {
   font-size: var(--font-xs);
-  color: var(--accent-gold);
+  color: var(--accent);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -1315,13 +1315,13 @@ button:disabled {
 }
 
 .dice-confirm-modal {
-  background: var(--bg-card, #1e1e2e);
-  border: 2px solid var(--accent-gold);
+  background: var(--bg-card, var(--bg-card));
+  border: 2px solid var(--accent);
   border-radius: var(--radius-md, 12px);
   padding: 24px;
   max-width: 420px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(245, 158, 11, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(129, 140, 248, 0.15);
   animation: slideUp 200ms ease;
 }
 
@@ -1338,13 +1338,13 @@ button:disabled {
 .dice-confirm-title {
   margin: 0 0 8px;
   font-size: 1.2rem;
-  color: var(--accent-gold);
+  color: var(--accent);
 }
 
 .dice-confirm-action {
   margin: 0 0 16px;
   font-size: var(--font-sm);
-  color: var(--text-primary, #e5e5e5);
+  color: var(--text-primary, var(--text-primary));
   line-height: 1.5;
 }
 
@@ -1366,7 +1366,7 @@ button:disabled {
 
 .dice-detail-label {
   font-size: var(--font-xs);
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary, var(--text-secondary));
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1374,11 +1374,11 @@ button:disabled {
 .dice-detail-value {
   font-size: var(--font-sm);
   font-weight: 600;
-  color: var(--text-primary, #e5e5e5);
+  color: var(--text-primary, var(--text-primary));
 }
 
 .dice-die-value {
-  color: var(--accent-gold);
+  color: var(--accent);
 }
 
 .mod-negative {
@@ -1392,12 +1392,12 @@ button:disabled {
 .dice-confirm-reason {
   margin: 0 0 16px;
   font-size: var(--font-xs);
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary, var(--text-secondary));
   font-style: italic;
   line-height: 1.5;
   padding: 8px 12px;
-  background: rgba(245, 158, 11, 0.06);
-  border-left: 3px solid var(--accent-gold);
+  background: rgba(129, 140, 248, 0.06);
+  border-left: 3px solid var(--accent);
   border-radius: 0 var(--radius-sm, 4px) var(--radius-sm, 4px) 0;
 }
 
@@ -1409,10 +1409,10 @@ button:disabled {
 
 .btn-dice-cancel {
   padding: 10px 18px;
-  border: 1px solid var(--border-default, #374151);
+  border: 1px solid var(--border-default, var(--border-default));
   border-radius: var(--radius-sm, 8px);
   background: transparent;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary, var(--text-secondary));
   cursor: pointer;
   font-size: var(--font-sm);
   transition: all 150ms ease;
@@ -1420,25 +1420,25 @@ button:disabled {
 
 .btn-dice-cancel:hover {
   background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary, #e5e5e5);
+  color: var(--text-primary, var(--text-primary));
 }
 
 .btn-dice-confirm {
   padding: 10px 24px;
   border: none;
   border-radius: var(--radius-sm, 8px);
-  background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-dark));
+  background: linear-gradient(135deg, var(--accent), var(--accent));
   color: #000;
   font-weight: 700;
   cursor: pointer;
   font-size: var(--font-sm);
   transition: all 150ms ease;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+  box-shadow: 0 2px 8px rgba(129, 140, 248, 0.3);
 }
 
 .btn-dice-confirm:hover {
-  background: linear-gradient(135deg, var(--accent-gold-hover), var(--accent-gold));
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+  background: linear-gradient(135deg, var(--accent-hover), var(--accent));
+  box-shadow: 0 4px 16px rgba(129, 140, 248, 0.4);
   transform: translateY(-1px);
 }
 
@@ -1458,7 +1458,7 @@ button:disabled {
   border-radius: var(--radius-sm);
   padding: 12px 16px;
   margin: 2px 0;
-  border-left: 4px solid #6b7280;
+  border-left: 4px solid var(--text-muted);
   background: rgba(255, 255, 255, 0.025);
   animation: slideUp 220ms ease;
   transition: box-shadow 200ms ease;
@@ -1490,7 +1490,7 @@ button:disabled {
 .dice-result-title {
   font-size: var(--font-sm);
   font-weight: 600;
-  color: var(--text-primary, #e5e5e5);
+  color: var(--text-primary, var(--text-primary));
   flex: 1;
 }
 
@@ -1528,7 +1528,7 @@ button:disabled {
 
 .dice-roll-label {
   font-size: 11px;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary, var(--text-secondary));
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1556,16 +1556,16 @@ button:disabled {
 }
 
 .dice-value.aced {
-  background: rgba(245, 158, 11, 0.18);
-  border-color: var(--accent-gold);
-  color: var(--accent-gold);
-  box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
+  background: rgba(129, 140, 248, 0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 14px rgba(129, 140, 248, 0.35);
   transform: scale(1.08);
 }
 
 .dice-roll-total {
   font-size: var(--font-xs);
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary, var(--text-secondary));
   margin-left: 2px;
 }
 
@@ -1573,17 +1573,17 @@ button:disabled {
   display: flex;
   gap: 12px;
   font-size: var(--font-xs);
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary, var(--text-secondary));
   padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .dice-mod {
-  color: var(--accent-gold);
+  color: var(--accent);
 }
 
 .dice-final {
-  color: var(--text-primary, #e5e5e5);
+  color: var(--text-primary, var(--text-primary));
 }
 
 .dice-final strong {
@@ -1591,13 +1591,13 @@ button:disabled {
 }
 
 .dice-tn {
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary, var(--text-secondary));
 }
 
 .dice-result-desc {
   margin: 6px 0 0;
   font-size: var(--font-xs);
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary, var(--text-secondary));
   font-style: italic;
 }
 
@@ -1617,8 +1617,8 @@ button:disabled {
 }
 
 .attack-result-status.shaken {
-  background: rgba(245, 158, 11, 0.15);
-  color: var(--accent-gold);
+  background: rgba(129, 140, 248, 0.15);
+  color: var(--accent);
 }
 
 .attack-result-status.wounded {
@@ -1703,13 +1703,13 @@ button:disabled {
   overflow: hidden;
 }
 
-/* ─── Game HUD (duas linhas: status + ações) ─── */
+/* ─── Game HUD (barra única: título + status + ações) ─── */
 .game-hud {
   display: flex;
   align-items: center;
-  gap: 8px 14px;
-  flex-wrap: wrap;
-  padding: 6px 0;
+  gap: 10px;
+  flex-wrap: nowrap;
+  padding: 4px 0;
   border-bottom: 1px solid var(--glass-border);
   position: sticky;
   top: 0;
@@ -1718,32 +1718,33 @@ button:disabled {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   min-width: 0;
+  overflow: hidden;
 }
 
-.hud-benny-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-  background: transparent;
-  border: 1px solid rgba(59, 130, 246, 0.35);
-  border-radius: var(--radius-full);
-  padding: 1px 7px;
-  color: #93c5fd;
-  font-size: var(--font-xs);
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+.game-hud-title {
+  font-size: var(--font-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  flex-shrink: 1;
+  min-width: 0;
+  background: var(--gradient-accent);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.hud-benny-btn:hover:not(:disabled) {
-  border-color: #3B82F6;
-  background: rgba(59, 130, 246, 0.12);
-  color: #bfdbfe;
+.hud-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-default);
+  flex-shrink: 0;
 }
 
-.hud-benny-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.hud-spacer {
+  flex: 1;
 }
 
 /* ─── Game Header (legado — mantido para compatibilidade) ─── */
@@ -3173,7 +3174,7 @@ button:disabled {
   padding: 6px 8px;
   background: var(--bg-field);
   border-radius: var(--radius-xs);
-  border-left: 2px solid var(--accent-gold-muted);
+  border-left: 2px solid var(--accent);
 }
 
 .nlog-options { display: flex; flex-direction: column; gap: 4px; }
@@ -3217,10 +3218,10 @@ button:disabled {
 
 .nlog-option-dice {
   font-size: 10px;
-  color: var(--accent-gold);
+  color: var(--accent);
   font-weight: 600;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: rgba(129, 140, 248, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.2);
   padding: 0 5px;
   border-radius: var(--radius-full);
 }

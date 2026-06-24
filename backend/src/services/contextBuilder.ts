@@ -133,6 +133,7 @@ export type LlmContext = {
     npcsPresent: Array<{
       id: string
       name: string
+      displayName?: string
       isWildCard: boolean
       disposition?: 'hostile' | 'neutral' | 'friendly'
       wounds: number
@@ -189,6 +190,7 @@ export function buildLlmContext(params: {
         .map((n) => ({
           id: n.id,
           name: n.name,
+          displayName: n.displayName ?? n.name,
           isWildCard: n.isWildCard,
           disposition: n.disposition,
           wounds: n.wounds,

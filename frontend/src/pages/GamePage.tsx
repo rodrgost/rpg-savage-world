@@ -510,7 +510,7 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
         {displayedSegments.map((segment, segmentIndex) => (
           segment.type === 'npc' ? (
             <div key={`${message.messageId}-segment-${segmentIndex}`} className={`narrative-segment npc-dialogue npc-dialogue--${segment.disposition}`}>
-              <strong className="npc-dialogue-label">{segment.npcName}</strong>
+              <strong className="npc-dialogue-label">{segment.npcDisplayName ?? segment.npcName}</strong>
               <div className="narrative-text npc-dialogue-text">
                 {splitNarrativeParagraphs(segment.text).map((paragraph, i) => (
                   <p key={i}>{paragraph}</p>
@@ -558,7 +558,7 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
             return (
               <div key={npcMention.id} className={`npc-compact ${npcMention.disposition} ${statusClass}`}>
                 <div className="npc-compact-header">
-                  <span className="npc-compact-name">{npcMention.name}</span>
+                  <span className="npc-compact-name">{npcMention.displayName ?? npcMention.name}</span>
                   <span className="npc-compact-status">{getStatusLabel(status)}</span>
                 </div>
                 <div className="npc-compact-stats">
@@ -842,6 +842,7 @@ type AttackHitPayload = {
   targetParry: number
   attackRaises: number
   damageTotal: number
+  raiseBonusDamage?: number
   targetToughness: number
   woundsInflicted: number
   targetWounds: number
@@ -970,6 +971,14 @@ function AttackResultCard({ event }: { event: SessionEvent }) {
                 </div>
               )
             })}
+            {(p.raiseBonusDamage ?? 0) > 0 && (
+              <div className="dice-roll-group">
+                <span className="dice-roll-label">Ampliação d6</span>
+                <div className="dice-roll-values">
+                  <span className="dice-value">{p.raiseBonusDamage}</span>
+                </div>
+              </div>
+            )}
           </div>
           <div className="dice-result-summary">
             <span className="dice-final">Dano: <strong>{p.damageTotal}</strong></span>
@@ -1067,6 +1076,14 @@ function NpcAttackResultCard({ event }: { event: SessionEvent }) {
                 </div>
               )
             })}
+            {(p.raiseBonusDamage ?? 0) > 0 && (
+              <div className="dice-roll-group">
+                <span className="dice-roll-label">Ampliação d6</span>
+                <div className="dice-roll-values">
+                  <span className="dice-value">{p.raiseBonusDamage}</span>
+                </div>
+              </div>
+            )}
           </div>
           <div className="dice-result-summary">
             <span className="dice-final">Dano: <strong>{p.damageTotal}</strong></span>
@@ -1158,6 +1175,79 @@ function SoakRollCard({ event }: { event: SessionEvent }) {
   )
 }
 
+type NpcSoakRollPayload = {
+  npcId: string
+  npcName: string
+  vigorDie: number
+  modifier: number
+  traitRoll: DiceRollDetail
+  wildRoll: DiceRollDetail | null
+  finalTotal: number
+  isSuccess: boolean
+  woundsSoaked: number
+  remainingWounds: number
+  remainingBennies: number
+}
+
+function NpcSoakRollCard({ event }: { event: SessionEvent }) {
+  const p = event.payload as unknown as NpcSoakRollPayload
+  const traitRoll = p.traitRoll
+  const wildRoll = p.wildRoll
+
+  return (
+    <div className={`dice-result-card ${p.isSuccess ? 'dice-success' : 'dice-failure'}`}>
+      <div className="dice-result-header">
+        <span className="dice-result-icon">🛡️</span>
+        <span className="dice-result-title">{p.npcName} — Absorção</span>
+        <span className={`dice-result-badge ${p.isSuccess ? 'success' : 'failure'}`}>
+          {p.isSuccess
+            ? `Absorveu ${p.woundsSoaked} ferimento${p.woundsSoaked !== 1 ? 's' : ''}`
+            : 'Falhou'}
+        </span>
+      </div>
+
+      <div className="dice-result-rolls">
+        {traitRoll && (
+          <div className="dice-roll-group">
+            <span className="dice-roll-label">Vigor d{p.vigorDie}</span>
+            <div className="dice-roll-values">
+              {traitRoll.rolls?.map((r: number, i: number) => (
+                <span key={i} className={`dice-value ${traitRoll.aced ? 'aced' : ''}`}>
+                  {r}{traitRoll.aced && i < traitRoll.rolls.length - 1 ? '🔥' : ''}
+                </span>
+              )) ?? <span className="dice-value">{traitRoll.total}</span>}
+              <span className="dice-roll-total">= {traitRoll.total}</span>
+            </div>
+          </div>
+        )}
+        {wildRoll && (
+          <div className="dice-roll-group">
+            <span className="dice-roll-label">Wild d6</span>
+            <div className="dice-roll-values">
+              {wildRoll.rolls?.map((r: number, i: number) => (
+                <span key={i} className={`dice-value ${wildRoll.aced ? 'aced' : ''}`}>
+                  {r}{wildRoll.aced && i < wildRoll.rolls.length - 1 ? '🔥' : ''}
+                </span>
+              )) ?? <span className="dice-value">{wildRoll.total}</span>}
+              <span className="dice-roll-total">= {wildRoll.total}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="dice-result-summary">
+        <span className="dice-final">Total: <strong>{p.finalTotal}</strong></span>
+        <span className="dice-tn">TN: 4</span>
+        <span className="dice-mod">Bennies: {p.remainingBennies}</span>
+        {p.isSuccess
+          ? <span className="attack-result-status shaken">Ferimentos restantes: {p.remainingWounds}</span>
+          : <span className="attack-result-status wounded">Ferimentos restantes: {p.remainingWounds}</span>
+        }
+      </div>
+    </div>
+  )
+}
+
 type RecoverShakenPayload = {
   spiritDie: number
   traitRoll: DiceRollDetail
@@ -1230,6 +1320,9 @@ function DiceResultCard({ event }: { event: SessionEvent }) {
   }
   if (event.type === 'soak_roll') {
     return <SoakRollCard event={event} />
+  }
+  if (event.type === 'npc_soak_roll') {
+    return <NpcSoakRollCard event={event} />
   }
   if (event.type === 'recover_shaken' || event.type === 'recover_shaken_failed') {
     return <RecoverShakenCard event={event} />
@@ -1706,7 +1799,6 @@ export function GamePage() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showNarrationLog, setShowNarrationLog] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [hudExpanded, setHudExpanded] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null)
   const [worldInfo, setWorldInfo] = useState<{ campaignName: string; worldName: string } | null>(null)
@@ -2260,8 +2352,8 @@ export function GamePage() {
       {/* ── YouTube Ambient ── */}
       {youtubeUrl && <YouTubeAmbient youtubeUrl={youtubeUrl} />}
 
-      {/* ── HUD: título + status + ações numa única barra ── */}
-      <div className={`game-hud ${hudExpanded ? 'hud-expanded' : ''}`}>
+      {/* ── HUD: status + ações numa única barra ── */}
+      <div className="game-hud">
         <button
           type="button"
           className="game-back-btn"
@@ -2270,83 +2362,67 @@ export function GamePage() {
         >
           ← Voltar
         </button>
-        <span className="hud-divider" />
-        <span className="game-hud-title">
-          {worldInfo ? (worldInfo.worldName ? `${worldInfo.campaignName} — ${worldInfo.worldName}` : worldInfo.campaignName) : 'Carregando...'}
-        </span>
 
         {state && (
           <>
-            <span className="hud-divider" />
             <div className="subheader-status">
               <span title="Ferimentos"><span className="hud-icon">❤️</span><span className="hud-label">Vida</span> {state.player.wounds}/{state.player.maxWounds}</span>
-              <span title="Bennies disponíveis"><span className="hud-icon">🎲</span><span className="hud-label">Bennies</span> {state.player.bennies}</span>
+              {bennies > 0 ? (
+                <button
+                  type="button"
+                  className="hud-benny-btn"
+                  onClick={() => handleSpendBenny('reroll')}
+                  disabled={loading}
+                  title="Gastar Benny para re-rolar"
+                >
+                  <span className="hud-icon">🎲</span><span className="hud-label">Bennies</span> {state.player.bennies}
+                </button>
+              ) : (
+                <span title="Bennies disponíveis"><span className="hud-icon">🎲</span><span className="hud-label">Bennies</span> {state.player.bennies}</span>
+              )}
               <span title="Aparar (defesa corpo a corpo)"><span className="hud-icon">🛡️</span><span className="hud-label">Aparar</span> {state.player.parry}</span>
               <span title="Resistência (absorção de dano)"><span className="hud-icon">💪</span><span className="hud-label">Resist.</span> {state.player.toughness}</span>
               {state.player.isShaken && <span className="shaken-badge">ABALADO</span>}
               <span className="location-tag" title="Localização atual"><span className="hud-icon">📍</span>{state.worldState.activeLocation}</span>
             </div>
-            <span className="hud-spacer" />
-            <button
-              type="button"
-              className="hud-expand-toggle"
-              onClick={() => setHudExpanded(!hudExpanded)}
-              title={hudExpanded ? 'Recolher ações' : 'Mostrar ações'}
-              aria-expanded={hudExpanded}
-            >
-              {hudExpanded ? '▾' : '▸'}
-            </button>
 
-            {hudExpanded && (
-              <div className="subheader-actions hud-actions-row">
-                <button
-                  type="button"
-                  className="subheader-btn pill-ficha"
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  title="Ficha do Personagem"
-                >
-                  📋 {state.player.name ?? 'Ficha'}
-                </button>
-                <button
-                  type="button"
-                  className="subheader-btn pill-actions"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  title="Ações avançadas"
-                >
-                  ⚔️ Ações
-                </button>
-                <button
-                  type="button"
-                  className="subheader-btn pill-log"
-                  onClick={() => setShowNarrationLog(!showNarrationLog)}
-                  title="Log de Narração"
-                >
-                  🗒 Log
-                </button>
-                <select
-                  className="subheader-btn pill-speed"
-                  value={typewriterSpeed}
-                  onChange={(e) => setTypewriterSpeed(Number(e.target.value))}
-                  title="Velocidade do narrador"
-                >
-                  <option value={0}>⚡ Instantâneo</option>
-                  <option value={1}>🐢 Lento</option>
-                  <option value={3}>💬 Normal</option>
-                  <option value={6}>🚀 Rápido</option>
-                </select>
-                {bennies > 0 && (
-                  <button
-                    type="button"
-                    className="subheader-btn accent pill-benny"
-                    onClick={() => handleSpendBenny('reroll')}
-                    disabled={loading}
-                    title="Gastar Benny para re-rolar"
-                  >
-                    🎲 Benny
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="subheader-actions hud-actions-row">
+              <button
+                type="button"
+                className="subheader-btn pill-ficha"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                title="Ficha do Personagem"
+              >
+                📋 {state.player.name ?? 'Ficha'}
+              </button>
+              <button
+                type="button"
+                className="subheader-btn pill-actions"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                title="Ações avançadas"
+              >
+                ⚔️ Ações
+              </button>
+              <button
+                type="button"
+                className="subheader-btn pill-log"
+                onClick={() => setShowNarrationLog(!showNarrationLog)}
+                title="Log de Narração"
+              >
+                🗒 Log
+              </button>
+              <select
+                className="subheader-btn pill-speed"
+                value={typewriterSpeed}
+                onChange={(e) => setTypewriterSpeed(Number(e.target.value))}
+                title="Velocidade do narrador"
+              >
+                <option value={0}>⚡ Instantâneo</option>
+                <option value={1}>🐢 Lento</option>
+                <option value={3}>💬 Normal</option>
+                <option value={6}>🚀 Rápido</option>
+              </select>
+            </div>
           </>
         )}
       </div>

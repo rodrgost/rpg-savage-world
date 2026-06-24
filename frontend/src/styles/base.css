@@ -38,6 +38,17 @@
   --accent-soft: rgba(129, 140, 248, 0.12);
   --accent-glow: rgba(129, 140, 248, 0.28);
 
+  /* Acento dourado / ambar — padrao da atmosfera RPG (narrador & dados) */
+  --accent-gold: #f59e0b;
+  --accent-gold-hover: #fbbf24;
+  --accent-gold-dark: #d97706;
+  --accent-gold-deep: #c9a000;
+  --accent-gold-deep-hover: #e6b800;
+  --accent-gold-muted: #c9963a;
+  --accent-gold-soft: rgba(245, 158, 11, 0.12);
+  --accent-gold-glow: rgba(245, 158, 11, 0.30);
+  --gradient-gold: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+
   --action-primary: #818CF8;
   --action-primary-hover: #9DA6FA;
   --action-danger: #EF4444;

@@ -214,11 +214,11 @@ export class SummaryService {
    * Ponto de entrada único para gerenciamento de resumo após cada turno.
    *
    * Prioridade:
-   * 1. Compactação de storage (se excedente >= env.compactBatchMin) — chama LLM para comprimir msgs antigas e as deleta
-   * 2. Resumo incremental (se shouldSummarize) — atualiza o resumo canônico sem deletar msgs
+   * 1. Compactação de storage (se excedente >= env.compactBatchMin) — fallback para backlogs
+   *    grandes: lê as msgs antigas, resume via summarizeHistory e as deleta.
+   * 2. Resumo incremental (se shouldSummarize) — atualiza o resumo canônico e, em seguida,
+   *    poda do chat as mensagens já cobertas que excedem a janela recente (pruneSummarizedMessages).
    * 3. Noop
-   *
-   * As duas operações nunca ocorrem no mesmo turno para evitar sobrescrever o resumo gerado.
    */
   async manageSummaryAfterTurn(params: { state: GameState; stateBeforeTurn?: GameState; hints?: SummaryDecisionHints }): Promise<void> {
     const { state, stateBeforeTurn, hints } = params
@@ -244,9 +244,38 @@ export class SummaryService {
     if (this.shouldSummarize({ turn: state.meta.turn, lastTurnIncluded, hints })) {
       log('manageSummary', `Updating incremental summary at turn=${state.meta.turn} (lastTurnIncluded=${lastTurnIncluded})`)
       await this.updateIncrementalSummary({ state, stateForSummary: stateBeforeTurn, hints, existing })
+
+      // Acopla a deleção ao resumo: o que já foi incorporado ao resumo canônico e está
+      // fora da janela recente não deve permanecer no chat (evita a duplicação resumo +
+      // mensagem bruta que antes só era limpa quando o excedente atingia compactBatchMin).
+      await this.pruneSummarizedMessages(sessionId)
     }
   }
 
+  /**
+   * Remove do chat as mensagens já incorporadas ao resumo canônico que excedem a janela
+   * recente. Só apaga o que está comprovadamente coberto pelo resumo (turn <= lastTurnIncluded),
+   * preservando sempre as RECENT_MESSAGES_TO_KEEP mensagens mais recentes verbatim.
+   */
+  private async pruneSummarizedMessages(sessionId: string): Promise<void> {
+    // Poda do chat o que já está no resumo canônico (coberto) e fora da janela recente.
+    const totalMessages = await this.chatMessages.countBySession(sessionId)
+    const overflow = totalMessages - SummaryService.RECENT_MESSAGES_TO_KEEP
+    if (overflow <= 0) return
+
+    // Só apaga o que está comprovadamente coberto pelo resumo canônico.
+    const existing = await this.summaries.getSummary(sessionId)
+    const coveredTurn = existing?.lastTurnIncluded ?? 0
+    if (coveredTurn <= 0) return
+
+    // Candidatas: as mensagens mais antigas que excedem a janela recente.
+    const oldestMessages = await this.chatMessages.getOldest(sessionId, overflow)
+    const deletable = oldestMessages.filter((message) => message.turn <= coveredTurn)
+    if (deletable.length === 0) return
+
+    await this.deleteCompactedMessages(sessionId, deletable)
+    log('manageSummary', `Pruned ${deletable.length} summarized messages (coveredTurn=${coveredTurn}, kept last ${SummaryService.RECENT_MESSAGES_TO_KEEP})`)
+  }
   async rebuildSummary(params: { state: GameState }): Promise<string> {
     const { state } = params
     const sessionId = state.meta.sessionId
