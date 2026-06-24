@@ -3081,7 +3081,10 @@ export class GeminiAdapter implements Narrator {
 
     // ── Montar a última mensagem user com contexto dinâmico do turno ──
     const inventoryList = req.context.inventory.length
-      ? req.context.inventory.map(i => `- ${i.name} (x${i.quantity}): ${i.description}`).join('\n')
+      ? req.context.inventory.map(i => {
+          const desc = (i.description ?? '').trim()
+          return desc ? `- ${i.name} (x${i.quantity}): ${desc}` : `- ${i.name} (x${i.quantity})`
+        }).join('\n')
       : 'No items'
 
     const statusList = req.context.activeStatusEffects.length
