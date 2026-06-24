@@ -2035,8 +2035,7 @@ export class GeminiAdapter implements Narrator {
         'Sentences must be SHORT and DIRECT — no comma-chained clauses.',
         'Any response with more than 3 sentences violates this instruction.',
         'STYLE: plain and factual. State what happens — no atmospheric build-up or scene-setting preamble.',
-        'FORBIDDEN anywhere in the narrative: descriptions of silence, sound, smell, light, air, or atmosphere ("O silêncio...", "Um zumbido...", "O ar...", "O cheiro de ozônio...", "Um odor de relâmpago...", "O ambiente..."). Start with the concrete fact or the consequence of the action.',
-        'NEVER mention: ozone smell, burnt smell, electricity smell, petrichor, atmospheric conditions, ambient sounds, or any sensory environmental element. These are BANNED even mid-sentence.',
+        'FORBIDDEN openings: descriptions of silence, sound, smell, light, or air ("O silêncio...", "Um zumbido...", "O ar..."). Start with the concrete fact or the consequence of the action.',
         'No poetic metaphors and no personification of objects or environment. Name things directly.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
       )
@@ -2102,8 +2101,7 @@ export class GeminiAdapter implements Narrator {
           '=== NARRATIVE VOICE ===',
           'Use the universe sections above only to calibrate vocabulary (names, terms, references) so the narrative fits this world.',
           '- Avoid generic RPG clichés ("you advance courageously", "the enemy is defeated").',
-          '- Stay direct and concrete: state facts and consequences, not atmosphere. Do NOT add metaphors, sensory build-up, or mood descriptions — the CONCISE style above takes priority over tone.',
-          '- ZERO environmental flavor: no ozone, no smells, no ambient sounds, no air descriptions. These are banned even as passing references mid-sentence.'
+          '- Stay direct and concrete: state facts and consequences, not atmosphere. Do NOT add metaphors, sensory build-up, or mood descriptions — the CONCISE style above takes priority over tone.'
         )
       } else {
         lines.push(
