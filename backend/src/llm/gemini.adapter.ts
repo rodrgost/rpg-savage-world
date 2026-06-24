@@ -2099,9 +2099,11 @@ export class GeminiAdapter implements Narrator {
         lines.push(
           '',
           '=== NARRATIVE VOICE ===',
-          'Use the universe sections above only to calibrate vocabulary (names, terms, references) so the narrative fits this world.',
+          'The universe text above may contain atmospheric, literary, or sensory writing — IGNORE its style and tone completely.',
+          'Extract from it ONLY proper nouns: place names, faction names, technology names, cultural terms, character names.',
+          'Do NOT mirror any sensory or environmental language from the lore (smells, air quality, sounds, textures, light, electricity, etc.).',
           '- Avoid generic RPG clichés ("you advance courageously", "the enemy is defeated").',
-          '- Stay direct and concrete: state facts and consequences, not atmosphere. Do NOT add metaphors, sensory build-up, or mood descriptions — the CONCISE style above takes priority over tone.'
+          '- Stay direct and concrete: state facts and consequences only.'
         )
       } else {
         lines.push(
