@@ -154,8 +154,20 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
         required: ['npcId', 'skillDie', 'damageFormula', 'ap'],
         propertyOrdering: ['npcId', 'skillDie', 'damageFormula', 'ap']
       }
+    },
+    outcomeOverride: {
+      type: 'OBJECT',
+      nullable: true,
+      description: 'Preencha SOMENTE quando o desfecho narrado divergir do resultado mecânico do dado. Caso contrário, omita ou use null.',
+      properties: {
+        mechanicalResult: { type: 'STRING', enum: ['success', 'failure'], description: 'Resultado mecânico produzido pelo dado.' },
+        narratedOutcome: { type: 'STRING', enum: ['success', 'failure'], description: 'Desfecho efetivamente narrado (deve diferir de mechanicalResult).' },
+        justification: { type: 'STRING', description: 'Causa explícita na ficção que justifica a inversão (interferência, imprevisto, sorte etc.).' }
+      },
+      required: ['mechanicalResult', 'narratedOutcome', 'justification'],
+      propertyOrdering: ['mechanicalResult', 'narratedOutcome', 'justification']
     }
   },
   required: ['narrative', 'options'],
-  propertyOrdering: ['narrative', 'segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks']
+  propertyOrdering: ['narrative', 'segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride']
 }

@@ -184,6 +184,17 @@ export type NpcAttackEntry = {
   isRanged?: boolean
 }
 
+// ─── Inversão justificada de desfecho ───
+
+export type OutcomeOverride = {
+  /** Resultado mecânico produzido pelo rule-engine */
+  mechanicalResult: 'success' | 'failure'
+  /** Desfecho efetivamente narrado neste turno (difere de mechanicalResult quando há inversão) */
+  narratedOutcome: 'success' | 'failure'
+  /** Causa explícita na ficção que justifica a divergência (ex: interferência de terceiros, imprevisto ambiental) */
+  justification: string
+}
+
 export type NarratorTurnResponse = {
   /** Texto narrativo descrevendo o passo da história */
   narrative: string
@@ -199,6 +210,8 @@ export type NarratorTurnResponse = {
   statusChanges: StatusChange[]
   /** Ataques de NPCs hostis contra o jogador neste turno */
   npcAttacks?: NpcAttackEntry[]
+  /** Preenchido apenas quando o desfecho narrado diverge do resultado mecânico, com a justificativa na ficção */
+  outcomeOverride?: OutcomeOverride | null
   /** true quando o conteúdo é um fallback estático por falha do LLM */
   isFallback?: boolean
 }

@@ -16,6 +16,7 @@ import type {
   NarrateTurnRequest,
   NarratorTurnResponse,
   NpcAttackEntry,
+  OutcomeOverride,
   NarrativeSegment,
   ActionOption,
   NPCMention,
@@ -1212,6 +1213,7 @@ export class GeminiAdapter implements Narrator {
       'You maintain the canonical continuity memory of an RPG session. This summary is NOT shown to players: it is internal context consumed by the narrator LLM to keep continuity.',
       'Objective: record ONLY the facts the narrator needs to continue coherently. It is a dense memory of state, not a retelling of the story.',
       'STYLE: telegraphic and factual, not literary. Do NOT narrate the action, do NOT recreate scenes, dialogue, or atmosphere. State facts, not prose. Each sentence carries one piece of useful information.',
+      'ORDER (mandatory): present the facts in CHRONOLOGICAL order — from the oldest event that still matters to the most recent. Follow the session timeline: earlier developments first, the current situation and immediate threats last. Do NOT scramble facts by category; the summary must read as a coherent timeline.',
       'CONFLICT RESOLUTION (when facts contradict — most authoritative wins):',
       '  1. CURRENT STRUCTURED STATE — factual anchor; override any contradictions in the previous summary or messages.',
       '  2. Most recent messages — take priority over older messages in a narrative conflict.',
@@ -1300,6 +1302,7 @@ export class GeminiAdapter implements Narrator {
       'You maintain the canonical continuity memory of an RPG session. This is internal context for the narrator LLM, NOT text shown to players.',
       'Read the messages below and record ONLY the facts needed to continue the session coherently. It is a dense memory of state, not a retelling.',
       'STYLE: telegraphic and factual, not literary. Do NOT narrate the action or recreate scenes/dialogue/atmosphere. State facts, not prose.',
+      'ORDER (mandatory): present the facts in CHRONOLOGICAL order — from the oldest event that still matters to the most recent. The messages are given oldest-to-most-recent; preserve that timeline. Earlier developments first, the current situation and immediate threats last. Do NOT scramble facts by category; the summary must read as a coherent timeline.',
       'Record: current situation and immediate threats; open objectives and unresolved problems; open narrative threads (mysteries, promises, secrets, unanswered questions); relevant NPCs (name + 1 trait/motivation + current disposition); referenceable worldbuilding (locations, lore, factions, significant objects); proper names and counts that affect the next decision.',
       'Discard: anything resolved or superseded by later events; step-by-step action and old blows/falls/deaths unless they remain an active consequence; inventory (tracked separately).',
       'Format: short, direct, declarative sentences ending each with a period; roughly 6 to 12 sentences. No markdown, titles, bullets, preamble, or meta commentary. Brazilian Portuguese only.'
@@ -2017,7 +2020,7 @@ export class GeminiAdapter implements Narrator {
       '- "segments": type="narrator" for prose/description/consequences; type="npc" for NPC direct speech only. When npc: set "npcDisplayName" to the SAME friendly name used in the "npcs" array (or PRESENT NPCS), and copy "npcId" (the hash) when the NPC is already present. No NPC speech → single type="narrator" segment.',
       '- The "options" array is MANDATORY and can NEVER be empty. Always return EXACTLY 4 options.',
       '- If you return empty options or fewer than 4 items, the response will be considered invalid.',
-      '- If a hostile NPC is present OR if your narrative this turn introduced hostile NPCs (which you MUST have registered in "npcs" with newlyIntroduced: true), include at least 1 combat option (actionType "attack"). NEVER use as targetId an NPC listed in DEFEATED NPCS — those enemies are out of combat.',
+      '- Choose the 4 options that make the most sense for the current scene — there is NO required mix of types and NO option type is mandatory. Offer combat, social, exploration, movement, investigation, or other actions only when they genuinely fit the fiction of this moment; let the situation decide. If you do offer an attack (actionType "attack"), NEVER use as targetId an NPC listed in DEFEATED NPCS — those enemies are out of combat.',
       '- The "feasible" field must be false if the player lacks the required items/conditions.',
       '-  REQUIRED ITEMS & FEASIBILITY: if an option uses a specific item, that item MUST be listed in "requiredItems" AND must exist in the current ── INVENTORY ── list (match by name). If the item is NOT in the current inventory, set feasible=false with a feasibilityReason naming the missing item. NEVER offer a feasible option that depends on an item the player no longer has (e.g. an artifact dropped, consumed, or confiscated in a previous turn). When unsure an item is still held, treat it as absent.',
       '- For actionType "trait_test", include "skill" or "attribute" in the actionPayload.',
@@ -2034,6 +2037,8 @@ export class GeminiAdapter implements Narrator {
       '  • changeType "gained": ONLY when the MECHANICAL RESULT contains explicit evidence ([item_gained]). Never invent gained items from narrative alone.',
       '  • changeType "lost" or "used": register when (a) the MECHANICAL RESULT has explicit evidence ([item_lost], [item_used], [ammunition_consumed]), OR (b) your narrative THIS TURN explicitly describes the item being dropped, destroyed, confiscated, consumed, or otherwise leaving the player\'s possession. Example: if the narrative says "forçando você a soltá-lo" about an item, register that item with changeType "lost".',
       '  ⚠️ FAILURE TO REGISTER A NARRATIVE ITEM LOSS IS A BUG: if your narrative says an item was lost but you omit the itemChanges entry, the item remains in inventory and future turns will contradict the story.',
+      '  • CONSUMÍVEL vs DURÁVEL — distinção OBRIGATÓRIA: apenas itens de categoria "consumable" (poções, rações, etc.) e "ammunition" são GASTOS ao serem usados e devem sair do inventário com changeType "used"/"lost". Itens DURÁVEIS — categorias "weapon", "armor", "vehicle", "property", "quest", "misc" — NÃO se gastam com o uso. Usar uma espada, vestir uma armadura, dirigir um veículo ou empunhar um artefato NÃO os remove do inventário.',
+      '  • Um item durável só sai do inventário (changeType "lost") se a narrativa DESTE turno descreve explicitamente que ele foi QUEBRADO/destruído, perdido, largado, roubado ou confiscado. Na dúvida, NÃO registre a perda: o jogador mantém o item. Nunca marque uma arma ou equipamento como "used" apenas porque o jogador o utilizou na ação.',
       '- Items already in inventory must NOT appear in itemChanges with changeType "gained". Each item appears AT MOST ONCE per response.',
       '- Ranged weapons (bow, crossbow, pistol, rifle, shotgun, etc.) must ALWAYS have their corresponding ammunition as a separate inventory item (arrows, bolts, bullets, cartridges, etc.).',
       '- Ammunition (category "ammunition") should ONLY appear in itemChanges with changeType "used" when the PLAYER\'S ACTION this turn is of type "attack" (shot actually fired). NEVER register ammunition consumption on trait_test, custom, travel, or any other type that is not attack — even if hostile NPCs were introduced in the narrative.',
@@ -2228,6 +2233,7 @@ export class GeminiAdapter implements Narrator {
       'NARRATIVE PLAUSIBILITY:',
       '  • MECHANICAL RESULT is the DEFAULT outcome: unless an override below applies, a success stays a success and a failure stays a failure.',
       '  • JUSTIFIED OUTCOME OVERRIDE: you MAY invert the narrated outcome against the mechanical result — narrate a mechanical success as a setback, or a mechanical failure as an unexpected gain — ONLY when an explicit in-fiction cause justifies it (e.g. third-party interference, an environmental twist, an unforeseen NPC reaction, a hidden complication revealed now, or a stroke of luck). When you invert, the narrative TEXT must state that cause clearly so the player can see WHY the outcome differed from what the roll implied — the override must never read as arbitrary or as a contradiction of the dice. If no explicit narrative cause exists, keep the mechanical result.',
+      '  • WHEN — AND ONLY WHEN — you invert the outcome, you MUST also fill the JSON field "outcomeOverride" with: mechanicalResult (the dice result: "success" or "failure"), narratedOutcome (what you actually narrated, the opposite value), and justification (a short sentence naming the in-fiction cause). If you do NOT invert, OMIT "outcomeOverride" entirely (or set it to null). Never fill it when narratedOutcome equals mechanicalResult.',
       '  •  ITEM-PREMISE OVERRIDE (takes precedence over the MECHANICAL RESULT): if the player\'s chosen action depends on a specific item that is NOT in the current ── INVENTORY ── list, do NOT narrate that item being used and do NOT fabricate it. Narrate instead that the character reaches for it and it is gone/unavailable, and make the resulting options reflect that. This overrides a mechanical "success" because the premise of the action is invalid — a success cannot be granted for using an item the player does not have.',
       '  • When NOT overriding, on success: preserve the positive consequence; optionally add cost, friction, or dilemma.',
       '  • When NOT overriding, on failure: preserve the negative consequence; optionally reveal a clue or open a worse path.',
@@ -2687,6 +2693,29 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
+    // Parse outcome override (inversão justificada de desfecho).
+    // Só é mantido quando o desfecho narrado realmente diverge do mecânico
+    // E há uma justificativa explícita na ficção. Caso contrário, descartado.
+    let outcomeOverride: OutcomeOverride | null = null
+    {
+      const rawOverride = raw.outcomeOverride
+      if (rawOverride && typeof rawOverride === 'object') {
+        const ov = rawOverride as Record<string, unknown>
+        const mechanicalResult = ov.mechanicalResult === 'success' || ov.mechanicalResult === 'failure'
+          ? ov.mechanicalResult
+          : null
+        const narratedOutcome = ov.narratedOutcome === 'success' || ov.narratedOutcome === 'failure'
+          ? ov.narratedOutcome
+          : null
+        const justification = sanitizeInlineText(ov.justification, '')
+        if (mechanicalResult && narratedOutcome && narratedOutcome !== mechanicalResult && justification) {
+          outcomeOverride = { mechanicalResult, narratedOutcome, justification }
+        } else if (mechanicalResult || narratedOutcome || justification) {
+          warn('sanitizeNarratorResponse', 'outcomeOverride descartado: sem divergência mecânico/narrado ou sem justificativa explícita')
+        }
+      }
+    }
+
     return {
       narrative,
       segments,
@@ -2694,7 +2723,8 @@ export class GeminiAdapter implements Narrator {
       npcs,
       itemChanges,
       statusChanges,
-      npcAttacks
+      npcAttacks,
+      ...(outcomeOverride ? { outcomeOverride } : {})
     }
   }
 
@@ -3097,7 +3127,7 @@ export class GeminiAdapter implements Narrator {
       'Describe the opening scene with concrete sensory details — smells, sounds, temperature, vision — that are specific to this universe, not generic.',
       'Present a clear narrative hook: a palpable tension, an immediate problem, or an opportunity that requires a decision right now.',
       'Establish at least 1 specific worldbuilding detail (a place name, a faction, a local custom, a strange object) that the player can explore.',
-      'Offer 4 varied action options for the player to start their adventure — each option must feel like a story choice, not a menu button.',
+      'Offer 4 action options that make the most sense for this opening scene — let the situation decide which actions fit; each option must feel like a story choice, not a menu button.',
       'For EACH option, evaluate whether it requires a dice roll (diceCheck) according to Savage Worlds rules.',
       '',
       'STARTING ITEMS (MANDATORY):',

@@ -270,15 +270,23 @@ export class SessionService {
     })
   }
 
+  /**
+   * Deduplica as opções já validadas do LLM e limita a no máximo 4.
+   *
+   * NÃO gera opções sintéticas de preenchimento: se o LLM devolver menos de 4
+   * opções válidas, a lista fica intencionalmente incompleta. É preferível
+   * apresentar menos opções reais e coerentes do que fabricar ações genéricas
+   * (ex.: "enfrentar" um inimigo já derrotado, "observar os arredores"), que
+   * confundem o jogador e quebram a continuidade da cena.
+   */
   private completeValidatedOptions(
-    options: NarratorTurnResponse['options'],
-    state: GameState
+    options: NarratorTurnResponse['options']
   ): NarratorTurnResponse['options'] {
     const completed: NarratorTurnResponse['options'] = []
     const seen = new Set<string>()
 
-    const push = (option: NarratorTurnResponse['options'][number]) => {
-      if (completed.length >= 4) return
+    for (const option of options) {
+      if (completed.length >= 4) break
 
       const signature = [
         option.actionType,
@@ -286,88 +294,12 @@ export class SessionService {
         JSON.stringify(option.actionPayload ?? {})
       ].join('|')
 
-      if (seen.has(signature)) return
+      if (seen.has(signature)) continue
       seen.add(signature)
       completed.push(option)
     }
 
-    for (const option of options) {
-      push(option)
-    }
-
-    const sceneHostileNpc = state.npcs.find(
-      (npc) => (!npc.location || npc.location === state.worldState.activeLocation) && npc.disposition === 'hostile'
-    )
-
-    if (sceneHostileNpc) {
-      push({
-        id: randomUUID(),
-        text: `Enfrentar ${sceneHostileNpc.name} antes que ele ataque`,
-        actionType: 'attack',
-        actionPayload: { targetId: sceneHostileNpc.id, skill: 'Luta' },
-        feasible: true,
-        diceCheck: {
-          required: true,
-          skill: 'Luta',
-          modifier: 0,
-          tn: 4,
-          reason: 'O alvo hostil já está em posição de confronto.'
-        }
-      })
-    }
-
-    push({
-      id: randomUUID(),
-      text: 'Observar os arredores com atenção',
-      actionType: 'trait_test',
-      actionPayload: { skill: 'Percepção' },
-      feasible: true,
-      diceCheck: {
-        required: true,
-        skill: 'Percepção',
-        modifier: 0,
-        tn: 4,
-        reason: 'Perceber detalhes ocultos ajuda a manter a vantagem.'
-      }
-    })
-    push({
-      id: randomUUID(),
-      text: 'Investigar a situação com calma',
-      actionType: 'trait_test',
-      actionPayload: { skill: 'Pesquisa' },
-      feasible: true,
-      diceCheck: {
-        required: true,
-        skill: 'Pesquisa',
-        modifier: 0,
-        tn: 4,
-        reason: 'Analisar a situação exige leitura cuidadosa de pistas.'
-      }
-    })
-    push({
-      id: randomUUID(),
-      text: 'Tentar conversar antes de agir',
-      actionType: 'custom',
-      actionPayload: { input: 'Tentar conversar antes de agir' },
-      feasible: true,
-      diceCheck: {
-        required: false,
-        reason: 'Uma abordagem inicial sem risco imediato não exige teste.'
-      }
-    })
-    push({
-      id: randomUUID(),
-      text: 'Seguir adiante com cautela',
-      actionType: 'custom',
-      actionPayload: { input: 'Seguir adiante com cautela' },
-      feasible: true,
-      diceCheck: {
-        required: false,
-        reason: 'Movimento controlado sem gatilho direto de risco.'
-      }
-    })
-
-    return completed.slice(0, 4)
+    return completed
   }
 
   private validateNarratorOption(
@@ -377,9 +309,21 @@ export class SessionService {
     pendingItemRefs: Set<string>,
     canonicalAnchors?: CanonicalAnchors
   ): NarratorTurnResponse['options'][number] | null {
+    // NPCs derrotados/mortos/incapacitados (ou em defeatedNpcIds) não são alvos
+    // válidos, mesmo que ainda constem na cena neste turno. Excluí-los aqui impede
+    // que uma opção de ataque do LLM contra um inimigo já abatido passe na validação
+    // (e que o redirecionamento de alvo hostil abaixo escolha um caído).
+    const NPC_DOWN_STATUSES = new Set(['dead', 'defeated', 'incapacitated'])
+    const isNpcDown = (npc: GameState['npcs'][number]): boolean =>
+      (state.defeatedNpcIds ?? []).includes(npc.id) ||
+      (npc.status != null && NPC_DOWN_STATUSES.has(npc.status))
+
     const sceneNpcIds = new Set(
       state.npcs
-        .filter((npc) => !npc.location || npc.location === state.worldState.activeLocation)
+        .filter(
+          (npc) =>
+            (!npc.location || npc.location === state.worldState.activeLocation) && !isNpcDown(npc)
+        )
         .map((npc) => npc.id)
     )
 
@@ -693,8 +637,7 @@ export class SessionService {
     const options = this.completeValidatedOptions(
       response.options
         .map((option) => this.validateNarratorOption(option, canonicalNarrativeState, mode, pendingItemRefs, canonicalAnchors))
-        .filter((option): option is NarratorTurnResponse['options'][number] => option !== null),
-      canonicalNarrativeState
+        .filter((option): option is NarratorTurnResponse['options'][number] => option !== null)
     )
     const sceneNpcIds = new Set(
       canonicalNarrativeState.npcs

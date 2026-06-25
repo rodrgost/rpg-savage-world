@@ -55,6 +55,30 @@ function normalizeInlineText(value: string): string {
     .trim()
 }
 
+/**
+ * Trata o texto digitado pelo jogador antes de enviar/exibir:
+ * - garante espaço após o hífen de fala ("-olá" -> "- olá", "ataco -vai" -> "ataco - vai");
+ * - capitaliza a primeira letra do texto, da fala (após "- ") e de cada nova frase.
+ * Não altera palavras hifenizadas (ex.: "guarda-costas"), pois exige espaço antes do hífen.
+ */
+function formatPlayerInput(value: string): string {
+  let text = value.trim()
+  if (!text) return text
+
+  // Espaço após hífen inicial de fala
+  text = text.replace(/^-(?=\S)/, '- ')
+  // Espaço após hífen separador (ação - fala) quando houver espaço antes
+  text = text.replace(/(\s)-(?=\S)/g, '$1- ')
+
+  // Capitalizar início do texto, início da fala (após "- ") e após pontuação final
+  text = text.replace(
+    /(^-\s+|[.!?…]["')\]]?\s+|\s-\s+|^)(\p{Ll})/gu,
+    (_match, prefix: string, letter: string) => prefix + letter.toUpperCase()
+  )
+
+  return text
+}
+
 function splitNarrativeParagraphs(narrative?: string): string[] {
   if (!narrative) return []
 
@@ -1813,6 +1837,7 @@ export function GamePage() {
   const [savingNarration, setSavingNarration] = useState(false)
 
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const messagesRef = useRef<ChatMessage[]>([])
   const pendingEngineMessagesRef = useRef<Map<string, ChatMessage>>(new Map())
   const streamAbortRef = useRef<AbortController | null>(null)
@@ -1820,6 +1845,14 @@ export function GamePage() {
   useEffect(() => {
     return () => { streamAbortRef.current?.abort() }
   }, [])
+
+  // Auto-expande a área de escrita conforme o texto, crescendo para cima (sem scroll vertical)
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [input])
 
   function getStreamController(): AbortSignal {
     streamAbortRef.current?.abort()
@@ -2119,8 +2152,8 @@ export function GamePage() {
 
   async function handleCustomSubmit(e?: FormEvent) {
     e?.preventDefault()
-    if (!sessionId || !input.trim()) return
-    const text = input.trim()
+    const text = formatPlayerInput(input)
+    if (!sessionId || !text) return
     setError('')
     setPendingValidation(null)
 
@@ -2641,6 +2674,7 @@ export function GamePage() {
       <form className="form-grid" onSubmit={handleCustomSubmit}>
         <div className="input-row">
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -2650,19 +2684,11 @@ export function GamePage() {
               }
             }}
             placeholder="Descreva sua ação... (Enter para enviar, Shift+Enter para nova linha)"
-            rows={2}
+            rows={1}
           />
           <div className="input-actions">
             <button disabled={loading || validating || !sessionId || !input.trim()} type="submit">
               {validating ? 'Validando...' : loading ? '...' : 'Enviar'}
-            </button>
-            <button
-              type="button"
-              className="scroll-top-btn"
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              title="Ir ao topo da página"
-            >
-              ↑
             </button>
           </div>
         </div>
