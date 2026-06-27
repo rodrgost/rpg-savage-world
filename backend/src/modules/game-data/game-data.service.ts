@@ -258,7 +258,7 @@ export class GameDataService {
 
   private async buildVisualDescription(params:
     | { entityType: 'world'; title: string }
-    | { entityType: 'campaign'; title: string }
+    | { entityType: 'campaign'; title: string; storyDescription?: string }
     | {
         entityType: 'character'
         worldName: string
@@ -547,13 +547,20 @@ export class GameDataService {
     return { campaignId }
   }
 
-  async generateCampaignStoryPreview(params: { userId: string; worldName: string }) {
+  async generateCampaignStoryPreview(params: { userId: string; worldName: string; worldId?: string }) {
+    let worldDescriptionEn: string | undefined
+    if (params.worldId) {
+      const world = await this.worlds.get(params.worldId)
+      worldDescriptionEn = world?.loreEn?.trim() || undefined
+    }
     const result = await this.narrator.expandAdventureStory({
-      campaignName: params.worldName
+      campaignName: params.worldName,
+      worldDescriptionEn
     })
 
     return {
       storyDescription: result.storyDescription,
+      storyDescriptionEn: result.storyDescriptionEn,
       storyCharacters: result.storyCharacters,
       name: result.name
     }
@@ -647,10 +654,18 @@ export class GameDataService {
   async generateCampaignImagePreview(params: {
     userId: string
     name?: string
+    storyDescription?: string
+    worldId?: string
   }): Promise<{ image: StoredImage }> {
     const campaignName = params.name?.trim() ?? ''
 
-    const visualDescription = await this.buildVisualDescription({ entityType: 'campaign', title: campaignName || 'Unnamed campaign' })
+    let storyContext = params.storyDescription?.trim() || undefined
+    if (!storyContext && params.worldId) {
+      const world = await this.worlds.get(params.worldId)
+      storyContext = world?.loreEn?.trim() || undefined
+    }
+
+    const visualDescription = await this.buildVisualDescription({ entityType: 'campaign', title: campaignName || 'Unnamed campaign', storyDescription: storyContext })
 
     const generated = await this.imageGenerator.generateImage({
       prompt: buildWorldImagePrompt({ campaignName, visualDescription }),
@@ -672,7 +687,8 @@ export class GameDataService {
     const worldName = world?.name ?? 'Mundo desconhecido'
 
     const result = await this.narrator.expandAdventureStory({
-      campaignName: campaign.name?.trim() || worldName
+      campaignName: campaign.name?.trim() || worldName,
+      worldDescriptionEn: world?.loreEn?.trim() || undefined
     })
 
     await this.campaigns.updateStoryDescription(campaign.id, result.storyDescription, result.storyCharacters, result.storyDescriptionEn)

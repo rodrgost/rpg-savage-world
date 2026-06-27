@@ -350,47 +350,9 @@ function sanitizeNarrativeOutput(text: string): string {
   return cleaned || original
 }
 
-function formatTraitTestResult(payload: Record<string, unknown>): string {
-  const trait = typeof payload.trait === 'string' ? payload.trait : 'Atributo'
-  const dieSides = typeof payload.dieSides === 'number' ? payload.dieSides : null
-  const finalTotal = typeof payload.finalTotal === 'number' ? payload.finalTotal : null
-  const tn = typeof payload.targetNumber === 'number' ? payload.targetNumber : 4
-  const isSuccess = payload.isSuccess === true
-  const raises = typeof payload.raises === 'number' ? payload.raises : 0
-  const description = typeof payload.description === 'string' ? payload.description : ''
-
-  // Falha crítica (Savage Worlds): 1 natural no dado da perícia E no Wild Die.
-  const traitRoll = payload.traitRoll as { rolls?: unknown } | null | undefined
-  const wildRoll = payload.wildRoll as { rolls?: unknown } | null | undefined
-  const traitNat = Array.isArray(traitRoll?.rolls) ? traitRoll!.rolls[0] : undefined
-  const wildNat = Array.isArray(wildRoll?.rolls) ? wildRoll!.rolls[0] : undefined
-  const criticalFailure = traitNat === 1 && wildNat === 1
-
-  let outcome: string
-  if (criticalFailure) outcome = 'MUITA FALHA (falha crítica)'
-  else if (!isSuccess) outcome = 'FALHA'
-  else if (raises >= 1) outcome = `MUITO SUCESSO (${raises} aumento${raises > 1 ? 's' : ''})`
-  else outcome = 'SUCESSO'
-
-  const dieLabel = dieSides ? ` d${dieSides}` : ''
-  const numbers = finalTotal !== null ? ` [total ${finalTotal} vs alvo ${tn}]` : ''
-  const action = description ? ` Ação: ${description}` : ''
-  return `[trait_test] ${outcome} — ${trait}${dieLabel}.${numbers}${action}`.replace(/\s+$/, '')
-}
-
 function formatEngineEventsForPrompt(events: Array<{ type: string; payload: unknown }>): string {
   return events
-    .map((event) => {
-      if (
-        event.type === 'trait_test'
-        && event.payload
-        && typeof event.payload === 'object'
-        && !Array.isArray(event.payload)
-      ) {
-        return formatTraitTestResult(event.payload as Record<string, unknown>)
-      }
-      return `[${event.type}] ${JSON.stringify(event.payload)}`
-    })
+    .map((event) => `[${event.type}] ${JSON.stringify(event.payload)}`)
     .join('\n')
 }
 
@@ -982,18 +944,11 @@ export class GeminiAdapter implements Narrator {
     toNumber(readEnv('GEMINI_CHARACTER_SUGGEST_THINKING_BUDGET', '512'), 512),
     128
   )
-  // Temperatura global das descrições visuais (mundo, campanha e personagem)
   private readonly imageDescriptionTemperature = toNumber(
     this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_IMAGE_DESCRIPTION_TEMPERATURE', '0.8')
-      : readEnv('GEMINI_IMAGE_DESCRIPTION_TEMPERATURE', '0.8'),
-    0.8
-  )
-  private readonly storyTemperature = toNumber(
-    this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_STORY_TEMPERATURE', '0.9')
-      : readEnv('GEMINI_STORY_TEMPERATURE', '0.9'),
-    0.9
+      ? readEnv('DEEPSEEK_IMAGE_DESCRIPTION_TEMPERATURE', '0.55')
+      : readEnv('GEMINI_IMAGE_DESCRIPTION_TEMPERATURE', '0.55'),
+    0.55
   )
   private readonly normalizedBaseUrl = this.baseUrl.replace(/\/+$/, '')
 
@@ -1450,19 +1405,15 @@ export class GeminiAdapter implements Narrator {
       'Start directly with { and end with }.'
     ].join('\n')
 
-    const worldContext = sanitizeInlineText(req.worldDescriptionEn).slice(0, 2400)
     const prompt = [
       `Campaign name/context: ${req.campaignName || 'free'}.`,
-      worldContext
-        ? `World setting (use as the foundation; keep names, factions, tone, and geography consistent with it): ${worldContext}`
-        : 'World setting: none provided; invent a fresh, distinctive setting and avoid generic cliches (e.g., do not default to "twilight"/"crepusculo" motifs).'
+      'Current description: ignore; generate from scratch.'
     ].join('\n')
 
     try {
       const generated = await this.generateText(prompt, {
         maxOutputTokens: this.worldMaxOutputTokens,
         timeoutMs: this.timeoutMs,
-        temperature: this.storyTemperature,
         systemInstruction: sysPrompt
       })
 
@@ -1641,12 +1592,8 @@ export class GeminiAdapter implements Narrator {
         'Otherwise, describe an epic and original scene with strong visual identity coherent with the name and theme of the universe, capturing the thematic essence so that the entire image reflects that universe.',
       ].join('\n')
     } else if (req.entityType === 'campaign') {
-      const storyContext = sanitizeInlineText(req.storyDescription).slice(0, 1200)
       prompt = [
         `Campaign title: ${req.title}.`,
-        ...(storyContext
-          ? [`Campaign story (translate its mood, setting, factions, and key visual elements into the art): ${storyContext}`]
-          : []),
         'Describe a wide image that translates the campaign\'s atmosphere as striking and cinematic illustrated art.'
       ].join('\n')
     } else {
@@ -2013,10 +1960,7 @@ export class GeminiAdapter implements Narrator {
       'diceCheck FIELD RULES (REQUIRED in EVERY option):',
       '- Only require a roll when BOTH: (1) outcome is genuinely uncertain, AND (2) failure has interesting consequences. If either is false → required=false.',
       '- WHEN IN DOUBT: required=false. Dice are the EXCEPTION. Intention-only options ("Try to help", "Look for a way out", "Check the surroundings") → required: false.',
-      '- ACTIONTYPE RULE: diceCheck.required=true and actionType="custom" can NEVER coexist.',
-	  'If required=true, you MUST force actionType to "trait_test", "attack", or "heal".',
-	  'If you must use "custom", required MUST be false.',
-	  'Always SELF-CHECK this exclusivity before emitting the response to avoid parsing errors.',
+      '- ACTIONTYPE RULE (mutually exclusive — NO exceptions): diceCheck.required=true and actionType="custom" can NEVER coexist. If required=true, actionType MUST be "trait_test" (put "skill" or "attribute" in actionPayload), or "attack"/"heal" when appropriate — even if the action felt generic/custom. SELF-CHECK each option before emitting: if required=true ⇒ actionType ∈ {trait_test, attack, heal}; if you cannot justify a trait_test, set required=false and keep custom. "custom" + required=true is INVALID and triggers a system promotion that may lose payload data.',
       '',
       '- Ações que NÃO exigem teste (qualquer personagem faz automaticamente):',
       '  • Atender o telefone / celular / chamada',
@@ -2264,6 +2208,7 @@ export class GeminiAdapter implements Narrator {
         '    { "displayName": "UCT Agent", "disposition": "hostile", "newlyIntroduced": true }',
         '  ]',
         '',
+        '- The "status" field in NPCs is OPTIONAL. Use it ONLY when your narrative THIS turn explicitly indicates that an NPC was incapacitated, knocked out, defeated, or killed WITHOUT going through a formal mechanical attack from the system (if they went through a rule-engine attack/damage, the status is managed automatically). Possible values: "active", "incapacitated" (knocked out/unconscious), "defeated" (defeated), "dead" (dead). Omit the field if the status did not change or if the NPC was hit via the formal attack system.',
         '',
         /*'- On a normal turn, do NOT create itemChanges with changeType "gained" EXCEPT in the situations below:',
         '  (1) Any category EXCEPT "weapon" and "armor", when the narrative this turn justifies it (store purchase, found item, reward, inheritance, conquest).',

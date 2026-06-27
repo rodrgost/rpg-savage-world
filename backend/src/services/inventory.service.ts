@@ -1,5 +1,19 @@
 import type { GameState } from '../domain/types/gameState.js'
-import type { InventoryItem, ItemChange } from '../domain/types/narrative.js'
+import type { InventoryItem, ItemChange, ItemCategory } from '../domain/types/narrative.js'
+
+/**
+ * Categorias DURÁVEIS: não se gastam com o uso. Só saem do inventário com
+ * changeType "lost" (destruído/perdido/roubado/confiscado), nunca com "used".
+ * Categorias consumíveis (consumable, ammunition, money) seguem o fluxo normal.
+ */
+const DURABLE_CATEGORIES = new Set<ItemCategory>([
+  'weapon',
+  'armor',
+  'vehicle',
+  'property',
+  'quest',
+  'misc'
+])
 
 const ITEM_REFERENCE_STOPWORDS = new Set([
   'a',
@@ -129,6 +143,18 @@ export class InventoryService {
       } else {
         // lost or used
         if (existing) {
+          // Itens duráveis NÃO são consumidos pelo simples uso: ignoramos
+          // changeType "used" para evitar que o LLM remova veículos, armas,
+          // armaduras, etc. só porque o jogador os utilizou. Categoria efetiva
+          // vem da mudança ou, na falta, do próprio item já no inventário.
+          const effectiveCategory = change.category ?? existing.category
+          if (
+            change.changeType === 'used' &&
+            effectiveCategory !== undefined &&
+            DURABLE_CATEGORIES.has(effectiveCategory)
+          ) {
+            continue
+          }
           existing.quantity -= change.quantity
           if (existing.quantity <= 0) {
             const idx = inventory.indexOf(existing)

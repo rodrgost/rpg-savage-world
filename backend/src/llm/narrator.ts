@@ -25,6 +25,8 @@ export type SummarizeHistoryRequest = {
 export type ExpandWorldRequest = {
   campaignName: string
   currentDescription?: string
+  /** Lore do mundo em inglês (loreEn) usado como contexto para diferenciar campanhas */
+  worldDescriptionEn?: string
 }
 
 export type StoryCharacter = {
@@ -95,6 +97,8 @@ export type GenerateImageDescriptionRequest =
   | {
       entityType: 'campaign'
       title: string
+      /** História da campanha (ou loreEn como fallback) usada como contexto visual */
+      storyDescription?: string
     }
   | {
       entityType: 'character'

@@ -34,6 +34,7 @@ export function CreateCampaignPage({ uid }: Props) {
   const [visibility, setVisibility] = useState<Visibility>('private')
   const [name, setName] = useState('')
   const [storyDescription, setStoryDescription] = useState('')
+  const [storyDescriptionEn, setStoryDescriptionEn] = useState('')
   const [storyCharacters, setStoryCharacters] = useState<StoryCharacter[]>([])
   const [imagePreview, setImagePreview] = useState<StoredImage | null>(null)
   const [youtubeUrl, setYoutubeUrl] = useState('')
@@ -72,6 +73,7 @@ export function CreateCampaignPage({ uid }: Props) {
         setResolvedWorldId(campaign.worldId)
         setName(campaign.name ?? '')
         setStoryDescription(campaign.storyDescription ?? '')
+        setStoryDescriptionEn(campaign.storyDescriptionEn ?? '')
         setStoryCharacters(campaign.storyCharacters ?? [])
         setImagePreview(campaign.image ?? null)
         setYoutubeUrl(campaign.youtubeUrl ?? '')
@@ -89,7 +91,7 @@ export function CreateCampaignPage({ uid }: Props) {
     setImageLoading(true)
 
     try {
-      const image = await generateCampaignImagePreview({ name: name.trim() || undefined })
+      const image = await generateCampaignImagePreview({ name: name.trim() || undefined, storyDescription: (storyDescriptionEn.trim() || storyDescription.trim()) || undefined, worldId: resolvedWorldId || undefined })
       setImagePreview(image)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Falha ao gerar imagem da campanha')
@@ -157,8 +159,9 @@ export function CreateCampaignPage({ uid }: Props) {
     setError('')
     setLlmLoading(true)
     try {
-      const result = await incrementCampaignStoryPreview({ worldName })
+      const result = await incrementCampaignStoryPreview({ worldName, worldId: resolvedWorldId || undefined })
       setStoryDescription(result.storyDescription)
+      setStoryDescriptionEn(result.storyDescriptionEn ?? '')
       setStoryCharacters(result.storyCharacters)
       setName(result.name ?? '')
     } catch (loadError) {

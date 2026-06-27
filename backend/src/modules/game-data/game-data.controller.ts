@@ -55,12 +55,15 @@ const UpdateCampaignBody = z.object({
 })
 
 const IncrementCampaignPreviewBody = z.object({
-  worldName: z.string().min(1)
+  worldName: z.string().min(1),
+  worldId: z.string().min(1).optional()
 })
 
 const CampaignImagePreviewBody = z
   .object({
-    name: z.string().min(1).optional()
+    name: z.string().min(1).optional(),
+    storyDescription: z.string().optional(),
+    worldId: z.string().min(1).optional()
   })
   .strict()
 

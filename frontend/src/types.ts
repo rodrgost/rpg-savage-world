@@ -28,6 +28,7 @@ export type Campaign = {
   visibility: Visibility
   name?: string
   storyDescription: string
+  storyDescriptionEn?: string
   storyCharacters?: StoryCharacter[]
   image?: {
     mimeType: string

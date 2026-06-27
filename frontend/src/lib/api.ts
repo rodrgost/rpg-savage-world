@@ -214,6 +214,7 @@ function mapCampaignRecord(item: {
   visibility?: Visibility
   name?: string
   storyDescription?: string
+  storyDescriptionEn?: string
   storyCharacters?: Array<{ name?: string; role?: string; description?: string; status?: string }>
   image?: { mimeType?: string; base64?: string }
   youtubeUrl?: string
@@ -226,6 +227,7 @@ function mapCampaignRecord(item: {
     visibility: normalizeVisibility(item.visibility),
     name: item.name,
     storyDescription: item.storyDescription ?? '',
+    storyDescriptionEn: item.storyDescriptionEn || undefined,
     storyCharacters: Array.isArray(item.storyCharacters)
       ? item.storyCharacters.map((c) => ({
           name: c.name ?? '',
@@ -332,6 +334,7 @@ export async function listCampaigns(worldId?: string): Promise<Campaign[]> {
       visibility?: Visibility
       name?: string
       storyDescription?: string
+      storyDescriptionEn?: string
       storyCharacters?: Array<{ name?: string; role?: string; description?: string; status?: string }>
       image?: { mimeType?: string; base64?: string }
       youtubeUrl?: string
@@ -351,6 +354,7 @@ export async function getCampaign(campaignId: string): Promise<Campaign> {
       visibility?: Visibility
       name?: string
       storyDescription?: string
+      storyDescriptionEn?: string
       storyCharacters?: Array<{ name?: string; role?: string; description?: string; status?: string }>
       image?: { mimeType?: string; base64?: string }
       youtubeUrl?: string
@@ -378,13 +382,15 @@ export async function deleteCampaign(campaignId: string): Promise<void> {
 
 export async function incrementCampaignStoryPreview(params: {
   worldName: string
-}): Promise<{ storyDescription: string; storyCharacters: StoryCharacter[]; name?: string }> {
-  const response = await apiRequest<{ storyDescription: string; storyCharacters?: StoryCharacter[]; name?: string }>('/campaigns/increment-preview', {
+  worldId?: string
+}): Promise<{ storyDescription: string; storyDescriptionEn?: string; storyCharacters: StoryCharacter[]; name?: string }> {
+  const response = await apiRequest<{ storyDescription: string; storyDescriptionEn?: string; storyCharacters?: StoryCharacter[]; name?: string }>('/campaigns/increment-preview', {
     method: 'POST',
     body: JSON.stringify(params)
   })
   return {
     storyDescription: response.storyDescription,
+    storyDescriptionEn: response.storyDescriptionEn,
     storyCharacters: response.storyCharacters ?? [],
     name: response.name
   }
@@ -399,6 +405,8 @@ export async function incrementCampaignStory(campaignId: string): Promise<{ stor
 
 export async function generateCampaignImagePreview(params: {
   name?: string
+  storyDescription?: string
+  worldId?: string
 }): Promise<StoredImage> {
   const response = await apiRequest<{ image: StoredImage }>('/campaigns/image-preview', {
     method: 'POST',
