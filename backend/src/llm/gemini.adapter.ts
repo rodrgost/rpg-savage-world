@@ -1462,7 +1462,6 @@ export class GeminiAdapter implements Narrator {
       const generated = await this.generateText(prompt, {
         maxOutputTokens: this.worldMaxOutputTokens,
         timeoutMs: this.timeoutMs,
-        temperature: this.storyTemperature,
         systemInstruction: sysPrompt
       })
 
@@ -1746,7 +1745,6 @@ export class GeminiAdapter implements Narrator {
           maxOutputTokens: this.characterSuggestionMaxOutputTokens,
           timeoutMs: this.timeoutMs,
           responseMimeType: 'application/json',
-          temperature: Math.max(this.characterSuggestionTemperature, attempt === 1 ? 0.95 : 1.15),
           systemInstruction: sysPrompt,
           ...(this.provider === 'gemini' ? { thinkingBudget: this.characterSuggestionThinkingBudget } : {})
         }, attempt)
@@ -1849,7 +1847,6 @@ export class GeminiAdapter implements Narrator {
           maxOutputTokens: this.characterSuggestionMaxOutputTokens,
           timeoutMs: this.timeoutMs,
           responseMimeType: 'application/json',
-          temperature: Math.max(this.characterSuggestionTemperature, attempt === 1 ? 0.85 : 1.05),
           systemInstruction: sysPrompt,
           ...(this.provider === 'gemini' ? { thinkingBudget: this.characterSuggestionThinkingBudget } : {})
         }, attempt)
