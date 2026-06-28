@@ -2069,10 +2069,10 @@ export function GamePage() {
 
     // Construir mensagem do narrador (fallback se Firestore ainda não propagou)
     let narratorMsg: ChatMessage | null = null
-    if (result.narratorResponse?.narrative) {
+    if (result.narratorResponse?.segments?.length) {
       const nr = result.narratorResponse
       const existingMsg = msgs.find(
-        (m) => m.role === 'narrator' && m.narrative === nr.narrative
+        (m) => m.role === 'narrator' && m.turn === result.state.meta.turn
       )
       if (!existingMsg) {
         narratorMsg = {
@@ -2080,7 +2080,7 @@ export function GamePage() {
           sessionId: result.state.meta.sessionId,
           turn: result.state.meta.turn,
           role: 'narrator',
-          narrative: nr.narrative,
+          segments: nr.segments,
           options: normalizedNarratorOptions,
           npcs: nr.npcs,
           itemChanges: nr.itemChanges,
@@ -2108,7 +2108,7 @@ export function GamePage() {
       replaceMessages: Boolean(options?.replaceMessages),
       incomingMessages: msgs.length,
       pendingEngineMessages: pendingEngineMessages.length,
-      hasNarratorResponse: Boolean(result.narratorResponse?.narrative)
+      hasNarratorResponse: Boolean(result.narratorResponse?.segments?.length)
     })
     const committedMessages = options?.replaceMessages
       ? commitMessages(msgs)
