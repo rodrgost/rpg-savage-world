@@ -192,8 +192,6 @@ export type NpcAttackEntry = {
   ap?: number
   /** Se o ataque é à distância (disparo, arremesso) — afeta a Vantagem Esquivar */
   isRanged?: boolean
-  /** Descrição narrativa do ataque (ex: "Golpeia com a espada", "Dispara uma flecha") */
-  attackDescription?: string
 }
 
 // ─── Inversão justificada de desfecho ───
