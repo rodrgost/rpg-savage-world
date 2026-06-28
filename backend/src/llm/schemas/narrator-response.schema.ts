@@ -146,10 +146,11 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
           // garantidos na sanitização (sanitizeNarratorResponse).
           skillDie: { type: 'INTEGER', description: 'Dado de perícia do NPC. Valores válidos: 6, 8, 10 ou 12.' },
           damageFormula: { type: 'STRING' },
-          ap: { type: 'INTEGER' }
+          ap: { type: 'INTEGER' },
+          attackDescription: { type: 'STRING', description: 'Descrição narrativa breve do ataque (ex: "Golpeia com a espada", "Dispara uma flecha").' }
         },
-        required: ['npcId', 'skillDie', 'damageFormula', 'ap'],
-        propertyOrdering: ['npcId', 'skillDie', 'damageFormula', 'ap']
+        required: ['npcId', 'skillDie', 'damageFormula', 'ap', 'attackDescription'],
+        propertyOrdering: ['npcId', 'skillDie', 'damageFormula', 'ap', 'attackDescription']
       }
     },
     outcomeOverride: {
