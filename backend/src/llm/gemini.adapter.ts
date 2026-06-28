@@ -963,12 +963,6 @@ export class GeminiAdapter implements Narrator {
       : readEnv('GEMINI_SUMMARY_HISTORY_TEMPERATURE', '0.15'),
     this.provider === 'deepseek' ? 0.10 : 0.15
   )
-  private readonly characterSuggestionTemperature = toNumber(
-    this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_CHARACTER_SUGGEST_TEMPERATURE', '1.0')
-      : readEnv('GEMINI_CHARACTER_SUGGEST_TEMPERATURE', '1.0'),
-    1.0
-  )
   private readonly characterSuggestionMaxOutputTokens = withMin(
     toNumber(
       this.provider === 'deepseek'
@@ -988,12 +982,6 @@ export class GeminiAdapter implements Narrator {
       ? readEnv('DEEPSEEK_IMAGE_DESCRIPTION_TEMPERATURE', '0.8')
       : readEnv('GEMINI_IMAGE_DESCRIPTION_TEMPERATURE', '0.8'),
     0.8
-  )
-  private readonly storyTemperature = toNumber(
-    this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_STORY_TEMPERATURE', '0.9')
-      : readEnv('GEMINI_STORY_TEMPERATURE', '0.9'),
-    0.9
   )
   private readonly normalizedBaseUrl = this.baseUrl.replace(/\/+$/, '')
 
