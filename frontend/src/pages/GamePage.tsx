@@ -1830,6 +1830,8 @@ export function GamePage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [currentOptions, setCurrentOptions] = useState<ActionOption[]>([])
   const [input, setInput] = useState('')
+  const [mention, setMention] = useState<{ start: number; query: string } | null>(null)
+  const [mentionIndex, setMentionIndex] = useState(0)
   const [loading, setLoading] = useState(false)
   const [latestNarratorId, setLatestNarratorId] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -1870,6 +1872,53 @@ export function GamePage() {
     el.style.height = 'auto'
     el.style.height = `${el.scrollHeight}px`
   }, [input])
+
+  type MentionNpc = NonNullable<GameState['npcs']>[number]
+
+  function detectMention(value: string, caret: number): { start: number; query: string } | null {
+    const upToCaret = value.slice(0, caret)
+    const at = upToCaret.lastIndexOf('@')
+    if (at === -1) return null
+    const prev = at > 0 ? upToCaret[at - 1] : ' '
+    if (!/\s/.test(prev)) return null
+    const query = upToCaret.slice(at + 1)
+    if (/\s/.test(query)) return null
+    return { start: at, query }
+  }
+
+  const mentionMatches = useMemo<MentionNpc[]>(() => {
+    if (!mention) return []
+    const list = state?.npcs ?? []
+    const q = mention.query.trim().toLowerCase()
+    const visible = list.filter((n) => (n.status ?? 'active') !== 'dead')
+    if (!q) return visible
+    return visible.filter((n) => (n.displayName ?? n.name).toLowerCase().includes(q))
+  }, [mention, state?.npcs])
+
+  useEffect(() => {
+    if (mentionIndex > mentionMatches.length - 1) setMentionIndex(0)
+  }, [mentionMatches.length, mentionIndex])
+
+  function selectMention(npc: MentionNpc) {
+    if (!mention) return
+    const el = inputRef.current
+    const caret = el?.selectionStart ?? input.length
+    const label = npc.displayName ?? npc.name
+    const before = input.slice(0, mention.start)
+    const after = input.slice(caret)
+    const insert = `@${label} `
+    const newValue = before + insert + after
+    setInput(newValue)
+    setMention(null)
+    setMentionIndex(0)
+    const newCaret = before.length + insert.length
+    requestAnimationFrame(() => {
+      if (el) {
+        el.focus()
+        el.setSelectionRange(newCaret, newCaret)
+      }
+    })
+  }
 
   function getStreamController(): AbortSignal {
     streamAbortRef.current?.abort()
@@ -2693,16 +2742,75 @@ export function GamePage() {
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value
+              setInput(value)
+              const caret = e.target.selectionStart ?? value.length
+              setMention(detectMention(value, caret))
+            }}
             onKeyDown={(e) => {
+              if (mention && mentionMatches.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  setMentionIndex((i) => (i + 1) % mentionMatches.length)
+                  return
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length)
+                  return
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  e.preventDefault()
+                  selectMention(mentionMatches[mentionIndex])
+                  return
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setMention(null)
+                  return
+                }
+              }
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
                 handleCustomSubmit()
               }
             }}
-            placeholder="Descreva sua ação... (Enter para enviar, Shift+Enter para nova linha)"
+            onBlur={() => setTimeout(() => setMention(null), 120)}
+            placeholder="Descreva sua ação... (@ menciona NPCs, Enter envia, Shift+Enter nova linha)"
             rows={1}
           />
+          {mention && mentionMatches.length > 0 && (
+            <ul className="npc-mention-dropdown" role="listbox">
+              {mentionMatches.map((npc, i) => (
+                <li
+                  key={npc.id}
+                  role="option"
+                  aria-selected={i === mentionIndex}
+                  className={`npc-mention-item ${npc.disposition ?? 'neutral'} ${i === mentionIndex ? 'active' : ''}`}
+                  onMouseDown={(ev) => {
+                    ev.preventDefault()
+                    selectMention(npc)
+                  }}
+                  onMouseEnter={() => setMentionIndex(i)}
+                >
+                  <span className="npc-mention-dot" />
+                  <span className="npc-mention-name">{npc.displayName ?? npc.name}</span>
+                  {npc.status && npc.status !== 'active' && (
+                    <span className="npc-mention-status">
+                      {npc.status === 'incapacitated'
+                        ? 'Incapacitado'
+                        : npc.status === 'defeated'
+                          ? 'Derrotado'
+                          : npc.status === 'dead'
+                            ? 'Morto'
+                            : ''}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="input-actions">
             <button disabled={loading || validating || !sessionId || !input.trim()} type="submit">
               {validating ? 'Validando...' : loading ? '...' : 'Enviar'}

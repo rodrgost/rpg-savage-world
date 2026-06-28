@@ -21,10 +21,6 @@
 export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
   type: 'OBJECT',
   properties: {
-    narrative: {
-      type: 'STRING',
-      description: 'Texto narrativo completo deste passo da história (PT-BR, 2ª pessoa do singular).'
-    },
     segments: {
       type: 'ARRAY',
       description: 'Narração e falas divididas em segmentos.',
@@ -165,6 +161,6 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
       propertyOrdering: ['mechanicalResult', 'narratedOutcome', 'justification']
     }
   },
-  required: ['narrative', 'options'],
-  propertyOrdering: ['narrative', 'segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride']
+  required: ['segments', 'options'],
+  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride']
 }

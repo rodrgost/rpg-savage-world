@@ -1,6 +1,6 @@
 import type { GameState, DieType, Hindrance, NpcDefinition } from '../domain/types/gameState.js'
 import type { SessionSummaryRow } from '../repositories/sessionSummary.repo.js'
-import type { InventoryItem } from '../domain/types/narrative.js'
+import type { InventoryItem, NarrativeSegment } from '../domain/types/narrative.js'
 import type { ChatMessageRow } from '../repositories/chatMessage.repo.js'
 import {
   SKILLS,
@@ -63,7 +63,7 @@ function buildRulesDigest(state: GameState): string {
 
   // 1. Skills with descriptions
   sections.push([
-    '=== AVAILABLE SKILLS ===',
+    '=== AVAILABLE SKILLS (use these exact names in diceCheck.skill) ===',
 
     ...SKILLS.map(s => {
       const attr = ATTRIBUTES.find(a => a.key === s.linkedAttribute)
@@ -152,7 +152,15 @@ export type LlmContext = {
   }
   /** Digest compacto das regras SW + traços do personagem + equipamento */
   rulesDigest: string
-  recentMessages: Array<{ role: string; narrative?: string; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+}
+
+function buildRecentSegments(m: ChatMessageRow): NarrativeSegment[] | undefined {
+  const segs: NarrativeSegment[] = m.segments?.length
+    ? m.segments
+    : (m.narrative?.trim() ? [{ type: 'narrator' as const, text: m.narrative }] : [])
+  if (!segs.length) return undefined
+  return segs.map((seg) => ({ ...seg, text: typeof seg.text === 'string' ? normalizeLlmText(seg.text) : seg.text }))
 }
 
 function buildCombinedSummaryText(summary: SessionSummaryRow | null): string {
@@ -217,7 +225,7 @@ export function buildLlmContext(params: {
     rulesDigest: buildRulesDigest(state),
     recentMessages: (recentMessages ?? []).map((m) => ({
       role: m.role,
-      narrative: typeof m.narrative === 'string' ? normalizeLlmText(m.narrative) : m.narrative,
+      segments: buildRecentSegments(m),
       playerInput: typeof m.playerInput === 'string' ? normalizeLlmText(m.playerInput) : m.playerInput,
       engineEvents: m.engineEvents?.map((event) => ({
         type: event.type,

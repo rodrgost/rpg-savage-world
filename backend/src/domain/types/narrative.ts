@@ -154,7 +154,7 @@ export type ValidateActionRequest = {
     playerSkills?: Record<string, string>
     rulesDigest?: string
   }
-  recentMessages: Array<{ role: string; narrative?: string; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
 }
 
 // ─── Opções de ação ───
@@ -206,10 +206,8 @@ export type OutcomeOverride = {
 }
 
 export type NarratorTurnResponse = {
-  /** Texto narrativo descrevendo o passo da história */
-  narrative: string
-  /** Blocos estruturados para renderizar narração e falas diretas de NPCs */
-  segments?: NarrativeSegment[]
+  /** Blocos estruturados para renderizar narração e falas diretas de NPCs (fonte única da narração) */
+  segments: NarrativeSegment[]
   /** Sempre 4 opções de ação para o jogador */
   options: ActionOption[]
   /** NPCs presentes ou mencionados na cena */
@@ -307,7 +305,7 @@ export type NarrateTurnRequest = {
     /** Catálogo de NPCs nomeados do mundo — permite referenciar NPCs canônicos por ID */
     npcCatalog?: Array<{ id: string; name: string; description?: string; dispositionDefault: string }>
   }
-  recentMessages: Array<{ role: string; narrative?: string; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
   narrativeStyle?: NarrativeStyle
   simpleVocabulary?: boolean
 }

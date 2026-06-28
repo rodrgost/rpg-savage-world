@@ -17,6 +17,7 @@ import { SessionEventRepo } from '../../repositories/sessionEvent.repo.js'
 import { SessionSummaryRepo } from '../../repositories/sessionSummary.repo.js'
 import { ChatMessageRepo, type ChatMessageRow } from '../../repositories/chatMessage.repo.js'
 import { buildLlmContext } from '../../services/contextBuilder.js'
+import { segmentsToText } from '../../domain/segments.js'
 import { firestore, FieldValue } from '../../infrastructure/firebase.js'
 import { randomUUID } from 'node:crypto'
 import { WorldsRepo } from '../../repositories/worlds.repo.js'
@@ -547,12 +548,10 @@ export class SessionService {
 
   private validateNarrativeSegments(params: {
     segments: NarratorTurnResponse['segments']
-    narrative: string
     state: GameState
     sceneNpcIds: Set<string>
   }): NonNullable<NarratorTurnResponse['segments']> {
-    const fallbackText = params.narrative.trim()
-    const fallback = fallbackText ? [{ type: 'narrator' as const, text: fallbackText }] : []
+    const fallback: NonNullable<NarratorTurnResponse['segments']> = [{ type: 'narrator' as const, text: 'A história continua...' }]
     if (!params.segments?.length) return fallback
 
     const sceneNpcs = params.state.npcs.filter((npc) => params.sceneNpcIds.has(npc.id))
@@ -631,7 +630,7 @@ export class SessionService {
       state: canonicalNarrativeState,
       recentMessages,
       summaryText,
-      currentNarrative: response.narrative
+      currentNarrative: segmentsToText(response.segments)
     })
     const itemChanges = this.validateNarratorItemChanges(response.itemChanges, state, mode, action)
     const pendingItemRefs = new Set(
@@ -650,14 +649,12 @@ export class SessionService {
     const npcs = response.npcs.filter((npc) => sceneNpcIds.has(npc.id))
     const segments = this.validateNarrativeSegments({
       segments: response.segments,
-      narrative: response.narrative,
       state: canonicalNarrativeState,
       sceneNpcIds
     })
 
     return {
       ...response,
-      narrative: response.narrative,
       segments,
       options,
       npcs,
@@ -906,7 +903,6 @@ export class SessionService {
       sessionId,
       turn: 0,
       role: 'narrator',
-      narrative: narratorResponse.narrative,
       segments: narratorResponse.segments,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
@@ -1071,7 +1067,6 @@ export class SessionService {
       sessionId: params.sessionId,
       turn: 0,
       role: 'narrator',
-      narrative: narratorResponse.narrative,
       segments: narratorResponse.segments,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
@@ -1304,7 +1299,7 @@ export class SessionService {
     finalState = this.statusEffects.tickEffects(finalState)
     finalState = this.statusEffects.applyNarrativeRecovery(finalState, {
       actionText: actionDescription,
-      narrative: narratorResponse.narrative
+      narrative: segmentsToText(narratorResponse.segments)
     })
 
     // 5.4. Persistir derrotas declaradas pela narrativa.
@@ -1402,7 +1397,7 @@ export class SessionService {
       durationMs: Date.now() - llmStart,
       playerAction: { type: normalizedAction.type, description: actionDescription },
       engineEvents: result.emittedEvents.map((e) => ({ type: e.type, payload: e.payload as Record<string, unknown> })),
-      narrative: narratorResponse.narrative,
+      narrative: segmentsToText(narratorResponse.segments),
       options: narratorResponse.options.map((o) => ({
         id: o.id,
         text: o.text,
@@ -1440,7 +1435,6 @@ export class SessionService {
       sessionId: params.sessionId,
       turn: finalState.meta.turn,
       role: 'narrator',
-      narrative: narratorResponse.narrative,
       segments: narratorResponse.segments,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,

@@ -26,6 +26,7 @@ import type {
   ValidateActionRequest,
   ValidateActionResponse
 } from '../domain/types/narrative.js'
+import { segmentsToText } from '../domain/segments.js'
 import { randomUUID, createHash } from 'node:crypto'
 import { NARRATOR_RESPONSE_SCHEMA } from './schemas/narrator-response.schema.js'
 import { findSkillDefinition, getCanonicalSkillLabel } from '../domain/savage-worlds/constants.js'
@@ -1924,7 +1925,7 @@ export class GeminiAdapter implements Narrator {
     narrativeStyle?: 'concise' | 'balanced'
     simpleVocabulary?: boolean
   } = {}): string {
-    const { world, campaign, rulesDigest, summaryText, playerSkills, mode = 'turn', narrativeStyle, simpleVocabulary } = opts
+    const { world, campaign, rulesDigest, summaryText, mode = 'turn', narrativeStyle, simpleVocabulary } = opts
     const lines = [
       'You are the Narrator of a story. Respond in Brazilian Portuguese, always in second person singular ("Você entra...", "Você vê...").',
       '',
@@ -1937,28 +1938,14 @@ export class GeminiAdapter implements Narrator {
       'NEVER redirect the story back to the planned arc if the player has already deviated from it — the emergent story IS the story.',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
-      '━━━ PRIMARY RULE FOR THE "narrative" FIELD ━━━',
-      'Narrate ONLY the direct consequence of the player\'s current action. The narrative MUST stop exactly when the consequence is visible — do NOT describe what the player does after this moment.',
-      'MANDATORY: The narrative covers ONE beat: what changed RIGHT NOW as a result of this action. The player\'s next move is ALWAYS chosen from the "options" field, NEVER decided inside "narrative".',
+      '━━━ PRIMARY RULE FOR THE NARRATOR SEGMENTS ━━━',
+      'Narrate ONLY the direct consequence of the player\'s current action. The narration MUST stop exactly when the consequence is visible — do NOT describe what the player does after this moment.',
+      'MANDATORY: The narrator segments cover ONE beat: what changed RIGHT NOW as a result of this action. The player\'s next move is ALWAYS chosen from the "options" field, NEVER decided inside the segments.',
       'FOCUS: what changed, what happened. Avoid recaps, state repetitions, and editorial conclusions.',
       '',
       'DO NOT WRITE:',
       '  • states that didn\'t change, absent things, or generic filler ("nothing changed", "time passes", "no threats in sight")',
-      '  • literal mechanical terms: "Shaken", "Wounded", "Fatigue" — narrate instead: "the arm gives out", "vision blurs"',
-      '  • NPCs making autonomous decisions that REMOVE player agency or skip the player\'s next choice',
-      '    (WRONG: "Marcus leaves, warns the others, and the building is surrounded." RIGHT: "Marcus steps back, hand moving toward his radio.")',
-      '  • NOTE: NPCs MAY speak, threaten, taunt, react emotionally, or take immediate in-scene actions (draw a weapon, block a door, shout a warning) — this IS expected. The prohibition is on NPCs resolving the OUTCOME of the scene without player input.',
-      '  • editorial conclusions that remove agency: "the priority now is...", "the next step is...", "you two need to...", "now you should...", "it\'s time to...", "you have to...", "you need to...", "you go to...", "you decide to..."',
-      '',
-      'AGENCY: open situations (what to do with an NPC, where to go) become OPTIONS — never resolved in the narrative.',
-      '',
-      'EXAMPLES OF CORRECT vs WRONG narrative endings:',
-      '   CORRECT: "The guard\'s weapon clatters to the ground. Two others step forward, blades drawn."',
-      '   WRONG:   "The guard falls. You charge the remaining two and escape through the window."',
-      '   CORRECT: "The door opens, revealing a dimly lit corridor."',
-      '   WRONG:   "The door opens. You step inside and search the room for clues."',
-      '   CORRECT: "Mira flinches at your words, her expression shifting to something harder."',
-      '   WRONG:   "Mira flinches. Now you need to decide whether to trust her or walk away."',
+      '  • any mention of rules, dice, or mechanics — including literal terms ("Shaken", "Wounded", "Fatigue"). Narrate the effect instead: "the arm gives out", "vision blurs".',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
       'The structured context of this call is the only canonical source for JSON fields.',
@@ -1967,10 +1954,9 @@ export class GeminiAdapter implements Narrator {
       '',
       'You MUST return ONLY a valid JSON (no markdown, no comments) with the following structure:',
       '{',
-      '  "narrative": "<narrative text for this story step>",',
       '  "segments": [',
       '    { "type": "narrator", "text": "<narration, context description, or consequence>" },',
-      '    { "type": "npc", "npcDisplayName": "<friendly NPC name, same as in npcs[]>", "npcId": "<hash id if the NPC is already present; else the temp handle from npcs[]>", "disposition": "hostile|neutral|friendly", "text": "<NPC direct speech>" }',
+      '    { "type": "npc", "npcDisplayName": "<friendly NPC name, same as in npcs[]>", "npcId": "<hash id if the NPC is already present; else the temp handle from npcs[]>", "disposition": "hostile|neutral|friendly", "text": "<only the literal words the NPC speaks aloud — INCLUDE this segment ONLY when an NPC actually talks this turn>" }',
       '  ],',
       '  "options": [',
       '    {',
@@ -2013,18 +1999,16 @@ export class GeminiAdapter implements Narrator {
 	  'Always SELF-CHECK this exclusivity before emitting the response to avoid parsing errors.',
       '',
       'GENERAL RULES:',
-      '- "narrative": mandatory, full turn text (narration + direct speech combined).',
-      '- "segments": type="narrator" for prose/description/consequences; type="npc" for NPC direct speech only. When npc: set "npcDisplayName" to the SAME friendly name used in the "npcs" array (or PRESENT NPCS), and copy "npcId" (the hash) when the NPC is already present. No NPC speech → single type="narrator" segment.',
-      '- The "options" array is MANDATORY and can NEVER be empty. Always return EXACTLY 4 options.',
-      '- If you return empty options or fewer than 4 items, the response will be considered invalid.',
-      '- Choose the 4 options that make the most sense for the current scene — there is NO required mix of types and NO option type is mandatory. Offer combat, social, exploration, movement, investigation, or other actions only when they genuinely fit the fiction of this moment; let the situation decide. If you do offer an attack (actionType "attack"), NEVER use as targetId an NPC listed in DEFEATED NPCS — those enemies are out of combat.',
+      '- "segments": type="narrator" is the DEFAULT and carries ALL prose/description/action/consequence. Add a type="npc" segment ONLY when an NPC speaks a LITERAL line aloud this turn — never for gestures, silence, or being described without words, and never invent dialogue to fill one. In an npc segment, "text" = only the spoken words; set "npcDisplayName" to the same name used in "npcs"/PRESENT NPCS and copy "npcId" when already present.',
+      '- "options": array is MANDATORY and can NEVER be empty. Always return EXACTLY 4 options.',
+      '- Choose the 4 options that make the most sense for the current scene; let the situation decide. If you do offer an attack (actionType "attack"), NEVER use as targetId an NPC listed in DEFEATED NPCS — those enemies are out of combat.',
       '- The "feasible" field must be false if the player lacks the required items/conditions.',
       '-  REQUIRED ITEMS & FEASIBILITY: if an option uses a specific item, that item MUST be listed in "requiredItems" AND must exist in the current ── INVENTORY ── list (match by name). If the item is NOT in the current inventory, set feasible=false with a feasibilityReason naming the missing item. NEVER offer a feasible option that depends on an item the player no longer has (e.g. an artifact dropped, consumed, or confiscated in a previous turn). When unsure an item is still held, treat it as absent.',
       '- For actionType "trait_test", include "skill" or "attribute" in the actionPayload.',
       '- For actionType "attack", include ONLY "targetId" in the actionPayload. Do NOT send damageFormula or ap — the app resolves the player\'s weapon damage from the equipped weapon.',
       '- For actionType "heal": include actionPayload: {} (heals the player) or actionPayload: { targetId: "<allied NPC id>" }.',
       '- NPC ATTACKS: hostile NPC attacks this turn → fill "npcAttacks": [{ "npcId", "skillDie": 6|8|10|12 (6=common, 8=trained, 10=champion, 12=elite), "damageFormula" (e.g. "str+d6", "2d6"), "ap": 0 }]. No attack → [].',
-      '- NPC ATTACK NARRATION: whenever npcAttacks is non-empty, the "narrative" MUST include a vivid action-scene description of the attack — describe the attacker\'s movement, the weapon or technique used, and the immediate physical impact or threat to the player. Write it as a dynamic action beat, not a passive mention. Example: "O guarda avança com o machado erguido e desfere um golpe violento em direção ao seu ombro."',
+      '- NPC ATTACK NARRATION: whenever npcAttacks is non-empty, the narrator segment text MUST include a vivid action-scene description of the attack — describe the attacker\'s movement, the weapon or technique used, and the immediate physical impact or threat to the player. Write it as a dynamic action beat, not a passive mention. Example: "O guarda avança com o machado erguido e desfere um golpe violento em direção ao seu ombro."',
       '- When narrating downed Extras (isWildCard=false): describe them leaving combat/fleeing/falling with 1 single wound.',
       '- When narrating wounded Wild Cards: accumulate penalties, they keep fighting until 4+ wounds.',
       '- For actionType "travel", include "to" in the actionPayload.',
@@ -2041,7 +2025,6 @@ export class GeminiAdapter implements Narrator {
       '- Ammunition (category "ammunition") should ONLY appear in itemChanges with changeType "used" when the PLAYER\'S ACTION this turn is of type "attack" (shot actually fired). NEVER register ammunition consumption on trait_test, custom, travel, or any other type that is not attack — even if hostile NPCs were introduced in the narrative.',
       '-  MUNIÇÃO ENCONTRADA/RECEBIDA: ao narrar e registrar munição achada, sempre descreva em UNIDADES INDIVIDUAIS (ex.: "12 balas", "8 cartuchos", "20 flechas"). NUNCA use objetos de agrupamento como caixa, pente, carregador, clipe, maço, pacote, fardo ou similares — nem na narrativa nem no nome do item. O campo "quantity" deve ser o número total de unidades individuais (ex.: uma "caixa de munição" deve virar "30 balas" com quantity=30, não "1 caixa").',
       '- Every item MUST have the "category" field. Use: weapon (weapons), armor (armor), consumable (consumables like potions/rations), ammunition (ammo), money (money/coins/monetary resources — the "quantity" field represents the exact amount of coins/credits/gold), vehicle (vehicles: car, motorcycle, plane, boat, ship, etc.), property (properties: house, apartment, farm, office, etc.), quest (narrative/quest item), misc (other items).',
-      '- Never break immersion. Never mention rules, dice, or mechanics in the narrative text.',
       '- Do not repeat the same narrative. Advance the story each turn.',
       '- Option texts must be at most 1 short sentence each.',
       '- Do not add extra fields beyond those specified above.'
@@ -2051,7 +2034,7 @@ export class GeminiAdapter implements Narrator {
     lines.push('')
     if (narrativeStyle === 'concise') {
       lines.push(
-        '━━━ MANDATORY "narrative" LENGTH: CONCISE ━━━',
+        '━━━ MANDATORY NARRATION LENGTH: CONCISE ━━━',
         'MAXIMUM 3 SHORT sentences. 1 single paragraph.',
         'Sentences must be SHORT and DIRECT — no comma-chained clauses.',
         'Any response with more than 3 sentences violates this instruction.',
@@ -2062,7 +2045,7 @@ export class GeminiAdapter implements Narrator {
       )
     } else if (narrativeStyle === 'balanced') {
       lines.push(
-        '━━━ MANDATORY "narrative" LENGTH: BALANCED ━━━',
+        '━━━ MANDATORY NARRATION LENGTH: BALANCED ━━━',
         'BETWEEN 4 and 6 sentences distributed in 2 paragraphs.',
         'Paragraph 1: concrete consequence of the action + NPC reaction.',
         'Paragraph 2: hook or tension for the next turn.',
@@ -2070,7 +2053,7 @@ export class GeminiAdapter implements Narrator {
       )
     } else {
       lines.push(
-        '━━━ MANDATORY "narrative" LENGTH (DEFAULT) ━━━',
+        '━━━ MANDATORY NARRATION LENGTH (DEFAULT) ━━━',
         'MAXIMUM 3 SHORT sentences. 1 single paragraph.',
         'Sentences must be SHORT and DIRECT — no comma-chained clauses.',
         'Any response with more than 3 sentences violates this instruction.',
@@ -2143,7 +2126,7 @@ export class GeminiAdapter implements Narrator {
       lines.push(
         '',
         '=== CAMPAIGN (PLANNED ARC — background only) ===',
-        'Use this for thematic coherence and world color. Do NOT treat it as a script to follow — the ADVENTURE SUMMARY is what canonically happened.',
+        'Thematic and world color only — not a script (see CANONICAL HIERARCHY).',
         `Name: ${campaign.name ?? 'Unnamed'}`,
         `Story: ${campaign.storyDescription ?? ''}`
       )
@@ -2154,21 +2137,12 @@ export class GeminiAdapter implements Narrator {
       lines.push('', rulesDigest)
     }
 
-    // Player skills (names the LLM must use in diceCheck)
-    if (playerSkills && Object.keys(playerSkills).length > 0) {
-      lines.push(
-        '',
-        '=== PLAYER SKILLS (use these exact names in diceCheck.skill) ===',
-        ...Object.entries(playerSkills).map(([name, die]) => `- ${name}: ${die}`)
-      )
-    }
-
     // Adventure summary so far
     if (summaryText) {
       lines.push(
         '',
         '=== ADVENTURE SUMMARY (ESTABLISHED CANON) ===',
-        '⚠️ This is the authoritative record of what already happened in this game. Facts here are FIXED — they cannot be contradicted by UNIVERSE lore or CAMPAIGN story. Build forward from this; do NOT rewrite, ignore, or contradict any event recorded here.',
+        '⚠️ Authoritative canon of what already happened — build forward from this; never contradict it.',
         summaryText
       )
     }
@@ -2215,7 +2189,7 @@ export class GeminiAdapter implements Narrator {
       '=== NARRATION INSTRUCTIONS ===',
       'ACTION RESULT:',
       '  • Success: describe the concrete positive consequence + its immediate impact on the world or present NPCs.',
-      '  • Failure: describe what specifically failed + a new complication or risk that emerges from the failure (failure is never neutral — it changes something).',
+      '  • Failure: describe what specifically failed + 50% chance of complications.',
       '  • Success with Raise: narrate an unexpected extra benefit beyond what was expected.',
       '',
       'NARRATIVE PLAUSIBILITY:',
@@ -2223,8 +2197,6 @@ export class GeminiAdapter implements Narrator {
       '  • JUSTIFIED OUTCOME OVERRIDE: you MAY invert the narrated outcome against the mechanical result — narrate a mechanical success as a setback, or a mechanical failure as an unexpected gain — ONLY when an explicit in-fiction cause justifies it (e.g. third-party interference, an environmental twist, an unforeseen NPC reaction, a hidden complication revealed now, or a stroke of luck). When you invert, the narrative TEXT must state that cause clearly so the player can see WHY the outcome differed from what the roll implied — the override must never read as arbitrary or as a contradiction of the dice. If no explicit narrative cause exists, keep the mechanical result.',
       '  • WHEN — AND ONLY WHEN — you invert the outcome, you MUST also fill the JSON field "outcomeOverride" with: mechanicalResult (the dice result: "success" or "failure"), narratedOutcome (what you actually narrated, the opposite value), and justification (a short sentence naming the in-fiction cause). If you do NOT invert, OMIT "outcomeOverride" entirely (or set it to null). Never fill it when narratedOutcome equals mechanicalResult.',
       '  •  ITEM-PREMISE OVERRIDE (takes precedence over the MECHANICAL RESULT): if the player\'s chosen action depends on a specific item that is NOT in the current ── INVENTORY ── list, do NOT narrate that item being used and do NOT fabricate it. Narrate instead that the character reaches for it and it is gone/unavailable, and make the resulting options reflect that. This overrides a mechanical "success" because the premise of the action is invalid — a success cannot be granted for using an item the player does not have.',
-      '  • When NOT overriding, on success: preserve the positive consequence; optionally add cost, friction, or dilemma.',
-      '  • When NOT overriding, on failure: preserve the negative consequence; optionally reveal a clue or open a worse path.',
       '  • Use results to seed future plots naturally (social debt, alerted enemy, incomplete clue).',
       '  • JSON FIELDS: register only elements with explicit structured context support — no invented state.',
       '  • NARRATIVE TEXT: freely add atmosphere, sensory details, hints, world flavor — keep OUT of JSON fields.',
@@ -2237,7 +2209,7 @@ export class GeminiAdapter implements Narrator {
       'When a PRESENT NPC has Personality, Motivation, or Speech fields:',
       '  • Use these to shape EVERY reaction, dialogue line, and behavior choice for that NPC.',
       '  • NPCs are CHARACTERS, not statblocks. They have opinions, fear, pride, goals.',
-      '  • NPCs may speak (via segments type="npc"), threaten, taunt, plead, negotiate, or react emotionally in ways consistent with their character.',
+      '  • NPCs may threaten, taunt, plead, negotiate, or react emotionally in ways consistent with their character.',
       '  • Hostile NPCs may take immediate in-scene initiative: draw a weapon, step forward, shout a warning, call for backup — as long as the outcome of the SCENE remains unresolved and the player still chooses their next action from "options".',
       '  • NPCs without personality/motivation fields: use their disposition and context to infer a credible behavioral baseline.',
       '  • CONSISTENCY: if an NPC said or did something in a previous turn, stay true to that characterization. Never flip tone without narrative cause.',
@@ -2252,7 +2224,7 @@ export class GeminiAdapter implements Narrator {
     opts: SanitizedNarratorResponseOptions = {}
   ): NarratorTurnResponse {
     const { fillFallbackOptions = true, allowNarrativeFallback = true, availableItemNames, presentNpcs = [] } = opts
-    const narrative = typeof raw.narrative === 'string'
+    const narrativeFallback = typeof raw.narrative === 'string'
       ? sanitizeNarrativeOutput(raw.narrative) || (allowNarrativeFallback ? 'A história continua...' : '')
       : (allowNarrativeFallback ? 'A história continua...' : '')
 
@@ -2569,8 +2541,8 @@ export class GeminiAdapter implements Narrator {
       pushNarratorSegment(text)
     }
 
-    if (!segments.length && narrative) {
-      pushNarratorSegment(narrative)
+    if (!segments.length && narrativeFallback) {
+      pushNarratorSegment(narrativeFallback)
     }
 
     // Parse item changes
@@ -2707,7 +2679,6 @@ export class GeminiAdapter implements Narrator {
     }
 
     return {
-      narrative,
       segments,
       options,
       npcs,
@@ -2719,7 +2690,7 @@ export class GeminiAdapter implements Narrator {
   }
 
   private isNarratorResponseStructurallyValid(response: NarratorTurnResponse): { valid: true } | { valid: false; reason: string } {
-    if (!response.narrative.trim()) return { valid: false, reason: 'narrative empty' }
+    if (!response.segments?.length || !segmentsToText(response.segments).trim()) return { valid: false, reason: 'segments empty' }
     if (response.options.length !== 4) return { valid: false, reason: `options count=${response.options.length}` }
 
     for (let i = 0; i < response.options.length; i++) {
@@ -2997,7 +2968,7 @@ export class GeminiAdapter implements Narrator {
 
     const recentText = req.recentMessages
       .slice(-5)
-      .map((m) => m.role === 'narrator' ? `Narrator: ${(m.narrative ?? '').slice(0, 200)}` : `Player: ${m.playerInput ?? ''}`)
+      .map((m) => m.role === 'narrator' ? `Narrator: ${segmentsToText(m.segments).slice(0, 200)}` : `Player: ${m.playerInput ?? ''}`)
       .filter(Boolean)
       .join('\n')
 
@@ -3144,7 +3115,7 @@ export class GeminiAdapter implements Narrator {
       // Fallback mínimo para não bloquear a sessão
       return {
         isFallback: true,
-        narrative: `You arrive at a new place. The air carries the weight of untold stories. Around you, the landscape of ${req.campaign.name ?? 'this world'} stretches as far as the eye can see. A path opens before you, and you feel that adventure is about to begin.`,
+        segments: [{ type: 'narrator', text: `You arrive at a new place. The air carries the weight of untold stories. Around you, the landscape of ${req.campaign.name ?? 'this world'} stretches as far as the eye can see. A path opens before you, and you feel that adventure is about to begin.` }],
         options: [
           { id: randomUUID(), text: 'Explore the main path', actionType: 'custom', actionPayload: { input: 'Explore the main path' }, feasible: true, diceCheck: { required: false, reason: 'Safe and accessible path' } },
           { id: randomUUID(), text: 'Observe the surroundings carefully', actionType: 'trait_test', actionPayload: { skill: 'Percepção' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detect hidden details in the environment' } },
@@ -3164,8 +3135,9 @@ export class GeminiAdapter implements Narrator {
     const contents: ContentEntry[] = []
 
     for (const msg of req.recentMessages) {
-      if (msg.role === 'narrator' && msg.narrative) {
-        contents.push({ role: 'model', text: msg.narrative })
+      const narratorText = msg.role === 'narrator' ? segmentsToText(msg.segments) : ''
+      if (msg.role === 'narrator' && narratorText) {
+        contents.push({ role: 'model', text: narratorText })
       } else if (msg.role === 'player' && msg.playerInput) {
         contents.push({ role: 'user', text: msg.playerInput })
       }
@@ -3304,7 +3276,7 @@ export class GeminiAdapter implements Narrator {
       warn('narrateTurn', `Fallback ativado: ${error instanceof Error ? error.message : String(error)}`)
       return {
         isFallback: true,
-        narrative: `Your action echoes through the environment. The consequences are not yet clear, but the world around you reacts in subtle ways. What will you do now?`,
+        segments: [{ type: 'narrator', text: `Your action echoes through the environment. The consequences are not yet clear, but the world around you reacts in subtle ways. What will you do now?` }],
         options: [
           { id: randomUUID(), text: 'Investigate the result of the action', actionType: 'trait_test', actionPayload: { skill: 'Percepção' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Investigation requires attention to detail' } },
           { id: randomUUID(), text: 'Move forward with caution', actionType: 'custom', actionPayload: { input: 'Move forward with caution' }, feasible: true, diceCheck: { required: false, reason: 'Cautious movement with no immediate threat' } },

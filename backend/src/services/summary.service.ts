@@ -7,6 +7,7 @@ import type { GameState } from '../domain/types/gameState.js'
 import type { Narrator } from '../llm/narrator.js'
 import { GeminiAdapter } from '../llm/gemini.adapter.js'
 import { log, warn } from '../utils/file-logger.js'
+import { messageText } from '../domain/segments.js'
 
 export type SummaryDecisionHints = {
   endedCombat?: boolean
@@ -62,7 +63,7 @@ export class SummaryService {
       .sort((a, b) => a.seq - b.seq || a.turn - b.turn)
 
     return sorted.map((m) => {
-      if (m.role === 'narrator') return { role: m.role as 'narrator', text: m.narrative ?? '', turn: m.turn }
+      if (m.role === 'narrator') return { role: m.role as 'narrator', text: messageText(m), turn: m.turn }
       return { role: m.role as 'player', text: m.playerInput ?? '', turn: m.turn }
     }).filter((m) => m.text.trim())
   }

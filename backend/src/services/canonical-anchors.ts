@@ -1,5 +1,6 @@
 import type { GameState } from '../domain/types/gameState.js'
 import type { ChatMessageRow } from '../repositories/chatMessage.repo.js'
+import { messageText } from '../domain/segments.js'
 
 export type CanonicalAnchors = {
   currentLocation: string
@@ -377,7 +378,8 @@ function collectHistoricalText(recentMessages: ChatMessageRow[], summaryText?: s
   if (summaryText?.trim()) lines.push(summaryText)
 
   for (const message of recentMessages) {
-    if (message.narrative?.trim()) lines.push(message.narrative)
+    const mt = messageText(message)
+    if (mt.trim()) lines.push(mt)
     if (message.playerInput?.trim()) lines.push(message.playerInput)
     if (Array.isArray(message.npcs)) {
       lines.push(...message.npcs.map((npc) => npc.name))

@@ -187,8 +187,7 @@ export type ValidateActionResponse = {
 }
 
 export type NarratorTurnResponse = {
-  narrative: string
-  segments?: NarrativeSegment[]
+  segments: NarrativeSegment[]
   options: ActionOption[]
   npcs: NPCMention[]
   itemChanges: ItemChange[]
