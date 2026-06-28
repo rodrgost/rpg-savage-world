@@ -2192,8 +2192,10 @@ export class GeminiAdapter implements Narrator {
       lines.push(
         '',
         '=== SESSION START RULES ===',
-        '- You MAY add x initial items in itemChanges with changeType "gained". be generous.',
-        '- Initial items must represent belongings the character already has at the start of the adventure.'
+        '- You SHOULD populate itemChanges with changeType "gained" to give the character their starting kit. Be generous — aim for 4 to 8 items that feel right for the character\'s profession and background.',
+        '- Include class-appropriate gear: weapons and armor for fighters, tools and kits for specialists, provisions and rope for explorers, coin pouches and trade goods for merchants, scrolls or reagents for mages, etc.',
+        '- Always include a small amount of money (category "money") unless the concept explicitly forbids it.',
+        '- Items must represent possessions the character plausibly already owns at the start of the adventure — personal kit, not rewards or loot.'
       )
     } else {
       lines.push(
@@ -2208,10 +2210,7 @@ export class GeminiAdapter implements Narrator {
         '    { "displayName": "UCT Agent #2", "disposition": "hostile", "newlyIntroduced": true }',
         '  ]',
         '',
-        /*'- On a normal turn, do NOT create itemChanges with changeType "gained" EXCEPT in the situations below:',
-        '  (1) Any category EXCEPT "weapon" and "armor", when the narrative this turn justifies it (store purchase, found item, reward, inheritance, conquest).',
-        '  (2) A NPC PRESENT IN THE SCENE explicitly gives an item to the player THIS turn (e.g.: passes a key, hands over a document). Use changeType "gained" with the correct item category.',
-      */'- On a normal turn, use itemChanges only for "lost", "used", or "gained" (per rules above) for items relevant to this turn\'s action.',
+        '- ITEM GAINS on a normal turn: use changeType "gained" whenever the narrative this turn justifies it — be generous. Valid situations: visiting a shop or market (player buys or trades for items), looting a defeated enemy or container, receiving a reward, gift, or payment from an NPC, finding an abandoned item in the scene, or being granted equipment by a faction or ally. Register ALL items the narrative establishes the character obtained this turn, including weapons, armor, and any category.',
         '- statusChanges "applied": ONLY for non-mechanical narrative effects (environmental poison, narrative burn, a story-driven fear or curse). NEVER register combat engine states via statusChanges — Shaken, Wounded, Fatigued, and all mechanical combat conditions are managed EXCLUSIVELY by the rule engine. If you register them here, they will be discarded.',
         '- statusChanges "removed": ONLY for effects already listed in ACTIVE EFFECTS. Use the exact effectId or name. Do not invent removals for effects that are not listed.',
         '- If the action or narrative establishes safe rest, hospitalization, medical discharge, or the passage of weeks/months, remove in statusChanges the temporary effects that have been healed or expired.',
