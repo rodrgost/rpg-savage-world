@@ -2176,19 +2176,13 @@ export class GeminiAdapter implements Narrator {
       lines.push(
         '',
         '=== SESSION START RULES ===',
-        '- You MAY introduce 1 initial NPC coherent with the scene.',
         '- You MAY add x initial items in itemChanges with changeType "gained". be generous.',
-        '- Initial items must represent belongings the character already has at the start of the adventure.',
-        '- Even at the start, do not invent skills, mechanical ids, or destinations outside the provided setting.'
+        '- Initial items must represent belongings the character already has at the start of the adventure.'
       )
     } else {
       lines.push(
         '',
         '=== CANONICAL TURN RULES ===',
-        '- On a normal turn, use the "npcs" array for NPCs already listed in PRESENT NPCS.',
-        '- NPC IDENTITY MODEL: each NPC has a "displayName" (the friendly, human-readable name shown to the player — REQUIRED) and a hash "id" used internally for identification. The SYSTEM generates the hash id from the displayName automatically, so you do NOT need to invent ids for NEW NPCs. For NPCs already in PRESENT NPCS, copy their existing "id" (the hash) and reuse the SAME "displayName".',
-        '- CRITICAL RULE — NPCS INTRODUCED IN THE NARRATIVE: If your narrative this turn mentions any NPC, agent, creature, or enemy that was NOT in PRESENT NPCS, you MUST register them in "npcs" with newlyIntroduced: true, appropriate disposition, and a distinctive "displayName". You MAY also include a temporary "id" handle (e.g. "npc-guard-1") and reuse that SAME handle in segments (npcId) and in actionPayload.targetId; alternatively reference the NPC by its exact displayName. The system remaps any handle/name to the final stable hash. Without registering the NPC, you will have no valid target for combat options, and the NPC will not appear in subsequent turns.',
-        '',
         '- MANDATORY COUNT: If the narrative mentions a specific number of NPCs/creatures/agents ("two agents", "three guards", "a group of five", "a patrol of four"), you MUST create exactly that number of separate entries in the "npcs" array. Each entry needs a DISTINCT "displayName" (e.g.: "UCT Agent #1", "UCT Agent #2") and the same disposition. When mentioning a group without explicit number ("a group of", "several", "some"), create at least 2-3 entries to represent the multiple threat.',
         '',
         '  CORRECT EXAMPLE:',
@@ -2197,13 +2191,6 @@ export class GeminiAdapter implements Narrator {
         '    { "displayName": "UCT Agent #1", "disposition": "hostile", "newlyIntroduced": true },',
         '    { "displayName": "UCT Agent #2", "disposition": "hostile", "newlyIntroduced": true }',
         '  ]',
-        '',
-        '  INCORRECT EXAMPLE (DO NOT DO THIS):',
-        '  Narrative: "Two UCT agents enter the room."',
-        '  npcs: [',
-        '    { "displayName": "UCT Agent", "disposition": "hostile", "newlyIntroduced": true }',
-        '  ]',
-        '',
         '',
         /*'- On a normal turn, do NOT create itemChanges with changeType "gained" EXCEPT in the situations below:',
         '  (1) Any category EXCEPT "weapon" and "armor", when the narrative this turn justifies it (store purchase, found item, reward, inheritance, conquest).',
