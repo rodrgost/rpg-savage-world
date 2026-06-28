@@ -2030,6 +2030,7 @@ export class GeminiAdapter implements Narrator {
       '- For actionType "attack", include ONLY "targetId" in the actionPayload. Do NOT send damageFormula or ap — the app resolves the player\'s weapon damage from the equipped weapon.',
       '- For actionType "heal": include actionPayload: {} (heals the player) or actionPayload: { targetId: "<allied NPC id>" }.',
       '- NPC ATTACKS: hostile NPC attacks this turn → fill "npcAttacks": [{ "npcId", "skillDie": 6|8|10|12 (6=common, 8=trained, 10=champion, 12=elite), "damageFormula" (e.g. "str+d6", "2d6"), "ap": 0 }]. No attack → [].',
+      '- NPC ATTACK NARRATION: whenever npcAttacks is non-empty, the "narrative" MUST include a vivid action-scene description of the attack — describe the attacker\'s movement, the weapon or technique used, and the immediate physical impact or threat to the player. Write it as a dynamic action beat, not a passive mention. Example: "O guarda avança com o machado erguido e desfere um golpe violento em direção ao seu ombro."',
       '- When narrating downed Extras (isWildCard=false): describe them leaving combat/fleeing/falling with 1 single wound.',
       '- When narrating wounded Wild Cards: accumulate penalties, they keep fighting until 4+ wounds.',
       '- For actionType "travel", include "to" in the actionPayload.',
