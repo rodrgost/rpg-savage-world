@@ -555,49 +555,66 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
       </div>
 
       {/* NPCs na cena com status detalhado */}
-      {message.npcs && message.npcs.length > 0 && (
-        <div className="npcs-in-scene-compact">
-          {message.npcs.map((npcMention) => {
-            const npcState = npcs.find((n) => n.id === npcMention.id)
-            // Use snapshot status from the message; fall back to current state only if absent
-            const status = npcMention.status ?? npcState?.status
+      {(() => {
+        if (!message.npcs || message.npcs.length === 0) return null
 
-            const getStatusLabel = (s?: string) => {
-              switch (s) {
-                case 'incapacitated': return 'Incapacitado'
-                case 'defeated': return 'Derrotado'
-                case 'dead': return 'Morto'
-                case 'active': return 'Ativo'
-                default: return 'Ativo'
-              }
-            }
+        // NPCs que têm falas nesta mensagem não exibem card
+        const spokennpcKeys = new Set(
+          segments
+            .filter((s): s is Extract<typeof s, { type: 'npc' }> => s.type === 'npc')
+            .flatMap(s => [s.npcId, s.npcName, s.npcDisplayName].filter(Boolean) as string[])
+        )
 
-            const statusClass = status === 'incapacitated' || status === 'defeated' || status === 'dead'
-              ? 'npc-compact-inactive'
-              : ''
+        const visibleNpcs = message.npcs.filter(
+          m => !spokennpcKeys.has(m.id) && !spokennpcKeys.has(m.name) && !(m.displayName && spokennpcKeys.has(m.displayName))
+        )
 
-            const wounds = npcState?.wounds ?? null
-            const maxWounds = npcState?.maxWounds ?? null
+        if (visibleNpcs.length === 0) return null
 
-            return (
-              <div key={npcMention.id} className={`npc-compact ${npcMention.disposition} ${statusClass}`}>
-                <div className="npc-compact-header">
-                  <span className="npc-compact-name">{npcMention.displayName ?? npcMention.name}</span>
-                  <span className="npc-compact-status">{getStatusLabel(status)}</span>
+        const getStatusLabel = (s?: string) => {
+          switch (s) {
+            case 'incapacitated': return 'Incapacitado'
+            case 'defeated': return 'Derrotado'
+            case 'dead': return 'Morto'
+            case 'active': return 'Ativo'
+            default: return 'Ativo'
+          }
+        }
+
+        return (
+          <div className="npcs-in-scene-compact">
+            {visibleNpcs.map((npcMention) => {
+              const npcState = npcs.find((n) => n.id === npcMention.id)
+              const status = npcMention.status ?? npcState?.status
+              const isEnemy = npcMention.disposition === 'hostile'
+
+              const statusClass = status === 'incapacitated' || status === 'defeated' || status === 'dead'
+                ? 'npc-compact-inactive'
+                : ''
+
+              const wounds = npcState?.wounds ?? null
+              const maxWounds = npcState?.maxWounds ?? null
+
+              return (
+                <div key={npcMention.id} className={`npc-compact ${npcMention.disposition} ${statusClass}`}>
+                  <div className="npc-compact-header">
+                    <span className="npc-compact-name">{npcMention.displayName ?? npcMention.name}</span>
+                    <span className="npc-compact-status">{getStatusLabel(status)}</span>
+                  </div>
+                  <div className="npc-compact-stats">
+                    {isEnemy && wounds !== null && maxWounds !== null && (
+                      <span>Ferimentos: {wounds}/{maxWounds}</span>
+                    )}
+                    {isEnemy && npcState?.toughness != null && <span>Resistência: {npcState.toughness}</span>}
+                    {isEnemy && npcState?.parry != null && <span>Aparar: {npcState.parry}</span>}
+                    {npcState?.isShaken && <span className="shaken-indicator">Abalado</span>}
+                  </div>
                 </div>
-                <div className="npc-compact-stats">
-                  {wounds !== null && maxWounds !== null && (
-                    <span>Ferimentos: {wounds}/{maxWounds}</span>
-                  )}
-                  {npcState?.toughness != null && <span>Resistência: {npcState.toughness}</span>}
-                  {npcState?.parry != null && <span>Aparar: {npcState.parry}</span>}
-                  {npcState?.isShaken && <span className="shaken-indicator">Abalado</span>}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* Itens ganhos/perdidos */}
       {message.itemChanges && message.itemChanges.length > 0 && (
