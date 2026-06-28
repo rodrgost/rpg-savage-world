@@ -1943,6 +1943,15 @@ export class GeminiAdapter implements Narrator {
     const lines = [
       'You are the Narrator of a story. Respond in Brazilian Portuguese, always in second person singular ("Você entra...", "Você vê...").',
       '',
+      '━━━ CANONICAL HIERARCHY — READ THIS FIRST ━━━',
+      'There are two layers of context in this prompt:',
+      '  1. PRE-WRITTEN CONTEXT (UNIVERSE, CAMPAIGN): background material — the intended setting and planned story arc. Use it for tone, vocabulary, and world coherence.',
+      '  2. PLAYED HISTORY (ADVENTURE SUMMARY + recent messages): the authoritative record of what ACTUALLY happened during the game. This is the only source of truth for in-game facts.',
+      'RULE: When there is ANY conflict between the pre-written context and the played history, the played history ALWAYS wins.',
+      'NEVER use UNIVERSE or CAMPAIGN descriptions to contradict, undo, or override events established in the ADVENTURE SUMMARY or recent turns.',
+      'NEVER redirect the story back to the planned arc if the player has already deviated from it — the emergent story IS the story.',
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      '',
       '━━━ PRIMARY RULE FOR THE "narrative" FIELD ━━━',
       'Narrate ONLY the direct consequence of the player\'s current action. The narrative MUST stop exactly when the consequence is visible — do NOT describe what the player does after this moment.',
       'MANDATORY: The narrative covers ONE beat: what changed RIGHT NOW as a result of this action. The player\'s next move is ALWAYS chosen from the "options" field, NEVER decided inside "narrative".',
@@ -2148,7 +2157,8 @@ export class GeminiAdapter implements Narrator {
     if (campaign && campaign.storyDescription) {
       lines.push(
         '',
-        '=== CAMPAIGN ===',
+        '=== CAMPAIGN (PLANNED ARC — background only) ===',
+        'Use this for thematic coherence and world color. Do NOT treat it as a script to follow — the ADVENTURE SUMMARY is what canonically happened.',
         `Name: ${campaign.name ?? 'Unnamed'}`,
         `Story: ${campaign.storyDescription ?? ''}`
       )
@@ -2170,7 +2180,12 @@ export class GeminiAdapter implements Narrator {
 
     // Adventure summary so far
     if (summaryText) {
-      lines.push('', '=== ADVENTURE SUMMARY ===', summaryText)
+      lines.push(
+        '',
+        '=== ADVENTURE SUMMARY (ESTABLISHED CANON) ===',
+        '⚠️ This is the authoritative record of what already happened in this game. Facts here are FIXED — they cannot be contradicted by UNIVERSE lore or CAMPAIGN story. Build forward from this; do NOT rewrite, ignore, or contradict any event recorded here.',
+        summaryText
+      )
     }
 
     if (mode === 'start') {
