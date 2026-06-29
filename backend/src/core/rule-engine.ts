@@ -497,13 +497,15 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
     case 'travel': {
       const from = nextState.worldState.activeLocation
       nextState.worldState.activeLocation = action.to
-      // Move NPCs friendly/neutral que estavam no local de partida junto com o jogador
-      nextState.npcs = nextState.npcs.map((npc) => {
-        if (npc.location === from && npc.disposition !== 'hostile') {
-          return { ...npc, location: action.to }
-        }
-        return npc
-      })
+      // Move NPCs friendly/neutral da cena de partida com o jogador; remove hostis que ficam para trás
+      nextState.npcs = nextState.npcs
+        .map((npc) => {
+          if (npc.location === from && npc.disposition !== 'hostile') {
+            return { ...npc, location: action.to }
+          }
+          return npc
+        })
+        .filter((npc) => !(npc.disposition === 'hostile' && (!npc.location || npc.location === from)))
       emittedEvents.push({ type: 'location_change', payload: { from, to: action.to } })
       break
     }

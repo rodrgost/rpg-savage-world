@@ -1888,7 +1888,7 @@ export function GamePage() {
 
   const mentionMatches = useMemo<MentionNpc[]>(() => {
     if (!mention) return []
-    const list = state?.npcs ?? []
+    const list = (state?.npcs ?? []).filter((n) => !n.location || n.location === state?.worldState.activeLocation)
     const q = mention.query.trim().toLowerCase()
     const visible = list.filter((n) => (n.status ?? 'active') !== 'dead')
     if (!q) return visible
@@ -2444,7 +2444,7 @@ export function GamePage() {
   const isShaken = state?.player.isShaken ?? false
   const inventory = state?.player.inventory ?? []
   const statusEffects = state?.player.statusEffects ?? []
-  const npcEffects = state?.npcs ?? []
+  const npcEffects = (state?.npcs ?? []).filter((n) => !n.location || n.location === state?.worldState.activeLocation)
 
   return (
     <section className="page-game">

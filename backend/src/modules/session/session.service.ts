@@ -203,6 +203,11 @@ export class SessionService {
       const mention = mentionById.get(existingNpc.id)
       if (!mention) return existingNpc
 
+      // Não atualiza NPCs que pertencem a outra cena
+      if (existingNpc.location && existingNpc.location !== sceneLocation) {
+        return existingNpc
+      }
+
       const mentionDisplay = mention.displayName ?? mention.name
 
       // Verifica se há mudanças em name/displayName, disposition ou status
@@ -245,12 +250,15 @@ export class SessionService {
   }
 
   private hydrateSceneNpcsFromRecentNarration(state: GameState, recentMessages: ChatMessageRow[]): GameState {
-    // Acumula NPCs de TODAS as mensagens recentes do narrador (mais recentes sobrescrevem as anteriores)
+    const activeLocation = state.worldState.activeLocation
+    // Acumula NPCs apenas das mensagens da cena atual (mensagens legadas sem location são incluídas para retrocompatibilidade)
     const accumulatedNpcs = new Map<string, NarratorTurnResponse['npcs'][number]>()
     for (const message of recentMessages) {
       if (message.role === 'narrator' && Array.isArray(message.npcs)) {
-        for (const npc of message.npcs) {
-          accumulatedNpcs.set(npc.id, npc)
+        if (!message.location || message.location === activeLocation) {
+          for (const npc of message.npcs) {
+            accumulatedNpcs.set(npc.id, npc)
+          }
         }
       }
     }
@@ -907,7 +915,8 @@ export class SessionService {
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
-      statusChanges: narratorResponse.statusChanges
+      statusChanges: narratorResponse.statusChanges,
+      location: state.worldState.activeLocation
     })
 
     const payload = await this.buildSessionPayload(sessionId)
@@ -1071,7 +1080,8 @@ export class SessionService {
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
-      statusChanges: narratorResponse.statusChanges
+      statusChanges: narratorResponse.statusChanges,
+      location: state.worldState.activeLocation
     })
 
     const payload = await this.buildSessionPayload(params.sessionId)
@@ -1439,7 +1449,8 @@ export class SessionService {
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
-      statusChanges: narratorResponse.statusChanges
+      statusChanges: narratorResponse.statusChanges,
+      location: finalState.worldState.activeLocation
     })
 
     // 7. Gerenciar resumo: compactar storage ou atualizar resumo incremental (nunca os dois no mesmo turno)

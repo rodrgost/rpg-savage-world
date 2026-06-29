@@ -30,6 +30,8 @@ export type ChatMessageRow = {
   statusChanges?: StatusChange[]
   /** Engine events attached to system messages (e.g. trait_test results) */
   engineEvents?: Array<{ type: string; payload: Record<string, unknown> }>
+  /** Localização ativa no momento em que a mensagem foi gerada (usado para filtrar NPCs por cena) */
+  location?: string
   createdAt?: unknown
 }
 
