@@ -159,8 +159,13 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
       },
       required: ['mechanicalResult', 'narratedOutcome', 'justification'],
       propertyOrdering: ['mechanicalResult', 'narratedOutcome', 'justification']
+    },
+    storyHook: {
+      type: 'STRING',
+      nullable: true,
+      description: 'Gancho de história: 1 frase curta sobre algo acontecendo fora de cena — um evento, indício ou ameaça que cria tensão ou curiosidade para o próximo turno. Omitir (null) quando não houver nada relevante além da consequência direta da ação.'
     }
   },
   required: ['segments', 'options'],
-  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride']
+  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride', 'storyHook']
 }
