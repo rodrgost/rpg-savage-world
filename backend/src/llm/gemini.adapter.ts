@@ -2035,9 +2035,9 @@ export class GeminiAdapter implements Narrator {
     if (narrativeStyle === 'concise') {
       lines.push(
         '━━━ MANDATORY NARRATION LENGTH: CONCISE ━━━',
-        'MAXIMUM 3 SHORT sentences. 1 single paragraph.',
+        'MAXIMUM 2 SHORT sentences. 1 single paragraph.',
         'Sentences must be SHORT and DIRECT — no comma-chained clauses.',
-        'Any response with more than 3 sentences violates this instruction.',
+        'Any response with more than 2 sentences violates this instruction.',
         'STYLE: plain and factual. State what happens — no atmospheric build-up or scene-setting preamble.',
         'FORBIDDEN openings: descriptions of silence, sound, smell, light, or air ("O silêncio...", "Um zumbido...", "O ar..."). Start with the concrete fact or the consequence of the action.',
         'No poetic metaphors and no personification of objects or environment. Name things directly.',
@@ -2046,7 +2046,7 @@ export class GeminiAdapter implements Narrator {
     } else if (narrativeStyle === 'balanced') {
       lines.push(
         '━━━ MANDATORY NARRATION LENGTH: BALANCED ━━━',
-        'BETWEEN 4 and 6 sentences distributed in 2 paragraphs.',
+        'BETWEEN 2 and 4 sentences distributed in 1 or 2 paragraphs.',
         'Paragraph 1: concrete consequence of the action + NPC reaction.',
         'Paragraph 2: hook or tension for the next turn.',
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
