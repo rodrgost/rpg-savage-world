@@ -57,8 +57,8 @@ export function createInitialState(params: { sessionId: string; campaignId: stri
       sessionId: params.sessionId,
       campaignId: params.campaignId,
       ...(params.worldId ? { worldId: params.worldId } : {}),
-      ...(params.narrativeStyle ? { narrativeStyle: params.narrativeStyle } : {}),
-      ...(params.simpleVocabulary !== undefined ? { simpleVocabulary: params.simpleVocabulary } : {}),
+      narrativeStyle: params.narrativeStyle ?? 'concise',
+      simpleVocabulary: params.simpleVocabulary ?? true,
       turn: 0,
       chapter: 1
     },
