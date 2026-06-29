@@ -404,6 +404,13 @@ function sanitizeInlineText(value: unknown, fallback = ''): string {
   return cleaned || fallback
 }
 
+// Remove padrões de quantidade que o LLM pode incluir no nome do item
+// Ex: "Espada x3", "Espada (x3)", "Espada ×3", "Espada x 3"
+function stripQuantityFromName(name: string): string {
+  const stripped = name.replace(/\s*[\(（]?\s*[x×]\s*\d+\s*[\)）]?\s*$/i, '').trim()
+  return stripped || name
+}
+
 function sanitizeNullableInlineText(value: unknown): string | null {
   const cleaned = sanitizeInlineText(value, '')
   return cleaned || null
@@ -2013,7 +2020,7 @@ export class GeminiAdapter implements Narrator {
       '- When narrating wounded Wild Cards: accumulate penalties, they keep fighting until 4+ wounds.',
       '- For actionType "travel", include "to" in the actionPayload.',
       '- For actionType "custom", include "input" in the actionPayload with the action description.',
-      '- Gained items must have creative names coherent with the setting.',
+      '- Gained items must have creative names coherent with the setting. The "name" field must contain ONLY the item name — NEVER include quantity or "x3"-style suffixes in the name (use the "quantity" field for that).',
       '-  CRITICAL RULE — itemChanges:',
       '  • changeType "gained": ONLY when the MECHANICAL RESULT contains explicit evidence ([item_gained]). Never invent gained items from narrative alone.',
       '  • changeType "lost" or "used": register when (a) the MECHANICAL RESULT has explicit evidence ([item_lost], [item_used], [ammunition_consumed]), OR (b) your narrative THIS TURN explicitly describes the item being dropped, destroyed, confiscated, consumed, or otherwise leaving the player\'s possession. Example: if the narrative says "forçando você a soltá-lo" about an item, register that item with changeType "lost".',
@@ -2566,7 +2573,7 @@ export class GeminiAdapter implements Narrator {
       const rawCategory = typeof item.category === 'string' ? item.category : undefined
       return {
         itemId: typeof item.itemId === 'string' ? item.itemId : randomUUID(),
-        name: sanitizeInlineText(item.name, 'Item'),
+        name: stripQuantityFromName(sanitizeInlineText(item.name, 'Item')),
         quantity: typeof item.quantity === 'number' ? item.quantity : 1,
         changeType: (['gained', 'lost', 'used'].includes(item.changeType as string) ? item.changeType : 'gained') as ItemChange['changeType'],
         ...(rawCategory && VALID_ITEM_CATEGORIES.has(rawCategory) ? { category: rawCategory as ItemChange['category'] } : {})
