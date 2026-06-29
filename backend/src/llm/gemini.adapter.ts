@@ -1925,7 +1925,7 @@ export class GeminiAdapter implements Narrator {
     narrativeStyle?: 'concise' | 'balanced'
     simpleVocabulary?: boolean
   } = {}): string {
-    const { world, campaign, rulesDigest, summaryText, mode = 'turn', narrativeStyle, simpleVocabulary } = opts
+    const { world, campaign, rulesDigest, summaryText, playerSkills, mode = 'turn', narrativeStyle, simpleVocabulary } = opts
     const lines = [
       'You are the Narrator of a story. Respond in Brazilian Portuguese, always in second person singular ("Você entra...", "Você vê...").',
       '',
@@ -2135,6 +2135,19 @@ export class GeminiAdapter implements Narrator {
     // Inject Savage Worlds rules digest (nearly static — only changes if edges/hindrances change)
     if (rulesDigest) {
       lines.push('', rulesDigest)
+    }
+
+    // Player skill levels — listed explicitly so the LLM knows which dice the character has trained
+    if (playerSkills && Object.keys(playerSkills).length > 0) {
+      const skillLines = Object.entries(playerSkills)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([label, die]) => `${label}: ${die}`)
+      lines.push(
+        '',
+        '=== PLAYER SKILL LEVELS ===',
+        'These are the character\'s trained skills with their current die type. Use these when suggesting trait_test options — prefer skills the character actually has trained.',
+        ...skillLines
+      )
     }
 
     // Adventure summary so far
