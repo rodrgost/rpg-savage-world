@@ -1,5 +1,4 @@
 import { env } from '../config/env.js'
-import { SessionEventRepo } from '../repositories/sessionEvent.repo.js'
 import { SessionSummaryRepo } from '../repositories/sessionSummary.repo.js'
 import { ChatMessageRepo } from '../repositories/chatMessage.repo.js'
 import type { ChatMessageRow } from '../repositories/chatMessage.repo.js'
@@ -8,10 +7,6 @@ import type { Narrator } from '../llm/narrator.js'
 import { GeminiAdapter } from '../llm/gemini.adapter.js'
 import { log, warn } from '../utils/file-logger.js'
 import { messageText } from '../domain/segments.js'
-
-export type SummaryDecisionHints = {
-  endedCombat?: boolean
-}
 
 function trimIncompleteSummaryText(text: string): string {
   const normalized = text.replace(/\r\n?/g, '\n').trim()
@@ -55,9 +50,6 @@ export class SummaryService {
   }
 
   private buildMessagesForSummary(messages: ChatMessageRow[]) {
-    // Para resumo narrativo: apenas narrador e jogador.
-    // System messages com engineEvents contêm dados mecânicos em JSON que poluem
-    // o resumo — os resultados relevantes já estão refletidos na narrativa do narrador.
     const sorted = [...messages]
       .filter((m) => m.role === 'narrator' || m.role === 'player')
       .sort((a, b) => a.seq - b.seq || a.turn - b.turn)
@@ -83,73 +75,11 @@ export class SummaryService {
 
   constructor(
     private readonly summaries = new SessionSummaryRepo(),
-    private readonly events = new SessionEventRepo(),
     private readonly chatMessages = new ChatMessageRepo(),
     private readonly narrator: Narrator = new GeminiAdapter()
   ) {}
 
-  shouldSummarize(params: { turn: number; lastTurnIncluded: number; hints?: SummaryDecisionHints }): boolean {
-    const { turn, lastTurnIncluded, hints } = params
-    if (hints?.endedCombat) return true
-
-    const interval = env.summaryIntervalTurns
-    if (interval <= 0) return false
-
-    const delta = turn - lastTurnIncluded
-    return delta >= interval
-  }
-
-  private async updateIncrementalSummary(params: { state: GameState; stateForSummary?: GameState; hints?: SummaryDecisionHints; existing?: Awaited<ReturnType<SessionSummaryRepo['getSummary']>> }): Promise<void> {
-    const sessionId = params.state.meta.sessionId
-
-    const existing = params.existing ?? await this.summaries.getSummary(sessionId)
-    const lastTurnIncluded = existing?.lastTurnIncluded ?? 0
-
-    if (
-      !this.shouldSummarize({
-        turn: params.state.meta.turn,
-        lastTurnIncluded,
-        hints: params.hints
-      })
-    ) {
-      return
-    }
-
-    const keyEvents = await this.events.listSince({ sessionId, afterTurn: lastTurnIncluded })
-    const recentRaw = await this.chatMessages.getRecent(sessionId, SummaryService.RECENT_MESSAGES_TO_KEEP)
-
-    // Quando não há resumo anterior, inclui também as primeiras mensagens (cena de abertura)
-    // para que o LLM não perca o contexto do início do jogo.
-    const openingRaw = existing?.summaryText ? [] : await this.chatMessages.getOldest(sessionId, 5)
-
-    // Mesclar abertura + recentes, deduplicar por messageId, ordenar por seq
-    const seenIds = new Set<string>()
-    const mergedRaw = [...openingRaw, ...recentRaw].filter((m) => {
-      if (seenIds.has(m.messageId)) return false
-      seenIds.add(m.messageId)
-      return true
-    }).sort((a, b) => a.seq - b.seq)
-
-    const recentMessages = this.buildMessagesForSummary(mergedRaw)
-
-    const summaryText = trimIncompleteSummaryText(await this.narrator.summarize({
-      previousSummary: existing?.summaryText ?? '',
-      upToTurn: params.state.meta.turn,
-      keyEvents,
-      currentState: params.stateForSummary ?? params.state,
-      maxTokensHint: 500,
-      recentMessages
-    }))
-
-    await this.summaries.upsertSummary({
-      sessionId,
-      lastTurnIncluded: params.state.meta.turn,
-      summaryText,
-      keyEvents
-    })
-  }
-
-  /** Integra ao resumo apenas o excedente, preservando as 20 mensagens mais recentes. */
+  /** Integra ao resumo apenas o excedente, preservando as RECENT_MESSAGES_TO_KEEP mensagens mais recentes. */
   private async compactOldMessages(params: { state: GameState; stateForSummary?: GameState }): Promise<void> {
     const { state, stateForSummary } = params
     const sessionId = state.meta.sessionId
@@ -213,70 +143,22 @@ export class SummaryService {
 
   /**
    * Ponto de entrada único para gerenciamento de resumo após cada turno.
-   *
-   * Prioridade:
-   * 1. Compactação de storage (se excedente >= env.compactBatchMin) — fallback para backlogs
-   *    grandes: lê as msgs antigas, resume via summarizeHistory e as deleta.
-   * 2. Resumo incremental (se shouldSummarize) — atualiza o resumo canônico e, em seguida,
-   *    poda do chat as mensagens já cobertas que excedem a janela recente (pruneSummarizedMessages).
-   * 3. Noop
+   * Compacta as mensagens mais antigas quando o excedente atinge env.compactBatchMin,
+   * atualizando o resumo canônico e apagando as mensagens incorporadas.
    */
-  async manageSummaryAfterTurn(params: { state: GameState; stateBeforeTurn?: GameState; hints?: SummaryDecisionHints }): Promise<void> {
-    const { state, stateBeforeTurn, hints } = params
+  async manageSummaryAfterTurn(params: { state: GameState; stateBeforeTurn?: GameState }): Promise<void> {
+    const { state, stateBeforeTurn } = params
     const sessionId = state.meta.sessionId
 
-    const [totalMessages, existingBefore] = await Promise.all([
-      this.chatMessages.countBySession(sessionId),
-      this.summaries.getSummary(sessionId)
-    ])
+    const totalMessages = await this.chatMessages.countBySession(sessionId)
     const messagesToCompact = totalMessages - SummaryService.RECENT_MESSAGES_TO_KEEP
 
     if (messagesToCompact >= env.compactBatchMin) {
       log('manageSummary', `Compacting ${messagesToCompact} old messages (threshold=${env.compactBatchMin})`)
       await this.compactOldMessages({ state, stateForSummary: stateBeforeTurn })
     }
-
-    // Re-read only if compaction may have written a new summary; otherwise reuse the cached read
-    const existing = messagesToCompact >= env.compactBatchMin
-      ? await this.summaries.getSummary(sessionId)
-      : existingBefore
-
-    const lastTurnIncluded = existing?.lastTurnIncluded ?? 0
-    if (this.shouldSummarize({ turn: state.meta.turn, lastTurnIncluded, hints })) {
-      log('manageSummary', `Updating incremental summary at turn=${state.meta.turn} (lastTurnIncluded=${lastTurnIncluded})`)
-      await this.updateIncrementalSummary({ state, stateForSummary: stateBeforeTurn, hints, existing })
-
-      // Acopla a deleção ao resumo: o que já foi incorporado ao resumo canônico e está
-      // fora da janela recente não deve permanecer no chat (evita a duplicação resumo +
-      // mensagem bruta que antes só era limpa quando o excedente atingia compactBatchMin).
-      await this.pruneSummarizedMessages(sessionId)
-    }
   }
 
-  /**
-   * Remove do chat as mensagens já incorporadas ao resumo canônico que excedem a janela
-   * recente. Só apaga o que está comprovadamente coberto pelo resumo (turn <= lastTurnIncluded),
-   * preservando sempre as RECENT_MESSAGES_TO_KEEP mensagens mais recentes verbatim.
-   */
-  private async pruneSummarizedMessages(sessionId: string): Promise<void> {
-    // Poda do chat o que já está no resumo canônico (coberto) e fora da janela recente.
-    const totalMessages = await this.chatMessages.countBySession(sessionId)
-    const overflow = totalMessages - SummaryService.RECENT_MESSAGES_TO_KEEP
-    if (overflow <= 0) return
-
-    // Só apaga o que está comprovadamente coberto pelo resumo canônico.
-    const existing = await this.summaries.getSummary(sessionId)
-    const coveredTurn = existing?.lastTurnIncluded ?? 0
-    if (coveredTurn <= 0) return
-
-    // Candidatas: as mensagens mais antigas que excedem a janela recente.
-    const oldestMessages = await this.chatMessages.getOldest(sessionId, overflow)
-    const deletable = oldestMessages.filter((message) => message.turn <= coveredTurn)
-    if (deletable.length === 0) return
-
-    await this.deleteCompactedMessages(sessionId, deletable)
-    log('manageSummary', `Pruned ${deletable.length} summarized messages (coveredTurn=${coveredTurn}, kept last ${SummaryService.RECENT_MESSAGES_TO_KEEP})`)
-  }
   async rebuildSummary(params: { state: GameState }): Promise<string> {
     const { state } = params
     const sessionId = state.meta.sessionId

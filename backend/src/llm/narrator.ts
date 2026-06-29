@@ -7,15 +7,6 @@ import type {
   ValidateActionResponse
 } from '../domain/types/narrative.js'
 
-export type SummarizeRequest = {
-  previousSummary: string
-  upToTurn: number
-  keyEvents: Array<{ turn: number; type: string; payload: unknown }>
-  currentState: GameState
-  maxTokensHint?: number
-  recentMessages?: Array<{ role: 'narrator' | 'player'; text: string; turn: number }>
-}
-
 export type SummarizeHistoryRequest = {
   previousSummary: string
   messages: Array<{ role: string; text: string; turn: number }>
@@ -111,7 +102,6 @@ export type GenerateImageDescriptionRequest =
     }
 
 export interface Narrator {
-  summarize(req: SummarizeRequest): Promise<string>
   summarizeHistory(req: SummarizeHistoryRequest): Promise<string>
   expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult>
   expandWorldLore(req: ExpandWorldLoreRequest): Promise<{ lore: string; loreEn?: string }>
