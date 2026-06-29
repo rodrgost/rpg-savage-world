@@ -4,7 +4,7 @@ import type { AttributeName, DieType, GameState, Hindrance, NarrativeStyle, Play
 import type { NarratorTurnResponse, ValidateActionResponse, NpcAttackEntry } from '../../domain/types/narrative.js'
 import { applyAction, applyNpcAttack } from '../../core/rule-engine.js'
 import { SnapshotService } from '../../services/snapshot.service.js'
-import { SummaryService, type SummaryDecisionHints } from '../../services/summary.service.js'
+import { SummaryService } from '../../services/summary.service.js'
 import { InventoryService } from '../../services/inventory.service.js'
 import { StatusEffectService } from '../../services/statusEffect.service.js'
 import { NpcService } from '../../services/npc.service.js'
@@ -1165,13 +1165,6 @@ export class SessionService {
     const recentMessagesBeforeTurn = await this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT)
     const currentWithSceneNpcs = this.hydrateSceneNpcsFromRecentNarration(current, recentMessagesBeforeTurn)
 
-    // Captura hostis presentes na cena ANTES do turno para detectar fim de combate
-    const hostileNpcIdsBefore = new Set(
-      currentWithSceneNpcs.npcs
-        .filter((npc) => (!npc.location || npc.location === currentWithSceneNpcs.worldState.activeLocation) && npc.disposition === 'hostile')
-        .map((npc) => npc.id)
-    )
-
     // 1. Aplicar mecânicas do rule-engine
     const normalizedAction = normalizePlayerAction(params.action)
     const result = applyAction(currentWithSceneNpcs, normalizedAction)
@@ -1453,16 +1446,8 @@ export class SessionService {
       location: finalState.worldState.activeLocation
     })
 
-    // 7. Gerenciar resumo: compactar storage ou atualizar resumo incremental (nunca os dois no mesmo turno)
-    const hasHostilesAfter = finalState.npcs.some(
-      (npc) => (!npc.location || npc.location === finalState.worldState.activeLocation)
-        && npc.disposition === 'hostile'
-        && !(finalState.defeatedNpcIds ?? []).includes(npc.id)
-    )
-    const summaryHints: SummaryDecisionHints = {
-      endedCombat: hostileNpcIdsBefore.size > 0 && !hasHostilesAfter
-    }
-    await this.summaries.manageSummaryAfterTurn({ state: finalState, stateBeforeTurn: result.nextState, hints: summaryHints })
+    // 7. Compactar histórico de mensagens antigas se necessário
+    await this.summaries.manageSummaryAfterTurn({ state: finalState, stateBeforeTurn: result.nextState })
 
     const payload = await this.buildSessionPayload(params.sessionId)
     log(

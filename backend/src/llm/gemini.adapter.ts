@@ -8,8 +8,7 @@ import type {
   SuggestedCharacter,
   SuggestCharacterFromWorldRequest,
   SuggestCharacterFromDescriptionRequest,
-  SummarizeHistoryRequest,
-  SummarizeRequest
+  SummarizeHistoryRequest
 } from './narrator.js'
 import type {
   NarrateStartRequest,
@@ -1232,101 +1231,8 @@ export class GeminiAdapter implements Narrator {
     return result.text
   }
 
-  async summarize(req: SummarizeRequest): Promise<string> {
-    const state = req.currentState
-    const p = state.player
-    const npcsAtLocation = state.npcs.filter((npc) => !npc.location || npc.location === state.worldState.activeLocation)
-    const hostileNpcs = npcsAtLocation.filter((npc) => npc.disposition === 'hostile')
-    const activeFlags = Object.entries(state.worldState.worldFlags)
-      .filter(([, value]) => value)
-      .map(([key]) => key)
-
-    const combatText = state.combat
-      ? `Active combat in round ${state.combat.round} with ${state.combat.combatants.length} combatants.`
-      : 'No formal combat in progress.'
-    const threatsText = hostileNpcs.length
-      ? hostileNpcs
-        .slice(0, 6)
-        .map((npc) => `${npc.name}${npc.wounds > 0 ? ` wounded ${npc.wounds}/${npc.maxWounds}` : ''}`)
-        .join(', ')
-      : 'No immediate threat confirmed.'
-    const resourcesText = p.inventory.length
-      ? p.inventory.slice(0, 8).map((item) => `${item.name} x${item.quantity}`).join(', ')
-      : 'No relevant resources carried.'
-    const forcesText = npcsAtLocation.length
-      ? npcsAtLocation
-        .slice(0, 8)
-        .map((npc) => `${npc.name}${npc.disposition ? ` (${npc.disposition})` : ''}`)
-        .join(', ')
-      : 'No one relevant visible at location.'
-    const statusText = p.statusEffects.length
-      ? p.statusEffects.map((effect) => `${effect.name}${effect.turnsRemaining != null ? ` (${effect.turnsRemaining}t)` : ''}`).join(', ')
-      : 'No active effects.'
-    const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'No relevant active flags.'
-
-    const sysPrompt = [
-      'You maintain the canonical continuity memory of an RPG session. This summary is NOT shown to players: it is internal context consumed by the narrator LLM to keep continuity.',
-      'Objective: record ONLY the facts the narrator needs to continue coherently. It is a dense memory of state, not a retelling of the story.',
-      'STYLE: telegraphic and factual, not literary. Do NOT narrate the action, do NOT recreate scenes, dialogue, or atmosphere. State facts, not prose. Each sentence carries one piece of useful information.',
-      'ORDER (mandatory): present the facts in CHRONOLOGICAL order — from the oldest event that still matters to the most recent. Follow the session timeline: earlier developments first, the current situation and immediate threats last. Do NOT scramble facts by category; the summary must read as a coherent timeline.',
-      'CONFLICT RESOLUTION (when facts contradict — most authoritative wins):',
-      '  1. CURRENT STRUCTURED STATE — factual anchor; override any contradictions in the previous summary or messages.',
-      '  2. Most recent messages — take priority over older messages in a narrative conflict.',
-      '  3. Previous summary — background context; discard only what has been explicitly superseded.',
-      'Record (only what is still relevant going forward):',
-      '- Current situation: where the character is, what is happening now, immediate threats.',
-      '- Open objectives and unresolved problems (pending; drop the moment they are fulfilled).',
-      '- Open narrative threads: raised mysteries, promises made, revealed secrets, unanswered questions, active tensions.',
-      '- Relevant NPCs: name + 1 trait/motivation + current relationship/disposition toward the character.',
-      '- Referenceable worldbuilding: concrete location facts, revealed lore, factions, significant objects.',
-      '- Proper names and counts that affect the next decision.',
-      'Discard:',
-      '- Anything already fulfilled, defeated, resolved, or superseded — keeping it causes incoherence.',
-      '- Step-by-step action, old blows/falls/deaths (unless they remain an active consequence), atmosphere, descriptive flourish.',
-      '- Inventory items (tracked separately).',
-      'Format: short, direct, declarative sentences in plain prose, ALWAYS ending each sentence with a period. No titles, sections, markdown, bullets, preamble, greetings, or meta commentary. Write in Brazilian Portuguese.',
-      'Keep it compact: roughly 6 to 12 sentences. If something does not change what the narrator does next, leave it out.'
-    ].join('\n')
-
-    const narrativeBlock = req.recentMessages?.length
-      ? `Session messages (opening and recent, chronological order):\n${req.recentMessages.map((m) => `[${m.role === 'narrator' ? 'Narrator' : 'Player'} T${m.turn}] ${m.text}`).join('\n')}`
-      : null
-
-    const prompt = [
-      `=== PREVIOUS SUMMARY (background — starting point for the new summary) ===`,
-      req.previousSummary || 'no previous summary.',
-      '',
-      ...(narrativeBlock ? [narrativeBlock, ''] : []),
-      `=== CURRENT STATE (factual anchor — use to verify and correct any contradictions above) ===`,
-      `Turn: ${req.upToTurn}. Location: ${state.worldState.activeLocation}.`,
-      combatText,
-      `Wounds: ${p.wounds}/${p.maxWounds}. Fatigue: ${p.fatigue}. Shaken: ${p.isShaken ? 'yes' : 'no'}. Bennies: ${p.bennies}.`,
-      `Visible threats: ${threatsText}`,
-      `Forces/NPCs at location: ${forcesText}`,
-      `Active effects: ${statusText}`,
-      `Active world flags: ${activeFlagsText}`,
-      '',
-      'Update the continuity memory: merge the previous summary with the new session messages, drop everything already superseded, and correct any fact contradicted by the current state above. Output dense factual notes (not narration), only what still matters for continuing the session.'
-    ].join('\n')
-
-    try {
-      const generated = await this.generateText(prompt, {
-        systemInstruction: sysPrompt,
-        temperature: this.summaryTemperature
-      })
-      return sanitizeNarrativeOutput(generated)
-    } catch {
-      const parts: string[] = []
-      parts.push(`The character is at ${state.worldState.activeLocation}. ${combatText}`)
-      if (threatsText !== 'No immediate threat confirmed.') parts.push(threatsText)
-      if (resourcesText !== 'No relevant resources carried.') parts.push(`Available resources: ${resourcesText}.`)
-      return parts.join(' ')
-    }
-  }
-
   async summarizeHistory(req: SummarizeHistoryRequest): Promise<string> {
     const state = req.currentState
-    const p = state.player
     const npcsAtLocation = state.npcs.filter((npc) => !npc.location || npc.location === state.worldState.activeLocation)
     const hostileNpcs = npcsAtLocation.filter((npc) => npc.disposition === 'hostile')
     const activeFlags = Object.entries(state.worldState.worldFlags)
@@ -1334,56 +1240,66 @@ export class GeminiAdapter implements Narrator {
       .map(([key]) => key)
 
     const combatText = state.combat
-      ? `Active combat in round ${state.combat.round} with ${state.combat.combatants.length} combatants.`
-      : 'No formal combat in progress.'
+      ? `Combate ativo (rodada ${state.combat.round}, ${state.combat.combatants.length} combatentes).`
+      : 'Sem combate formal em curso.'
     const threatsText = hostileNpcs.length
       ? hostileNpcs
         .slice(0, 6)
-        .map((npc) => `${npc.name}${npc.wounds > 0 ? ` wounded ${npc.wounds}/${npc.maxWounds}` : ''}`)
+        .map((npc) => `${npc.name}${npc.wounds > 0 ? ` (ferido ${npc.wounds}/${npc.maxWounds})` : ''}`)
         .join(', ')
-      : 'No immediate threat confirmed.'
+      : 'Nenhuma ameaça imediata.'
     const forcesText = npcsAtLocation.length
       ? npcsAtLocation
         .slice(0, 8)
         .map((npc) => `${npc.name}${npc.disposition ? ` (${npc.disposition})` : ''}`)
         .join(', ')
-      : 'No one relevant visible at location.'
-    const statusText = p.statusEffects.length
-      ? p.statusEffects.map((effect) => `${effect.name}${effect.turnsRemaining != null ? ` (${effect.turnsRemaining}t)` : ''}`).join(', ')
-      : 'No active effects.'
-    const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'No relevant active flags.'
+      : 'Nenhum NPC relevante visível.'
+    const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'nenhuma'
 
     const sysPrompt = [
-      'You maintain the canonical continuity memory of an RPG session. This is internal context for the narrator LLM, NOT text shown to players.',
-      'Read the messages below and record ONLY the facts needed to continue the session coherently. It is a dense memory of state, not a retelling.',
-      'STYLE: telegraphic and factual, not literary. Do NOT narrate the action or recreate scenes/dialogue/atmosphere. State facts, not prose.',
-      'ORDER (mandatory): present the facts in CHRONOLOGICAL order — from the oldest event that still matters to the most recent. The messages are given oldest-to-most-recent; preserve that timeline. Earlier developments first, the current situation and immediate threats last. Do NOT scramble facts by category; the summary must read as a coherent timeline.',
-      'Record: current situation and immediate threats; open objectives and unresolved problems; open narrative threads (mysteries, promises, secrets, unanswered questions); relevant NPCs (name + 1 trait/motivation + current disposition); referenceable worldbuilding (locations, lore, factions, significant objects); proper names and counts that affect the next decision.',
-      'Discard: anything resolved or superseded by later events; step-by-step action and old blows/falls/deaths unless they remain an active consequence; inventory (tracked separately).',
-      'Format: short, direct, declarative sentences ending each with a period; roughly 6 to 12 sentences. No markdown, titles, bullets, preamble, or meta commentary. Brazilian Portuguese only.'
+      'Você é o guardião da memória de continuidade de uma sessão de RPG. Sua saída é contexto interno para o LLM narrador — nunca mostrado aos jogadores.',
+      '',
+      'Organize os fatos em blocos por LOCAL, em ordem cronológica. Um bloco por local distinto (mescle visitas contíguas ao mesmo local; mantenha separados se o personagem saiu e voltou).',
+      '',
+      'FORMATO DOS BLOCOS ANTERIORES (repita para cada local visitado, exceto o atual):',
+      '[LOCAL: <nome do local> | T<primeiro>–T<último>]',
+      'Situação: <o que aconteceu aqui — máx 2 frases>',
+      'NPCs: <nome> (<1 traço>, <disposição>); <nome> (...)   ← omita esta linha se nenhum NPC relevante',
+      'Tensões: <fios narrativos abertos, mistérios, promessas não cumpridas>   ← omita se nada em aberto',
+      '',
+      'BLOCO ATUAL (sempre presente, sempre por último):',
+      '[ATUAL: <nome do local> | T<turno atual>]',
+      'Situação: <cena atual e ameaças imediatas>',
+      'NPCs: <quem está presente e disposição>   ← omita se nenhum',
+      'Objetivos: <metas ainda pendentes do personagem>   ← omita se nenhum',
+      'Tensões: <tensões ativas não resolvidas>   ← omita se nenhuma',
+      '',
+      'REGRAS:',
+      '• Telegráfico e factual — sem narração, atmosfera ou recriação de cenas.',
+      '• Cada frase termina com ponto final.',
+      '• Descarte: eventos resolvidos; golpes/mortes antigas sem consequência duradoura; inventário (rastreado separadamente pelo motor).',
+      '• Se há resumo anterior, integre seus fatos — mantenha o que ainda é relevante, descarte o que foi superado.',
+      '• Apenas português do Brasil.'
     ].join('\n')
 
     const messagesText = req.messages
-      .map((m) => `[Turn ${m.turn}] ${m.role === 'narrator' ? 'Narrator' : 'Player'}: ${m.text}`)
+      .map((m) => `[T${m.turn}] ${m.role === 'narrator' ? 'Narrador' : 'Jogador'}: ${m.text}`)
       .join('\n')
 
-    const currentStateBlock = [
-      `=== CURRENT STATE (factual anchor — correct any contradictions in the messages above) ===`,
-      `Location: ${state.worldState.activeLocation}. ${combatText}`,
-      `Visible threats: ${threatsText} | Forces: ${forcesText}`,
-      `Active flags: ${activeFlagsText}`
-    ].join('\n')
-
     const prompt = [
-      req.previousSummary ? '=== Previous summary (background — integrate forward, do not repeat) ===\n' + req.previousSummary : '',
-      '',
-      '=== New events (chronological order — oldest to most recent) ===',
+      ...(req.previousSummary ? [`=== Resumo anterior (integre e descarte o que foi superado) ===`, req.previousSummary, ''] : []),
+      '=== Mensagens (ordem cronológica, mais antiga → mais recente) ===',
       messagesText,
       '',
-      currentStateBlock,
+      '=== Estado atual ===',
+      `Local: ${state.worldState.activeLocation} | Turno: ${state.meta.turn}`,
+      combatText,
+      `Ameaças visíveis: ${threatsText}`,
+      `NPCs presentes: ${forcesText}`,
+      `Flags ativas: ${activeFlagsText}`,
       '',
-      'Update the continuity memory: merge the previous summary with the new events, drop everything already resolved or superseded, and correct facts using the current state above. Output dense factual notes (not narration), only what still matters for continuing the session.'
-    ].filter(Boolean).join('\n')
+      'Agrupe em blocos por local e produza a memória atualizada. Descarte o que foi resolvido. Use o estado atual acima para corrigir contradições.'
+    ].join('\n')
 
     let lastError: Error | null = null
     const attempts = [

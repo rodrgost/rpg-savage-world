@@ -1,13 +1,11 @@
 import type { GameState } from '../domain/types/gameState.js'
 
-export type SummarizeRequest = {
+export type SummarizeHistoryRequest = {
   previousSummary: string
-  upToTurn: number
-  keyEvents: Array<{ turn: number; type: string; payload: unknown }>
+  messages: Array<{ role: string; text: string; turn: number }>
   currentState: GameState
-  maxTokensHint?: number
 }
 
 export interface Narrator {
-  summarize(req: SummarizeRequest): Promise<string>
+  summarizeHistory(req: SummarizeHistoryRequest): Promise<string>
 }
