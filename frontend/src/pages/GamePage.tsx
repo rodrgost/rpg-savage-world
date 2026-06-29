@@ -1591,7 +1591,7 @@ function SidebarNarration({
   onVocabChange: (simple: boolean) => void
   saving: boolean
 }) {
-  const current = narrativeStyle ?? 'balanced'
+  const current = narrativeStyle ?? 'concise'
   return (
     <div className="sidebar-narration">
       <p className="narration-hint">Define o estilo e ritmo das narrações do mestre. A mudança vale a partir do próximo turno.</p>
@@ -1618,7 +1618,7 @@ function SidebarNarration({
       <label className="narration-vocab-toggle">
         <input
           type="checkbox"
-          checked={simpleVocabulary ?? false}
+          checked={simpleVocabulary ?? true}
           onChange={(e) => onVocabChange(e.target.checked)}
           disabled={saving}
         />

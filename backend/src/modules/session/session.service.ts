@@ -1285,8 +1285,8 @@ export class SessionService {
           npcCatalog: context.stateBrief.npcCatalog
         },
         recentMessages: context.recentMessages,
-        narrativeStyle: sessionNarrativeStyle ?? result.nextState.meta.narrativeStyle,
-        simpleVocabulary: sessionSimpleVocabulary ?? result.nextState.meta.simpleVocabulary
+        narrativeStyle: sessionNarrativeStyle ?? result.nextState.meta.narrativeStyle ?? 'concise',
+        simpleVocabulary: sessionSimpleVocabulary ?? result.nextState.meta.simpleVocabulary ?? true
       }),
       state: result.nextState,
       mode: 'turn',
