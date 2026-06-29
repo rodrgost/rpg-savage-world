@@ -27,6 +27,13 @@ const actions = [
     action: 'Gerenciar personagens'
   },
   {
+    icon: '🎲',
+    title: 'Jogos ativos',
+    description: 'Retome suas partidas em andamento de onde você parou.',
+    to: '/active',
+    action: 'Ver jogos ativos'
+  },
+  {
     icon: '📜',
     title: 'Regras',
     description: 'Consulte Savage Worlds e os atalhos da sua implementação antes de jogar.',

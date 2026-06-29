@@ -12,6 +12,7 @@ const CreateCampaignPage = lazy(() => import('./pages/CreateCampaignPage').then(
 const CreateCharacterPage = lazy(() => import('./pages/CreateCharacterPage').then(m => ({ default: m.CreateCharacterPage })))
 const GamePage = lazy(() => import('./pages/GamePage').then(m => ({ default: m.GamePage })))
 const CharactersPage = lazy(() => import('./pages/CharactersPage').then(m => ({ default: m.CharactersPage })))
+const PlaythroughsPage = lazy(() => import('./pages/PlaythroughsPage').then(m => ({ default: m.PlaythroughsPage })))
 const RulesPage = lazy(() => import('./pages/RulesPage').then(m => ({ default: m.RulesPage })))
 
 /** Redirect /worlds/:worldId/campaigns → /campaigns?worldId=X */
@@ -146,6 +147,7 @@ export function App() {
             <Route path="/campaigns" element={<CampaignsPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
             <Route path="/campaigns/:campaignId/edit" element={<CreateCampaignPage uid={uid} />} />
             <Route path="/worlds" element={<WorldsPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
+            <Route path="/active" element={<PlaythroughsPage uid={uid} />} />
             <Route path="/characters" element={<CharactersPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
             <Route path="/characters/new" element={<CreateCharacterPage uid={uid} />} />
             <Route path="/characters/:characterId/edit" element={<CreateCharacterPage uid={uid} />} />

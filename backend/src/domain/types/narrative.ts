@@ -92,10 +92,10 @@ export type DiceCheck = {
   /**
    * Dificuldade situacional declarada pelo LLM (sinal limitado de ficção).
    * O app converte para modificador fixo via DIFFICULTY_MODIFIER
-   * (normal: 0, dificil: -2, extremo: -4). Não confundir com os modificadores
+   * (facil: +2, normal: 0, dificil: -2, extremo: -4). Não confundir com os modificadores
    * mecânicos (ferimento/Edge/Hindrance), que o rule-engine aplica sozinho.
    */
-  difficulty?: 'normal' | 'dificil' | 'extremo' | null
+  difficulty?: 'facil' | 'normal' | 'dificil' | 'extremo' | null
   /**
    * Modificador situacional — APP-COMPUTED a partir de `difficulty`.
    * Não é mais decidido pelo LLM; mantido para exibição/persistência.

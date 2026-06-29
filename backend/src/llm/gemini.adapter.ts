@@ -28,7 +28,7 @@ import type {
 import { segmentsToText } from '../domain/segments.js'
 import { randomUUID, createHash } from 'node:crypto'
 import { NARRATOR_RESPONSE_SCHEMA } from './schemas/narrator-response.schema.js'
-import { findSkillDefinition, getCanonicalSkillLabel } from '../domain/savage-worlds/constants.js'
+import { findSkillDefinition, getCanonicalSkillLabel, inferSkillFromText } from '../domain/savage-worlds/constants.js'
 import { logLlmRequest, logLlmResponse, logLlmError, log, warn, error as logErr } from '../utils/file-logger.js'
 import { classifyTrivialAction } from '../core/trivial-action.js'
 
@@ -180,14 +180,14 @@ function sanitizeSkillName(value: unknown): string | null {
 }
 
 /** Normaliza o rótulo de dificuldade declarado pelo LLM. Default: 'normal'. */
-function sanitizeDifficulty(value: unknown): 'normal' | 'dificil' | 'extremo' {
+function sanitizeDifficulty(value: unknown): 'facil' | 'normal' | 'dificil' | 'extremo' {
   if (typeof value !== 'string') return 'normal'
   const v = value
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .trim()
     .toLowerCase()
-  if (v === 'dificil' || v === 'extremo') return v
+  if (v === 'facil' || v === 'dificil' || v === 'extremo') return v
   return 'normal'
 }
 
@@ -529,7 +529,11 @@ function sanitizeValidateActionResponse(
   if (actionType === 'trait_test') {
     const payloadAttribute = sanitizeInlineText(actionPayload.attribute, '')
     if (!payloadSkill && !payloadAttribute && !diceCheck?.skill && !diceCheck?.attribute) {
-      return null
+      // Mesma cascata determinística do narrador: tenta inferir a skill pelo texto
+      // (interpretação ou input cru) antes de descartar a ação como inválida.
+      const inferred = inferSkillFromText(interpretation) ?? inferSkillFromText(fallbackInput)
+      if (!inferred) return null
+      actionPayload.skill = inferred.label
     }
   }
 
@@ -553,113 +557,18 @@ function sanitizeCharacterField(value: unknown, fallback: string): string {
   return cleaned || fallback
 }
 
-type RecentSuggestedCharacter = {
-  name: string
-  profession: string
-  description: string
-  campaignRole: string
-}
+const OVERUSED_SUGGESTION_NAMES = [
+  'Vance', 'Kael', 'Elara', 'Aria', 'Lyra', 'Cassius', 'Rourke',
+  'Garrick', 'Dorian', 'Seraphina', 'Thorne', 'Kaelen'
+]
+const NAME_INITIAL_POOL = 'ABCDEFGHIJLMNOPRSTV'
 
-const RECENT_CHARACTER_SUGGESTIONS_LIMIT = 8
-const RECENT_CHARACTER_CONTEXTS_LIMIT = 40
-const recentCharacterSuggestions = new Map<string, RecentSuggestedCharacter[]>()
-
-function normalizeSuggestionText(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-}
-
-function buildCharacterSuggestionContextKey(req: SuggestCharacterFromWorldRequest): string {
-  const worldName = normalizeSuggestionText(req.worldName ?? '').slice(0, 80)
-  const lore = normalizeSuggestionText(req.worldLore ?? '').slice(0, 120)
-  const story = normalizeSuggestionText(req.storyDescription ?? '').slice(0, 180)
-  return `${worldName}|${lore}|${story}`
-}
-
-function uniqueSuggestionWords(value: string): Set<string> {
-  const ignored = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'o', 'a', 'os', 'as', 'um', 'uma', 'para', 'por', 'com', 'sem', 'em', 'na', 'no'])
-  return new Set(
-    normalizeSuggestionText(value)
-      .split(' ')
-      .filter(word => word.length > 2 && !ignored.has(word))
-  )
-}
-
-function jaccardSimilarity(left: string, right: string): number {
-  const leftWords = uniqueSuggestionWords(left)
-  const rightWords = uniqueSuggestionWords(right)
-  if (leftWords.size === 0 || rightWords.size === 0) return 0
-
-  let intersection = 0
-  for (const word of leftWords) {
-    if (rightWords.has(word)) intersection++
-  }
-
-  const union = leftWords.size + rightWords.size - intersection
-  return union === 0 ? 0 : intersection / union
-}
-
-function getRecentCharacterSuggestions(contextKey: string): RecentSuggestedCharacter[] {
-  return recentCharacterSuggestions.get(contextKey) ?? []
-}
-
-function rememberCharacterSuggestion(contextKey: string, character: SuggestedCharacter): void {
-  const existing = getRecentCharacterSuggestions(contextKey)
-  const next = [
-    {
-      name: character.name,
-      profession: character.profession,
-      description: character.description,
-      campaignRole: character.campaignRole
-    },
-    ...existing
-  ].slice(0, RECENT_CHARACTER_SUGGESTIONS_LIMIT)
-
-  if (!recentCharacterSuggestions.has(contextKey) && recentCharacterSuggestions.size >= RECENT_CHARACTER_CONTEXTS_LIMIT) {
-    const oldestKey = recentCharacterSuggestions.keys().next().value
-    if (oldestKey) recentCharacterSuggestions.delete(oldestKey)
-  }
-
-  recentCharacterSuggestions.set(contextKey, next)
-}
-
-function getRecentSuggestionDiversityIssue(character: SuggestedCharacter, recent: RecentSuggestedCharacter[]): string | null {
-  const name = normalizeSuggestionText(character.name)
-  const profession = normalizeSuggestionText(character.profession)
-  const description = normalizeSuggestionText(character.description)
-  const campaignRole = normalizeSuggestionText(character.campaignRole)
-
-  for (const previous of recent) {
-    const previousName = normalizeSuggestionText(previous.name)
-    const previousProfession = normalizeSuggestionText(previous.profession)
-    const previousDescription = normalizeSuggestionText(previous.description)
-    const previousCampaignRole = normalizeSuggestionText(previous.campaignRole)
-
-    if (name && name === previousName) return `nome repetido (${character.name})`
-    if (profession && profession === previousProfession && jaccardSimilarity(campaignRole, previousCampaignRole) >= 0.28) {
-      return `profissao e papel muito parecidos (${character.profession})`
-    }
-    if (description && jaccardSimilarity(description, previousDescription) >= 0.55) {
-      return 'descricao muito parecida com sugestao recente'
-    }
-  }
-
-  return null
-}
-
-function buildRecentSuggestionAvoidanceLines(recent: RecentSuggestedCharacter[]): string[] {
-  if (!recent.length) return []
-
-  return [
-    'Avoid repeating recent suggestions for this same adventure:',
-    ...recent.slice(0, 5).map((character) => `  - ${character.name} / ${character.profession}`),
-    'Create a new combination of name, profession, narrative role, and motivation.'
-  ]
+function buildNameDiversityLine(conditional = false): string {
+  const letter = NAME_INITIAL_POOL[Math.floor(Math.random() * NAME_INITIAL_POOL.length)]
+  const prefix = conditional
+    ? `If the player did not specify a name, the character's given name MUST start with the letter "${letter}"`
+    : `Naming constraint: the character's given name MUST start with the letter "${letter}"`
+  return `${prefix}. Never use any of these overused names: ${OVERUSED_SUGGESTION_NAMES.join(', ')}.`
 }
 
 function getSuggestedCharacterIssues(character: SuggestedCharacter): string[] {
@@ -980,8 +889,8 @@ export class GeminiAdapter implements Narrator {
     2048
   )
   private readonly characterSuggestionThinkingBudget = withMin(
-    toNumber(readEnv('GEMINI_CHARACTER_SUGGEST_THINKING_BUDGET', '512'), 512),
-    128
+    toNumber(readEnv('GEMINI_CHARACTER_SUGGEST_THINKING_BUDGET', '0'), 0),
+    0
   )
   // Temperatura global das descrições visuais (mundo, campanha e personagem)
   private readonly imageDescriptionTemperature = toNumber(
@@ -1594,7 +1503,6 @@ export class GeminiAdapter implements Narrator {
     const storyDescription = req.storyDescription?.trim() ?? ''
     const promptWorldLore = worldLore.length > 6000 ? `${worldLore.slice(0, 6000)}...` : worldLore
     const promptStoryDescription = storyDescription.length > 2800 ? `${storyDescription.slice(0, 2800)}...` : storyDescription
-    const contextKey = buildCharacterSuggestionContextKey(req)
     const creativeIdentityLocked = Boolean(existing.name?.trim())
     const existingLines: string[] = []
     if (hasExisting) {
@@ -1622,29 +1530,26 @@ export class GeminiAdapter implements Narrator {
       '  race: race/species only when there is a contextual clue; otherwise empty string',
       '  profession: trade or social role derived exclusively from the world name, lore, and story; max 60 chars',
       '  description: 2-3 sentences derived primarily from the adventure story and lore, describing physical appearance (hair, eyes, build, or notable scar), clothing or equipment coherent with the profession, and personality trait with motivation. Min 80 chars, max 280 chars.',
-      '  campaignRole: what this character is doing in this specific adventure, their mission, or how they connect to the plot. Derive from story/lore, be concrete and not generic. Max 300 chars.',
+      '  campaignRole: what this character is doing in this specific adventure, their mission, or how they connect to the plot. Derive from story/lore, be concrete and not generic. Max 600 chars.',
       '  genderPt: Brazilian Portuguese translation of gender (Masculino, Feminino, or Outro); empty string if gender is empty',
       '  racePt: Brazilian Portuguese translation of race/species; empty string if race is empty',
       '  professionPt: Brazilian Portuguese translation of profession; max 60 chars',
       '  descriptionPt: Brazilian Portuguese translation of description; same length constraints (min 80, max 280 chars)',
-      '  campaignRolePt: Brazilian Portuguese translation of campaignRole; max 300 chars',
+      '  campaignRolePt: Brazilian Portuguese translation of campaignRole; max 600 chars',
       'If a name is provided, do not invent the description from the sound of the name; use the name only to preserve identity and derive everything else from the adventure story and lore.',
       'In repeated calls for the same plot, vary the name, profession, narrative function, motivation, appearance, and entry point into the adventure.',
     ].join('\n')
 
     const buildPrompt = (attempt: number): string => {
-      const recent = creativeIdentityLocked ? [] : getRecentCharacterSuggestions(contextKey)
-      const avoidanceLines = buildRecentSuggestionAvoidanceLines(recent)
       return [
         ...(existingLines.length > 0 ? [...existingLines, ''] : []),
-        ...(avoidanceLines.length > 0 ? [...avoidanceLines, ''] : []),
+        ...(creativeIdentityLocked ? [] : [buildNameDiversityLine(), '']),
         `Variation attempt: ${attempt}.`,
         '',
         ...(worldName ? [`World/universe name: ${worldName}.`] : []),
         ...(promptWorldLore ? [`Universe lore: ${promptWorldLore}.`, ''] : []),
-        `Adventure story: ${promptStoryDescription || 'not provided'}.`,
-        '',
-        'Derive the profession and role solely from the world/universe, the lore, and the adventure story.'
+        ...(promptStoryDescription ? [`Adventure story: ${promptStoryDescription}.`, ''] : []),
+        'Derive the profession and role solely from the world/universe and its lore.'
       ].join('\n')
     }
 
@@ -1657,6 +1562,7 @@ export class GeminiAdapter implements Narrator {
           maxOutputTokens: this.characterSuggestionMaxOutputTokens,
           timeoutMs: this.timeoutMs,
           responseMimeType: 'application/json',
+          temperature: this.temperature,
           systemInstruction: sysPrompt,
           ...(this.provider === 'gemini' ? { thinkingBudget: this.characterSuggestionThinkingBudget } : {})
         }, attempt)
@@ -1679,17 +1585,13 @@ export class GeminiAdapter implements Narrator {
 
           const truncatedJson = firstResult.finishReason === 'MAX_TOKENS' && parsedJson?.source !== 'direct'
           const firstTryIssues = getSuggestedCharacterIssues(firstTry)
-          const diversityIssue = creativeIdentityLocked ? null : getRecentSuggestionDiversityIssue(firstTry, getRecentCharacterSuggestions(contextKey))
           lastIssues = [
             ...(truncatedJson ? ['truncado'] : []),
-            ...firstTryIssues,
-            ...(diversityIssue ? [diversityIssue] : [])
+            ...firstTryIssues
           ]
 
-          if (!truncatedJson && firstTryIssues.length === 0 && !diversityIssue) {
-            const suggestion = firstTry
-            if (!creativeIdentityLocked) rememberCharacterSuggestion(contextKey, suggestion)
-            return suggestion
+          if (!truncatedJson && firstTryIssues.length === 0) {
+            return firstTry
           }
 
           warn(
@@ -1732,12 +1634,12 @@ export class GeminiAdapter implements Narrator {
       '  race: race/species only when mentioned or inferable from the concept; otherwise empty string',
       '  profession: trade or social role derived from the player concept; max 60 chars',
       '  description: 2-3 sentences expanding the concept with physical appearance (hair, eyes, build, or notable scar), clothing or equipment coherent with the profession, and personality trait with motivation. Min 80 chars, max 280 chars.',
-      '  campaignRole: what this character does in the world, their mission, or how they connect to the setting. Concrete and specific, not generic. Max 300 chars.',
+      '  campaignRole: what this character does in the world, their mission, or how they connect to the setting. Concrete and specific, not generic. Max 600 chars.',
       '  genderPt: Brazilian Portuguese translation of gender (Masculino, Feminino, or Outro); empty string if gender is empty',
       '  racePt: Brazilian Portuguese translation of race/species; empty string if race is empty',
       '  professionPt: Brazilian Portuguese translation of profession; max 60 chars',
       '  descriptionPt: Brazilian Portuguese translation of description; same length constraints (min 80, max 280 chars)',
-      '  campaignRolePt: Brazilian Portuguese translation of campaignRole; max 300 chars',
+      '  campaignRolePt: Brazilian Portuguese translation of campaignRole; max 600 chars',
     ].join('\n')
 
     const userPrompt = [
@@ -1748,6 +1650,7 @@ export class GeminiAdapter implements Narrator {
       ...(promptStory ? [`Adventure story: ${promptStory}`] : []),
       ...(promptWorldLore ? [`Universe lore: ${promptWorldLore}.`] : []),
       '',
+      buildNameDiversityLine(true),
       'Expand the player concept into a full character profile following the JSON schema above.',
     ].join('\n')
 
@@ -1759,6 +1662,7 @@ export class GeminiAdapter implements Narrator {
           maxOutputTokens: this.characterSuggestionMaxOutputTokens,
           timeoutMs: this.timeoutMs,
           responseMimeType: 'application/json',
+          temperature: this.temperature,
           systemInstruction: sysPrompt,
           ...(this.provider === 'gemini' ? { thinkingBudget: this.characterSuggestionThinkingBudget } : {})
         }, attempt)
@@ -1883,7 +1787,7 @@ export class GeminiAdapter implements Narrator {
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
       'The structured context of this call is the only canonical source for JSON fields.',
-      'If an NPC, item, effect, skill, destination, condition, or resource is not in the structured context, it CANNOT be created in the JSON fields.',
+      'If an NPC, item, effect, destination, condition, or resource is not in the structured context, it CANNOT be created in the JSON fields.',
       'When in doubt, prefer to keep npcs, itemChanges, and statusChanges empty/null and preserve continuity only in narrative and options.',
       '',
       'You MUST return ONLY a valid JSON (no markdown, no comments) with the following structure:',
@@ -1903,9 +1807,9 @@ export class GeminiAdapter implements Narrator {
       '      "feasibilityReason": "<reason if feasible=false>",',
       '      "diceCheck": {',
       '        "required": true,',
-      '        "skill": "<skill name in Brazilian Portuguese, e.g.: Percepção, Furtividade, Luta>",',
-      '        "attribute": "<attribute name if not a skill, e.g.: vigor, spirit>",',
-      '        "difficulty": "normal|dificil|extremo",',
+      '        "skill": "<OPTIONAL: Brazilian Portuguese skill name when a specific skill clearly applies, e.g.: Percepção, Furtividade, Eletrônica. Omit if unsure — the app infers it from the option text.>",',
+      '        "attribute": "<ONLY for a raw-attribute roll, e.g.: vigor, spirit. Omit when a skill applies.>",',
+      '        "difficulty": "facil|normal|dificil|extremo",',
       '        "reason": "<narrative justification for the roll>"',
       '      }',
       '    }',
@@ -1939,7 +1843,6 @@ export class GeminiAdapter implements Narrator {
       '- Choose the 4 options that make the most sense for the current scene; let the situation decide. If you do offer an attack (actionType "attack"), NEVER use as targetId an NPC listed in DEFEATED NPCS — those enemies are out of combat.',
       '- The "feasible" field must be false if the player lacks the required items/conditions.',
       '-  REQUIRED ITEMS & FEASIBILITY: if an option uses a specific item, that item MUST be listed in "requiredItems" AND must exist in the current ── INVENTORY ── list (match by name). If the item is NOT in the current inventory, set feasible=false with a feasibilityReason naming the missing item. NEVER offer a feasible option that depends on an item the player no longer has (e.g. an artifact dropped, consumed, or confiscated in a previous turn). When unsure an item is still held, treat it as absent.',
-      '- For actionType "trait_test", include "skill" or "attribute" in the actionPayload.',
       '- For actionType "attack", include ONLY "targetId" in the actionPayload. Do NOT send damageFormula or ap — the app resolves the player\'s weapon damage from the equipped weapon.',
       '- For actionType "heal": include actionPayload: {} (heals the player) or actionPayload: { targetId: "<allied NPC id>" }.',
       '- NPC ATTACKS: hostile NPC attacks this turn → fill "npcAttacks": [{ "npcId", "skillDie": 6|8|10|12 (6=common, 8=trained, 10=champion, 12=elite), "damageFormula" (e.g. "str+d6", "2d6"), "ap": 0 }]. No attack → [].',
@@ -2195,7 +2098,7 @@ export class GeminiAdapter implements Narrator {
         delete actionPayload.skill
       }
 
-      const diceCheck = hydrateDiceCheckFromActionPayload(
+      let diceCheck = hydrateDiceCheckFromActionPayload(
         candidate.diceCheck
           ? {
               ...candidate.diceCheck,
@@ -2206,6 +2109,37 @@ export class GeminiAdapter implements Narrator {
           : null,
         actionPayload
       )
+
+      // Resolução determinística da TRAIT da rolagem.
+      // A LLM NÃO envia mais "skill" (decidido no código): a skill é inferida pelo
+      // verbo no texto da opção. Atributo puro continua vindo da LLM (não inferível).
+      // Toda opção trait_test PRECISA de skill ou atributo na validação estrutural —
+      // por isso, se nada for inferível, convertemos para "custom" (sem trait) e
+      // rebaixamos required=false, em vez de invalidar a resposta inteira.
+      {
+        const payloadAttribute = sanitizeNullableInlineText(actionPayload.attribute)
+        let hasTrait = Boolean(diceCheck?.skill || diceCheck?.attribute || payloadSkill || payloadAttribute)
+        const needsTrait = Boolean(diceCheck?.required) || candidate.actionType === 'trait_test'
+
+        if (!hasTrait && needsTrait && diceCheck) {
+          const inferred = inferSkillFromText(text)
+          if (inferred) {
+            diceCheck = { ...diceCheck, skill: inferred.label }
+            if (candidate.actionType === 'trait_test') actionPayload.skill = inferred.label
+            hasTrait = true
+            warn('sanitizeNarratorResponse', `Skill inferida do texto da opção: "${text}" → ${inferred.label}`)
+          }
+        }
+
+        if (!hasTrait) {
+          if (candidate.actionType === 'trait_test') {
+            candidate.actionType = 'custom'
+            if (!sanitizeInlineText(actionPayload.input, '')) actionPayload.input = text
+          }
+          if (diceCheck?.required) diceCheck = { ...diceCheck, required: false }
+          warn('sanitizeNarratorResponse', `Sem trait inferível para "${text}": rolagem rebaixada${candidate.actionType === 'custom' ? ' e ação convertida para custom' : ''}`)
+        }
+      }
 
       const signature = buildOptionSignature({
         text,
@@ -2836,7 +2770,7 @@ export class GeminiAdapter implements Narrator {
       '    "required": true|false,',
       '    "skill": "<required skill or null>",',
       '    "attribute": "<required attribute or null>",',
-      '    "difficulty": "normal|dificil|extremo",',
+      '    "difficulty": "facil|normal|dificil|extremo",',
       '    "reason": "<narrative justification>"',
       '  },',
       '  "interpretation": "<brief description of how you interpreted the action>"',

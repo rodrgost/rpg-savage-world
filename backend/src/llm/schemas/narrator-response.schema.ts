@@ -68,7 +68,7 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
               required: { type: 'BOOLEAN' },
               skill: { type: 'STRING', nullable: true },
               attribute: { type: 'STRING', nullable: true },
-              difficulty: { type: 'STRING', enum: ['normal', 'dificil', 'extremo'], nullable: true },
+              difficulty: { type: 'STRING', enum: ['facil', 'normal', 'dificil', 'extremo'], nullable: true },
               reason: { type: 'STRING' }
             },
             required: ['required', 'reason'],

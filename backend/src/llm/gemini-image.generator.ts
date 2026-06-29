@@ -136,7 +136,7 @@ export class GeminiImageGenerator {
 
       const promptText = buildPrompt(parsedParams)
       if (attempt === 1) {
-        log('GeminiImage', `Prompt: ${promptText.slice(0, 300)}`)
+        log('GeminiImage', `Prompt (${promptText.length} chars): ${promptText}`)
         log('GeminiImage', `Model: ${this.model} Temperature: ${this.temperature}`)
       } else {
         log('GeminiImage', `Tentativa ${attempt}/${maxAttempts}`)

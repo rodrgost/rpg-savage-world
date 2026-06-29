@@ -76,6 +76,12 @@ export class SessionController {
     })
   }
 
+  /** Playthroughs ativos do usuário — aba "jogos ativos". Rota estática antes de /:sessionId. */
+  @Get('/active')
+  async listActive(@CurrentUser('uid') userId: string) {
+    return { playthroughs: await this.sessions.listActivePlaythroughs({ ownerId: userId }) }
+  }
+
   @Get('/:sessionId')
   async get(@CurrentUser('uid') userId: string, @Param('sessionId') sessionId: string) {
     return await this.sessions.getSession({ ownerId: userId, sessionId })

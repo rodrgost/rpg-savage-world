@@ -771,6 +771,45 @@ export class SessionService {
     return legacyCandidate.sessionId
   }
 
+  /**
+   * Playthroughs (sessões) ativos do usuário — alimenta a aba "jogos ativos".
+   * Um mesmo personagem pode aparecer em várias linhas (campanhas diferentes).
+   * Obs.: sessões legadas sem `status` não aparecem até receberem backfill.
+   */
+  async listActivePlaythroughs(params: { ownerId: string }): Promise<Array<{
+    sessionId: string
+    campaignId: string
+    characterId: string
+    worldId?: string
+    status: string
+    updatedAtMillis: number
+  }>> {
+    const qs = await firestore
+      .collection('sessions')
+      .where('ownerId', '==', params.ownerId)
+      .where('status', '==', 'ativo')
+      .get()
+
+    const toMillis = (value: unknown): number =>
+      typeof value === 'object' && value !== null && '_seconds' in value
+        ? Number((value as { _seconds: number })._seconds) * 1000
+        : 0
+
+    return qs.docs
+      .map((doc) => {
+        const data = doc.data() as Record<string, unknown>
+        return {
+          sessionId: doc.id,
+          campaignId: String(data.campaignId ?? ''),
+          characterId: String(data.characterId ?? ''),
+          worldId: typeof data.worldId === 'string' ? data.worldId : undefined,
+          status: String(data.status ?? 'ativo'),
+          updatedAtMillis: toMillis(data.updatedAt ?? data.createdAt)
+        }
+      })
+      .sort((a, b) => b.updatedAtMillis - a.updatedAtMillis)
+  }
+
   async createSession(params: { ownerId: string; campaignId: string; characterId: string; narrativeStyle?: NarrativeStyle; simpleVocabulary?: boolean }) {
     const [campaign, character] = await Promise.all([
       this.campaigns.get(params.campaignId),
@@ -785,7 +824,11 @@ export class SessionService {
       ? character.ownerId
       : character.userId
     if (characterOwnerId !== params.ownerId) throw new NotFoundException('Sem permissão para este character')
-    if (character.campaignId !== params.campaignId) throw new NotFoundException('Character não pertence a esta campanha')
+    // Personagem agora pertence ao Mundo (não à Campanha). Invariante: mesmo mundo.
+    // Personagens legados sem worldId são tolerados (serão backfillados).
+    if (character.worldId && character.worldId !== campaign.worldId) {
+      throw new NotFoundException('Personagem pertence a outro mundo')
+    }
 
     const resumeKey = this.buildResumeKey(params)
     const reusableSessionId = await this.findReusableSessionId(params)
@@ -811,7 +854,9 @@ export class SessionService {
         resumeKey,
         ...(params.narrativeStyle ? { narrativeStyle: params.narrativeStyle } : {}),
         ...(params.simpleVocabulary !== undefined ? { simpleVocabulary: params.simpleVocabulary } : {}),
-        createdAt: FieldValue.serverTimestamp()
+        status: 'ativo',
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
       })
 
     // Parse character attributes as DieType

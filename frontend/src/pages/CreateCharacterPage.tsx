@@ -12,7 +12,7 @@ import {
   listWorlds,
   updateCharacter
 } from '../lib/api'
-import type { Campaign, DieType, Hindrance, Visibility, World } from '../types'
+import type { DieType, Hindrance, Visibility, World } from '../types'
 import {
   ATTRIBUTES,
   ATTRIBUTE_KEYS,
@@ -104,8 +104,6 @@ export function CreateCharacterPage({ uid }: Props) {
   /* ---------- State ---------- */
   const [worlds, setWorlds] = useState<World[]>([])
   const [selectedWorldId, setSelectedWorldId] = useState('')
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [selectedCampaignId, setSelectedCampaignId] = useState('')
   const [ownerId, setOwnerId] = useState('')
   const [visibility, setVisibility] = useState<Visibility>('private')
   const [name, setName] = useState('')
@@ -142,8 +140,8 @@ export function CreateCharacterPage({ uid }: Props) {
   const skillPointsTotal = CHARACTER_CREATION.skillPoints + hindranceAllocation.extraSkillPoints
   const skillPointsUsed = useMemo(() => countSkillSteps(skills), [skills])
   const skillPointsLeft = skillPointsTotal - skillPointsUsed
-  const selectedCampaign = campaigns.find((campaign) => campaign.id === selectedCampaignId)
-  const selectedCampaignHasStory = Boolean(selectedCampaign?.storyDescription?.trim())
+  const selectedWorld = worlds.find((world) => world.id === selectedWorldId)
+  const selectedWorldHasLore = Boolean(selectedWorld?.lore?.trim())
   const isOwner = !isEditMode || !ownerId || ownerId === uid
   const isReadOnly = isEditMode && !isOwner
 
@@ -186,13 +184,6 @@ export function CreateCharacterPage({ uid }: Props) {
   }, [uid])
 
   useEffect(() => {
-    if (!uid) return
-    listCampaigns(selectedWorldId || undefined).then(setCampaigns).catch(() => {})
-    // Reset campaign selection when world changes
-    if (!isEditMode) setSelectedCampaignId('')
-  }, [uid, selectedWorldId])
-
-  useEffect(() => {
     if (!isEditMode || !characterId || !uid) return
     getCharacter(characterId)
       .then((c) => {
@@ -206,7 +197,6 @@ export function CreateCharacterPage({ uid }: Props) {
             if (camp?.worldId) setSelectedWorldId(camp.worldId)
           }).catch(() => {})
         }
-        setSelectedCampaignId(c.campaignId)
         setName(c.name)
         setGender(c.gender ?? '')
         setRace(c.race ?? '')
@@ -277,9 +267,9 @@ export function CreateCharacterPage({ uid }: Props) {
   }
 
   async function handleSuggest() {
-    if (!selectedCampaignId) return
-    if (!selectedCampaignHasStory) {
-      setError('Esta campanha ainda não possui história para gerar personagem.')
+    if (!selectedWorldId) return
+    if (!selectedWorldHasLore) {
+      setError('Este mundo ainda não possui lore para gerar personagem.')
       return
     }
     setSuggestLoading(true)
@@ -290,7 +280,7 @@ export function CreateCharacterPage({ uid }: Props) {
       if (name.trim()) existing.name = name.trim()
 
       const suggestion = await generateCharacterFromWorldStory({
-        campaignId: selectedCampaignId,
+        worldId: selectedWorldId,
         existingFields: Object.keys(existing).length > 0 ? existing : undefined
       })
 
@@ -314,12 +304,12 @@ export function CreateCharacterPage({ uid }: Props) {
   }
 
   async function handleGenerateFromConcept() {
-    if (!selectedCampaignId || !characterConcept.trim()) return
+    if (!selectedWorldId || !characterConcept.trim()) return
     setConceptLoading(true)
     setError('')
     try {
       const suggestion = await generateCharacterFromDescription({
-        campaignId: selectedCampaignId,
+        worldId: selectedWorldId,
         characterConcept: characterConcept.trim()
       })
       setName(suggestion.name)
@@ -341,7 +331,7 @@ export function CreateCharacterPage({ uid }: Props) {
   }
 
   async function handleImagePreview() {
-    if (!selectedCampaignId || !profession) return
+    if (!selectedWorldId || !profession) return
     setImageLoading(true)
     setError('')
     try {
@@ -349,7 +339,7 @@ export function CreateCharacterPage({ uid }: Props) {
       const parts: string[] = []
       if (name.trim()) parts.push(`Nome do personagem: ${name.trim()}`)
       if (description.trim()) parts.push(`Descrição base: ${description.trim()}`)
-      if (selectedCampaign?.name?.trim()) parts.push(`Campanha: ${selectedCampaign.name.trim()}`)
+      if (selectedWorld?.name?.trim()) parts.push(`Mundo: ${selectedWorld.name.trim()}`)
       if (selectedEdges.length > 0) {
         const labels = selectedEdges.map(k => EDGES.find(e => e.key === k)?.label ?? k)
         parts.push(`Traços marcantes: ${labels.join(', ')}`)
@@ -360,7 +350,7 @@ export function CreateCharacterPage({ uid }: Props) {
       }
 
       const img = await generateCharacterImagePreview({
-        campaignId: selectedCampaignId,
+        worldId: selectedWorldId,
         gender,
         race,
         profession,
@@ -381,7 +371,7 @@ export function CreateCharacterPage({ uid }: Props) {
       return
     }
     setError('')
-    if (!selectedCampaignId) { setError('Selecione uma campanha'); return }
+    if (!selectedWorldId) { setError('Selecione um universo'); return }
     if (attrPointsLeft < 0) { setError('Pontos de atributo excedidos'); return }
     if (skillPointsLeft < 0) { setError('Pontos de perícia excedidos'); return }
     if (!hindranceLimits.valid) { setError(hindranceLimits.errors.join('. ')); return }
@@ -407,7 +397,7 @@ export function CreateCharacterPage({ uid }: Props) {
         })
       } else {
         await createCharacter({
-          campaignId: selectedCampaignId,
+          worldId: selectedWorldId,
           name, gender, race, profession, description, campaignRole,
           genderEn, raceEn, professionEn, descriptionEn, campaignRoleEn,
           visibility,
@@ -431,42 +421,10 @@ export function CreateCharacterPage({ uid }: Props) {
 
       <form onSubmit={handleSubmit}>
         <fieldset className="form-fieldset-reset" disabled={isReadOnly}>
-        {/* ═══════ GERAÇÃO POR DESCRIÇÃO ═══════ */}
+        {/* ═══════ COMECE POR AQUI: UNIVERSO + VISIBILIDADE + CONCEITO ═══════ */}
         <div className="section-card">
           <div className="section-card-header">
-            <h3>✍️ Descreva seu personagem</h3>
-          </div>
-          <div className="section-card-body form-stack">
-            <p className="section-card-hint">
-              Escreva livremente quem é o seu personagem — origem, personalidade, aparência, motivação — e a IA gera todas as informações básicas para você.
-            </p>
-            <label>
-              Conceito do personagem
-              <textarea
-                disabled={!selectedCampaignId}
-                onChange={(e) => setCharacterConcept(e.target.value)}
-                placeholder={selectedCampaignId ? 'Ex: Um elfo alto e reservado que cresceu entre os ladrões de uma cidade portuária corrupta. Habilidoso com faca e palavras afiadas, busca redenção após trair sua guilda...' : 'Selecione uma campanha para habilitar'}
-                rows={4}
-                value={characterConcept}
-              />
-            </label>
-            <button
-              className="btn-ai-gen button-full"
-              disabled={conceptLoading || !selectedCampaignId || characterConcept.trim().length < 10}
-              onClick={handleGenerateFromConcept}
-              type="button"
-            >
-              {conceptLoading
-                ? <><span className="btn-ai-spinner" /> Gerando personagem…</>
-                : '✨ Gerar personagem pela descrição'}
-            </button>
-          </div>
-        </div>
-
-        {/* ═══════ DADOS BÁSICOS ═══════ */}
-        <div className="section-card">
-          <div className="section-card-header">
-            <h3>📋 Informações Básicas</h3>
+            <h3>✍️ Comece por aqui</h3>
           </div>
           <div className="section-card-body form-stack">
             <label>
@@ -476,7 +434,7 @@ export function CreateCharacterPage({ uid }: Props) {
                 onChange={(e) => setSelectedWorldId(e.target.value)}
                 value={selectedWorldId}
               >
-                <option value="">Todos os universos</option>
+                <option value="">Selecione um universo</option>
                 {worlds.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
@@ -493,36 +451,54 @@ export function CreateCharacterPage({ uid }: Props) {
               </select>
             </label>
 
-            {visibility === 'public' && selectedCampaign && selectedCampaign.visibility !== 'public' && (
+            {visibility === 'public' && selectedWorld && selectedWorld.visibility !== 'public' && (
               <p className="error" style={{ margin: 0 }}>
-                Personagens públicos exigem uma campanha pública.
+                Personagens públicos exigem um mundo público.
               </p>
             )}
 
-            <label>
-              Campanha
-              <select
-                disabled={isEditMode}
-                onChange={(e) => setSelectedCampaignId(e.target.value)}
-                value={selectedCampaignId}
-              >
-                <option value="">Selecione uma campanha</option>
-                {campaigns.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name || 'Campanha sem nome'}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <hr className="subsection-divider" />
 
-            {selectedCampaignId && (
+            <p className="section-card-hint">
+              Escreva livremente quem é o seu personagem — origem, personalidade, aparência, motivação — e a IA gera todas as informações básicas para você.
+            </p>
+            <label>
+              Conceito do personagem
+              <textarea
+                disabled={!selectedWorldId}
+                onChange={(e) => setCharacterConcept(e.target.value)}
+                placeholder={selectedWorldId ? 'Ex: Um elfo alto e reservado que cresceu entre os ladrões de uma cidade portuária corrupta. Habilidoso com faca e palavras afiadas, busca redenção após trair sua guilda...' : 'Selecione um universo para habilitar'}
+                rows={4}
+                value={characterConcept}
+              />
+            </label>
+            <button
+              className="btn-ai-gen button-full"
+              disabled={conceptLoading || !selectedWorldId || characterConcept.trim().length < 10}
+              onClick={handleGenerateFromConcept}
+              type="button"
+            >
+              {conceptLoading
+                ? <><span className="btn-ai-spinner" /> Gerando personagem…</>
+                : '✨ Gerar personagem pela descrição'}
+            </button>
+          </div>
+        </div>
+
+        {/* ═══════ DADOS BÁSICOS + RETRATO ═══════ */}
+        <div className="section-card">
+          <div className="section-card-header">
+            <h3>📋 Informações Básicas</h3>
+          </div>
+          <div className="section-card-body form-stack">
+            {selectedWorldId && (
               <div className="form-row-2">
                 <button
                   className="btn-ai-gen"
-                  disabled={suggestLoading || !selectedCampaignHasStory}
+                  disabled={suggestLoading || !selectedWorldHasLore}
                   onClick={handleSuggest}
                   type="button"
-                  title={selectedCampaignHasStory ? 'Sugerir personagem pela IA' : 'A campanha precisa ter história antes de sugerir personagem'}
+                  title={selectedWorldHasLore ? 'Sugerir personagem pela IA' : 'O mundo precisa ter lore antes de sugerir personagem'}
                 >
                   {suggestLoading ? <><span className="btn-ai-spinner" /> Gerando sugestão…</> : '✨ Sugerir pela IA'}
                 </button>
@@ -542,9 +518,9 @@ export function CreateCharacterPage({ uid }: Props) {
               </div>
             )}
 
-            {selectedCampaignId && !selectedCampaignHasStory && (
+            {selectedWorldId && !selectedWorldHasLore && (
               <p className="error" style={{ margin: 0 }}>
-                Esta campanha ainda não possui história para gerar personagem.
+                Este mundo ainda não possui lore para gerar personagem.
               </p>
             )}
 
@@ -579,15 +555,12 @@ export function CreateCharacterPage({ uid }: Props) {
               Papel na Campanha
               <textarea onChange={(e) => setCampaignRole(e.target.value)} rows={2} value={campaignRole} placeholder="O que este personagem é neste mundo, o que está fazendo ou sua missão atual..." />
             </label>
-          </div>
-        </div>
 
-        {/* ═══════ IMAGEM ═══════ */}
-        <div className="section-card">
-          <div className="section-card-header">
-            <h3>🖼️ Retrato</h3>
-          </div>
-          <div className="section-card-body">
+            <hr className="subsection-divider" />
+
+            <div className="subsection-head">
+              <h4>🖼️ Retrato</h4>
+            </div>
             {image && (
               <div className="hero-image">
                 <img
@@ -598,7 +571,7 @@ export function CreateCharacterPage({ uid }: Props) {
             )}
             <button
               className="btn-ai-gen button-full"
-              disabled={imageLoading || !selectedCampaignId || !profession}
+              disabled={imageLoading || !selectedWorldId || !profession}
               onClick={handleImagePreview}
               type="button"
               style={{ marginTop: image ? 'var(--space-3)' : 0 }}
@@ -608,15 +581,18 @@ export function CreateCharacterPage({ uid }: Props) {
           </div>
         </div>
 
-        {/* ═══════ ATRIBUTOS ═══════ */}
+        {/* ═══════ ATRIBUTOS + PERÍCIAS ═══════ */}
         <div className="section-card">
           <div className="section-card-header">
-            <h3>🎲 Atributos</h3>
-            <span className={`badge ${attrPointsLeft < 0 ? 'badge--error' : attrPointsLeft === 0 ? 'badge--success' : 'badge--accent'}`}>
-              {attrPointsLeft} / {attrPointsTotal} pts
-            </span>
+            <h3>🎲 Atributos &amp; Perícias</h3>
           </div>
           <div className="section-card-body">
+            <div className="subsection-head">
+              <h4>Atributos</h4>
+              <span className={`badge ${attrPointsLeft < 0 ? 'badge--error' : attrPointsLeft === 0 ? 'badge--success' : 'badge--accent'}`}>
+                {attrPointsLeft} / {attrPointsTotal} pts
+              </span>
+            </div>
             <div className="attr-list">
               {ATTRIBUTES.map((attr) => (
                 <div key={attr.key} className="attr-row">
@@ -632,18 +608,15 @@ export function CreateCharacterPage({ uid }: Props) {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
 
-        {/* ═══════ PERÍCIAS ═══════ */}
-        <div className="section-card">
-          <div className="section-card-header">
-            <h3>📖 Perícias</h3>
-            <span className={`badge ${skillPointsLeft < 0 ? 'badge--error' : skillPointsLeft === 0 ? 'badge--success' : 'badge--accent'}`}>
-              {skillPointsLeft} / {skillPointsTotal} pts
-            </span>
-          </div>
-          <div className="section-card-body">
+            <hr className="subsection-divider" />
+
+            <div className="subsection-head">
+              <h4>📖 Perícias</h4>
+              <span className={`badge ${skillPointsLeft < 0 ? 'badge--error' : skillPointsLeft === 0 ? 'badge--success' : 'badge--accent'}`}>
+                {skillPointsLeft} / {skillPointsTotal} pts
+              </span>
+            </div>
             <p className="section-card-hint" style={{ marginBottom: 'var(--space-3)' }}>
               Marque as perícias desejadas. Cada d4 = 1 pt, cada aumento = +1 pt.
             </p>
@@ -683,15 +656,18 @@ export function CreateCharacterPage({ uid }: Props) {
           </div>
         </div>
 
-        {/* ═══════ COMPLICAÇÕES ═══════ */}
+        {/* ═══════ COMPLICAÇÕES + VANTAGENS ═══════ */}
         <div className="section-card">
           <div className="section-card-header">
-            <h3>⚠️ Complicações</h3>
-            <span className={`badge ${!hindranceLimits.valid ? 'badge--error' : hindrancePointsEarned > 0 ? 'badge--warn' : 'badge--accent'}`}>
-              {hindranceLimits.majorCount}M / {hindranceLimits.minorCount}m &nbsp;→&nbsp; {hindrancePointsEarned} pts
-            </span>
+            <h3>⚠️ Complicações &amp; Vantagens</h3>
           </div>
           <div className="section-card-body">
+            <div className="subsection-head">
+              <h4>⚠️ Complicações</h4>
+              <span className={`badge ${!hindranceLimits.valid ? 'badge--error' : hindrancePointsEarned > 0 ? 'badge--warn' : 'badge--accent'}`}>
+                {hindranceLimits.majorCount}M / {hindranceLimits.minorCount}m &nbsp;→&nbsp; {hindrancePointsEarned} pts
+              </span>
+            </div>
             <p className="section-card-hint" style={{ marginBottom: 'var(--space-3)' }}>
               Máx. {CHARACTER_CREATION.maxMajorHindrances} Maior e {CHARACTER_CREATION.maxMinorHindrances} Menores. Concedem pontos extras para gastar.
             </p>
@@ -762,18 +738,15 @@ export function CreateCharacterPage({ uid }: Props) {
                 </div>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* ═══════ VANTAGENS ═══════ */}
-        <div className="section-card">
-          <div className="section-card-header">
-            <h3>⭐ Vantagens</h3>
-            <span className={`badge ${selectedEdges.length > freeEdgesAllowed ? 'badge--error' : selectedEdges.length === freeEdgesAllowed ? 'badge--success' : 'badge--accent'}`}>
-              {selectedEdges.length} / {freeEdgesAllowed}
-            </span>
-          </div>
-          <div className="section-card-body">
+            <hr className="subsection-divider" />
+
+            <div className="subsection-head">
+              <h4>⭐ Vantagens</h4>
+              <span className={`badge ${selectedEdges.length > freeEdgesAllowed ? 'badge--error' : selectedEdges.length === freeEdgesAllowed ? 'badge--success' : 'badge--accent'}`}>
+                {selectedEdges.length} / {freeEdgesAllowed}
+              </span>
+            </div>
             {freeEdgesAllowed === 0 && (
               <p className="section-card-hint" style={{ marginBottom: 'var(--space-3)' }}>
                 Selecione Complicações e aloque pontos em "Vantagem extra" para desbloquear.
@@ -852,10 +825,10 @@ export function CreateCharacterPage({ uid }: Props) {
           </div>
         )}
 
-        {!campaigns.length && (
+        {!worlds.length && (
           <div className="section-card">
             <div className="section-card-body">
-              <p className="muted" style={{ margin: 0 }}>Crie uma campanha antes de criar personagem.</p>
+              <p className="muted" style={{ margin: 0 }}>Crie um universo antes de criar personagem.</p>
             </div>
           </div>
         )}
@@ -865,7 +838,7 @@ export function CreateCharacterPage({ uid }: Props) {
           {!isReadOnly && (
             <button
               className="button-primary-lg"
-              disabled={loading || !campaigns.length || attrPointsLeft < 0 || skillPointsLeft < 0}
+              disabled={loading || !selectedWorldId || attrPointsLeft < 0 || skillPointsLeft < 0}
               type="submit"
             >
               {loading

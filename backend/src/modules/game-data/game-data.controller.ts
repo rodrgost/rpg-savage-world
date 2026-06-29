@@ -98,7 +98,7 @@ const WorldImagePreviewBody = z
 // ─── Character ─────────────────────────────────────────────────
 
 const CreateCharacterBody = z.object({
-  campaignId: z.string().min(1),
+  worldId: z.string().min(1),
   name: z.string().min(1),
   gender: z.string().optional().default(''),
   race: z.string().optional().default(''),
@@ -139,7 +139,7 @@ const UpdateCharacterBody = z.object({
 
 const CharacterImagePreviewBody = z
   .object({
-    campaignId: z.string().min(1),
+    worldId: z.string().min(1),
     gender: z.string().optional().default(''),
     race: z.string().optional().default(''),
     profession: z.string().min(1),
@@ -149,7 +149,7 @@ const CharacterImagePreviewBody = z
 
 const CharacterSuggestionBody = z
   .object({
-    campaignId: z.string().min(1),
+    worldId: z.string().min(1),
     existingFields: z.object({
       name: z.string().optional(),
       gender: z.string().optional(),
@@ -163,7 +163,7 @@ const CharacterSuggestionBody = z
 
 const CharacterFromDescriptionBody = z
   .object({
-    campaignId: z.string().min(1),
+    worldId: z.string().min(1),
     characterConcept: z.string().min(10).max(1000)
   })
   .strict()
@@ -305,9 +305,9 @@ export class GameDataController {
   @Get('/characters')
   async listCharacters(
     @CurrentUser('uid') userId: string,
-    @Query('campaignId') campaignId: string | undefined
+    @Query('worldId') worldId: string | undefined
   ) {
-    return await this.gameData.listCharacters({ userId, campaignId })
+    return await this.gameData.listCharacters({ userId, worldId })
   }
 
   @Get('/characters/:characterId')

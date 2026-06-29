@@ -587,11 +587,8 @@ export class GameDataService {
     if (!campaign) throw new NotFoundException('Campanha não encontrada')
     if (campaign.ownerId !== params.userId) throw new ForbiddenException('Sem permissão para esta campanha')
 
-    const linkedCharacters = await this.characters.listByCampaign(params.campaignId)
-    if (linkedCharacters.length > 0) {
-      throw new BadRequestException('Exclua os personagens vinculados antes de remover esta campanha.')
-    }
-
+    // N:M: personagens pertencem ao Mundo, não à campanha — não bloqueiam mais a exclusão.
+    // Apenas Playthroughs (sessions) desta campanha bloqueiam.
     const sessionSnapshot = await firestore.collection('sessions').where('campaignId', '==', params.campaignId).limit(1).get()
     if (!sessionSnapshot.empty) {
       throw new BadRequestException('Existem sessões vinculadas a esta campanha. Remova-as antes de excluir a campanha.')
@@ -625,14 +622,8 @@ export class GameDataService {
       }
     }
 
-    if (params.visibility === 'private') {
-      const linkedCharacters = await this.characters.listByCampaign(params.campaignId)
-      const hasPublicCharacters = linkedCharacters.some((character) => normalizeVisibility(character.visibility) === 'public')
-
-      if (hasPublicCharacters) {
-        throw new BadRequestException('Esta campanha possui personagens públicos. Torne esses personagens privados antes de privatizar a campanha.')
-      }
-    }
+    // N:M: a visibilidade do personagem é governada pelo Mundo, não pela campanha.
+    // Privatizar a campanha não exige mais privatizar personagens.
 
     const normalizedImage = params.image
       ? await this.normalizeStoredImageByHint({ image: params.image, kind: 'world' })
@@ -697,7 +688,7 @@ export class GameDataService {
 
   async createCharacter(params: {
     userId: string
-    campaignId: string
+    worldId: string
     name: string
     gender?: string
     race?: string
@@ -718,18 +709,16 @@ export class GameDataService {
     sheetValues?: Record<string, unknown>
     image?: StoredImage
   }) {
-    const campaign = await this.campaigns.get(params.campaignId)
-    if (!campaign) throw new NotFoundException('Campanha não encontrada')
-    if (!this.canReadResource({ ownerId: campaign.ownerId, visibility: campaign.visibility, userId: params.userId })) {
-      throw new ForbiddenException('Sem permissão para esta campanha')
+    const world = await this.worlds.get(params.worldId)
+    if (!world) throw new NotFoundException('Mundo não encontrado')
+    if (!this.canReadResource({ ownerId: world.ownerId, visibility: world.visibility, userId: params.userId })) {
+      throw new ForbiddenException('Sem permissão para este mundo')
     }
 
     const visibility = normalizeVisibility(params.visibility)
-    if (visibility === 'public' && normalizeVisibility(campaign.visibility) !== 'public') {
-      throw new BadRequestException('Personagens públicos exigem uma campanha pública.')
+    if (visibility === 'public' && normalizeVisibility(world.visibility) !== 'public') {
+      throw new BadRequestException('Personagens públicos exigem um mundo público.')
     }
-
-    const world = await this.worlds.get(campaign.worldId)
 
     const normalizedHindrances = validateHindrances(params.hindrances ?? [])
     const allocation = params.hindranceAllocation ?? { extraEdges: 0, extraAttributePoints: 0, extraSkillPoints: 0 }
@@ -747,8 +736,7 @@ export class GameDataService {
     const characterId = randomUUID()
     await this.characters.create({
       characterId,
-      campaignId: params.campaignId,
-      worldId: campaign.worldId,
+      worldId: params.worldId,
       ownerId: params.userId,
       visibility,
       name: params.name,
@@ -776,21 +764,20 @@ export class GameDataService {
 
   async generateCharacterImagePreview(params: {
     userId: string
-    campaignId: string
+    worldId: string
     gender?: string
     race?: string
     profession: string
     additionalDescription?: string
   }): Promise<{ image: StoredImage }> {
-    const campaign = await this.campaigns.get(params.campaignId)
-    if (!campaign) throw new NotFoundException('Campanha não encontrada')
-    if (!this.canReadResource({ ownerId: campaign.ownerId, visibility: campaign.visibility, userId: params.userId })) {
-      throw new ForbiddenException('Sem permissão para esta campanha')
+    const world = await this.worlds.get(params.worldId)
+    if (!world) throw new NotFoundException('Mundo não encontrado')
+    if (!this.canReadResource({ ownerId: world.ownerId, visibility: world.visibility, userId: params.userId })) {
+      throw new ForbiddenException('Sem permissão para este mundo')
     }
 
-    const world = await this.worlds.get(campaign.worldId)
-    const worldName = world?.name ?? 'Mundo desconhecido'
-    const campaignName = campaign.name ?? ''
+    const worldName = world.name ?? 'Mundo desconhecido'
+    const campaignName = ''
     const visualDescription = await this.buildVisualDescription({
       entityType: 'character',
       worldName,
@@ -820,8 +807,8 @@ export class GameDataService {
     return { image: normalized }
   }
 
-  async listCharacters(params: { userId: string; campaignId?: string }) {
-    const characters = await this.characters.listAccessible({ userId: params.userId, campaignId: params.campaignId })
+  async listCharacters(params: { userId: string; worldId?: string }) {
+    const characters = await this.characters.listAccessible({ userId: params.userId, worldId: params.worldId })
     const ownerProfiles = await this.loadOwnerProfiles(characters.map((character) => getCharacterOwnerId(character)))
     return {
       characters: characters.map((character) => {
@@ -846,7 +833,7 @@ export class GameDataService {
 
   async suggestCharacterFromWorld(params: {
     userId: string
-    campaignId: string
+    worldId: string
     existingFields?: {
       name?: string
       gender?: string
@@ -860,33 +847,31 @@ export class GameDataService {
     const existingFields = typedName ? { name: typedName } : undefined
 
     log('suggestCharacterFromWorld', 'request received', {
-      campaignId: params.campaignId,
+      worldId: params.worldId,
       userId: params.userId,
       existingFields: Object.keys(existingFields ?? {})
     })
 
-    const campaign = await this.campaigns.get(params.campaignId)
-    if (!campaign) throw new NotFoundException('Campanha não encontrada')
-    if (!this.canReadResource({ ownerId: campaign.ownerId, visibility: campaign.visibility, userId: params.userId })) {
-      throw new ForbiddenException('Sem permissão para esta campanha')
+    const world = await this.worlds.get(params.worldId)
+    if (!world) throw new NotFoundException('Mundo não encontrado')
+    if (!this.canReadResource({ ownerId: world.ownerId, visibility: world.visibility, userId: params.userId })) {
+      throw new ForbiddenException('Sem permissão para este mundo')
     }
 
-    const storyDescription = campaign.storyDescription?.trim()
-    if (!storyDescription) {
-      warn('suggestCharacterFromWorld', `Campanha sem história para campaignId=${params.campaignId}`)
-      throw new BadRequestException('Esta campanha ainda não possui história para gerar personagem.')
+    const worldName = world.name?.trim() ?? ''
+    const worldLore = (world.loreEn ?? world.lore ?? '').trim()
+    if (!worldLore) {
+      warn('suggestCharacterFromWorld', `Mundo sem lore para worldId=${params.worldId}`)
+      throw new BadRequestException('Este mundo ainda não possui lore para gerar personagem.')
     }
-
-    // Enrich with world lore if available
-    const world = await this.worlds.get(campaign.worldId)
-    const worldName = world?.name?.trim() ?? ''
-    const worldLore = (world?.loreEn ?? world?.lore ?? '').trim()
+    // N:M: a sugestão usa apenas o lore do Mundo como contexto.
+    // storyDescription fica vazio para não duplicar o lore no prompt (Universe lore == Adventure story).
+    const storyDescription = ''
 
     log('suggestCharacterFromWorld', 'context ready', {
-      campaignId: params.campaignId,
+      worldId: params.worldId,
       worldName,
       storyLength: storyDescription.length,
-      worldId: campaign.worldId,
       worldLoreLength: worldLore.length
     })
 
@@ -905,12 +890,12 @@ export class GameDataService {
       const description = suggestion.description.trim()
       const campaignRole = (suggestion.campaignRole || '').trim()
 
-      if (!name || !profession || description.length < 80 || !campaignRole) {
+      if (!name || !profession || description.length < 80) {
         throw new Error('O provedor de IA retornou uma sugestão incompleta.')
       }
 
       log('suggestCharacterFromWorld', 'suggestion ready', {
-        campaignId: params.campaignId,
+        worldId: params.worldId,
         hasName: Boolean(name),
         hasProfession: Boolean(profession),
         descriptionLength: description.length,
@@ -932,31 +917,30 @@ export class GameDataService {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
-      warn('suggestCharacterFromWorld', `Falha ao gerar sugestão por IA para campaignId=${params.campaignId}: ${message}`)
+      warn('suggestCharacterFromWorld', `Falha ao gerar sugestão por IA para worldId=${params.worldId}: ${message}`)
       throw new ServiceUnavailableException(`Falha ao gerar personagem com IA: ${message}`)
     }
   }
 
   async suggestCharacterFromDescription(params: {
     userId: string
-    campaignId: string
+    worldId: string
     characterConcept: string
   }) {
     if (!params.characterConcept?.trim()) {
       throw new BadRequestException('Informe uma descrição do personagem.')
     }
 
-    const campaign = await this.campaigns.get(params.campaignId)
-    if (!campaign) throw new NotFoundException('Campanha não encontrada')
-    if (!this.canReadResource({ ownerId: campaign.ownerId, visibility: campaign.visibility, userId: params.userId })) {
-      throw new ForbiddenException('Sem permissão para esta campanha')
+    const world = await this.worlds.get(params.worldId)
+    if (!world) throw new NotFoundException('Mundo não encontrado')
+    if (!this.canReadResource({ ownerId: world.ownerId, visibility: world.visibility, userId: params.userId })) {
+      throw new ForbiddenException('Sem permissão para este mundo')
     }
 
-    const world = await this.worlds.get(campaign.worldId)
-    const worldName = world?.name?.trim() ?? ''
-    const worldLore = (world?.loreEn ?? world?.lore ?? '').trim()
-    const campaignName = campaign.name?.trim() ?? ''
-    const storyDescription = (campaign.storyDescriptionEn ?? campaign.storyDescription ?? '').trim()
+    const worldName = world.name?.trim() ?? ''
+    const worldLore = (world.loreEn ?? world.lore ?? '').trim()
+    const campaignName = ''
+    const storyDescription = ''
 
     try {
       const suggestion = await this.narrator.suggestCharacterFromDescription({
@@ -1023,10 +1007,11 @@ export class GameDataService {
 
     const nextVisibility = params.visibility ? normalizeVisibility(params.visibility) : normalizeVisibility(character.visibility)
     if (nextVisibility === 'public') {
-      const campaign = await this.campaigns.get(character.campaignId)
-      if (!campaign) throw new NotFoundException('Campanha não encontrada')
-      if (normalizeVisibility(campaign.visibility) !== 'public') {
-        throw new BadRequestException('Personagens públicos exigem uma campanha pública.')
+      // Personagem pertence ao Mundo: visibilidade pública exige Mundo público.
+      const world = character.worldId ? await this.worlds.get(character.worldId) : null
+      if (!world) throw new NotFoundException('Mundo não encontrado')
+      if (normalizeVisibility(world.visibility) !== 'public') {
+        throw new BadRequestException('Personagens públicos exigem um mundo público.')
       }
     }
 

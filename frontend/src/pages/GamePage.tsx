@@ -705,7 +705,6 @@ function ActionOptions({
                   <span className="dice-check-value">
                     {trait.label}
                     {dc.modifier ? ` (${dc.modifier > 0 ? '+' : ''}${dc.modifier})` : ''}
-                    {' · TN '}{dc.tn ?? 4}
                   </span>
                 </span>
               )}

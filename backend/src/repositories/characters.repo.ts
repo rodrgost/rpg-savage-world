@@ -2,8 +2,9 @@ import { FieldValue, firestore } from '../infrastructure/firebase.js'
 import type { Visibility } from './worlds.repo.js'
 
 export type CharacterDoc = {
-  campaignId: string
-  worldId?: string
+  /** @deprecated Personagem agora pertence ao Mundo (worldId). Mantido só para leitura legada. */
+  campaignId?: string
+  worldId: string
   ownerId?: string
   userId?: string
   visibility?: Visibility
@@ -53,8 +54,8 @@ export class CharactersRepo {
 
   async create(params: {
     characterId: string
-    campaignId: string
-    worldId?: string
+    campaignId?: string
+    worldId: string
     ownerId: string
     visibility: Visibility
     name: string
@@ -81,8 +82,8 @@ export class CharactersRepo {
       .collection('characters')
       .doc(params.characterId)
       .set({
-        campaignId: params.campaignId,
-        ...(params.worldId ? { worldId: params.worldId } : {}),
+        ...(params.campaignId ? { campaignId: params.campaignId } : {}),
+        worldId: params.worldId,
         ownerId: params.ownerId,
         userId: params.ownerId,
         visibility: params.visibility,
@@ -156,6 +157,14 @@ export class CharactersRepo {
 
   async listByCampaign(campaignId: string): Promise<Array<CharacterDoc & { id: string }>> {
     const snapshot = await firestore.collection('characters').where('campaignId', '==', campaignId).get()
+    const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as CharacterDoc) }))
+    rows.sort((a, b) => this.toMillis(b.createdAt) - this.toMillis(a.createdAt))
+    return rows
+  }
+
+  /** Personagens de um Mundo (substitui listByCampaign no modelo N:M). */
+  async listByWorld(worldId: string): Promise<Array<CharacterDoc & { id: string }>> {
+    const snapshot = await firestore.collection('characters').where('worldId', '==', worldId).get()
     const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as CharacterDoc) }))
     rows.sort((a, b) => this.toMillis(b.createdAt) - this.toMillis(a.createdAt))
     return rows

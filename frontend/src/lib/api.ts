@@ -497,7 +497,7 @@ export async function generateWorldImagePreview(params: { name: string }): Promi
 }
 
 export async function createCharacter(params: {
-  campaignId: string
+  worldId: string
   name: string
   gender?: string
   race?: string
@@ -526,7 +526,7 @@ export async function createCharacter(params: {
 }
 
 export async function generateCharacterFromWorldStory(params: {
-  campaignId: string
+  worldId: string
   existingFields?: {
     name?: string
     gender?: string
@@ -555,7 +555,7 @@ export async function generateCharacterFromWorldStory(params: {
 }
 
 export async function generateCharacterFromDescription(params: {
-  campaignId: string
+  worldId: string
   characterConcept: string
 }): Promise<{
   name: string
@@ -577,7 +577,7 @@ export async function generateCharacterFromDescription(params: {
 }
 
 export async function generateCharacterImagePreview(params: {
-  campaignId: string
+  worldId: string
   gender?: string
   race?: string
   profession: string
@@ -590,8 +590,8 @@ export async function generateCharacterImagePreview(params: {
   return response.image
 }
 
-export async function listCharacters(campaignId?: string): Promise<Character[]> {
-  const query = campaignId ? `?campaignId=${encodeURIComponent(campaignId)}` : ''
+export async function listCharacters(worldId?: string): Promise<Character[]> {
+  const query = worldId ? `?worldId=${encodeURIComponent(worldId)}` : ''
   const response = await apiRequest<{ characters: Array<{
     id: string
     campaignId: string
@@ -683,6 +683,21 @@ export async function startSession(params: {
     method: 'POST',
     body: JSON.stringify(params)
   })
+}
+
+export type ActivePlaythrough = {
+  sessionId: string
+  campaignId: string
+  characterId: string
+  worldId?: string
+  status: string
+  updatedAtMillis: number
+}
+
+/** Playthroughs ativos do usuário (aba "jogos ativos"). */
+export async function listActivePlaythroughs(): Promise<ActivePlaythrough[]> {
+  const response = await apiRequest<{ playthroughs: ActivePlaythrough[] }>('/sessions/active')
+  return response.playthroughs
 }
 
 export type EnginePhaseData = {

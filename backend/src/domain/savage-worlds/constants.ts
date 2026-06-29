@@ -64,28 +64,42 @@ export const CORE_SKILL_KEYS = SKILLS.map((s) => s.key)
 
 // Formas verbais/coloquiais que a LLM por vezes confunde com o label can\u00f4nico
 // (ex.: narra "Intimidar o guarda" e devolve "skill": "Intimidar" em vez de "Intimida\u00e7\u00e3o").
+// Levantamento amplo de verbos (infinitivo) e substantivos que a LLM costuma
+// usar no lugar do label canônico. Alimenta TANTO o match exato do campo
+// (findSkillDefinition) QUANTO a inferência por texto (inferSkillFromText).
+// Regra de curadoria: cada forma de superfície pertence a UMA única skill —
+// não repita a mesma palavra em skills diferentes (evita falso positivo).
 const SKILL_VERB_ALIASES: Record<string, readonly string[]> = {
-  boating: ['Navegar'],
-  driving: ['Conduzir', 'Dirigir'],
-  piloting: ['Pilotar'],
-  fighting: ['Lutar'],
-  riding: ['Montar', 'Cavalgar'],
-  shooting: ['Atirar'],
-  stealth: ['Esconder-se', 'Furtar-se'],
-  thievery: ['Roubar', 'Furtar'],
-  hacking: ['Hackear'],
-  healing: ['Curar'],
-  language: ['Falar'],
-  notice: ['Perceber', 'Notar'],
-  repair: ['Reparar'],
-  research: ['Pesquisar'],
-  gambling: ['Apostar'],
-  intimidation: ['Intimidar'],
-  performance: ['Atuar'],
-  persuasion: ['Persuadir', 'Convencer'],
-  focus: ['Focar'],
-  spellcasting: ['Conjurar'],
-  survival: ['Sobreviver']
+  athletics: ['Atletismo', 'Correr', 'Escalar', 'Saltar', 'Pular', 'Nadar', 'Subir', 'Trepar', 'Arremessar', 'Escapar', 'Esquivar'],
+  boating: ['Navegar', 'Remar', 'Velejar'],
+  driving: ['Conduzir', 'Dirigir', 'Direção'],
+  piloting: ['Pilotar', 'Voar'],
+  fighting: ['Lutar', 'Golpear', 'Combater', 'Brigar', 'Esgrimir', 'Desferir'],
+  riding: ['Cavalgar', 'Montar', 'Galopar'],
+  shooting: ['Atirar', 'Disparar', 'Mirar', 'Alvejar', 'Fuzilar', 'Pontaria'],
+  stealth: ['Furtividade', 'Esconder', 'Esgueirar', 'Espreitar', 'Camuflar', 'Ocultar'],
+  thievery: ['Ladinagem', 'Roubar', 'Furtar', 'Surrupiar', 'Arrombar', 'Saquear'],
+  academics: ['Acadêmico', 'Erudição', 'Recordar'],
+  commonKnowledge: ['Conhecimento'],
+  electronics: ['Eletrônica'],
+  hacking: ['Hackear', 'Crackear'],
+  healing: ['Curar', 'Tratar', 'Medicar', 'Estabilizar', 'Cicatrizar', 'Socorrer', 'Medicina'],
+  language: ['Idioma', 'Idiomas', 'Traduzir'],
+  notice: ['Perceber', 'Notar', 'Observar', 'Vigiar', 'Espiar', 'Buscar', 'Procurar', 'Vasculhar', 'Examinar', 'Inspecionar', 'Detectar', 'Avistar'],
+  occult: ['Ocultismo'],
+  repair: ['Reparar', 'Consertar', 'Remendar', 'Restaurar'],
+  research: ['Investigar', 'Investigação', 'Averiguar', 'Apurar'],
+  science: ['Ciência'],
+  battle: ['Tática', 'Comandar', 'Estratégia'],
+  gambling: ['Apostar', 'Jogatina'],
+  intimidation: ['Intimidar', 'Ameaçar', 'Coagir', 'Amedrontar'],
+  performance: ['Atuar', 'Cantar', 'Dançar', 'Entreter', 'Encenar'],
+  persuasion: ['Persuadir', 'Convencer', 'Negociar', 'Barganhar', 'Seduzir', 'Argumentar'],
+  taunt: ['Provocar', 'Zombar', 'Insultar', 'Debochar'],
+  faith: ['Rezar', 'Orar', 'Abençoar'],
+  focus: ['Focar', 'Concentrar', 'Canalizar', 'Meditar'],
+  spellcasting: ['Conjurar', 'Encantar', 'Enfeitiçar', 'Feitiçar'],
+  survival: ['Sobreviver', 'Rastrear', 'Caçar', 'Acampar', 'Acampamento', 'Forragear', 'Trilhar']
 }
 
 function normalizeSkillLookupValue(value: string): string {
@@ -105,6 +119,50 @@ for (const skill of SKILLS) {
   for (const alias of SKILL_VERB_ALIASES[skill.key] ?? []) {
     SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(alias), skill)
   }
+}
+
+// Mapa dedicado à inferência por TEXTO: palavra normalizada (token único,
+// apenas letras, tamanho mínimo) → skill. Usado quando a LLM não devolve uma
+// skill válida no campo e precisamos deduzir o verbo a partir do texto da opção.
+const SKILL_BY_TEXT_WORD = new Map<string, SkillDefinition>()
+
+function registerTextWord(word: string, skill: SkillDefinition): void {
+  const normalized = normalizeSkillLookupValue(word)
+  // Tokens curtos ou com caracteres não-alfabéticos geram falso positivo — ignorados.
+  if (normalized.length < 4 || /[^a-z]/.test(normalized)) return
+  // Primeiro a registrar vence: mantém o mapeamento determinístico e estável.
+  if (!SKILL_BY_TEXT_WORD.has(normalized)) SKILL_BY_TEXT_WORD.set(normalized, skill)
+}
+
+for (const skill of SKILLS) {
+  // Chaves (key) são em inglês e não aparecem na narração PT — fora da inferência.
+  registerTextWord(skill.label, skill)
+  for (const alias of SKILL_VERB_ALIASES[skill.key] ?? []) {
+    registerTextWord(alias, skill)
+  }
+}
+
+/**
+ * Inferência determinística da skill a partir do texto livre de uma opção.
+ * Normaliza o texto, quebra em palavras e devolve a primeira skill cujo verbo/
+ * substantivo for reconhecido (ordem de leitura). Sem fuzzy: só correspondência
+ * exata de palavra contra a tabela de aliases.
+ */
+export function inferSkillFromText(text: string | null | undefined): SkillDefinition | undefined {
+  if (typeof text !== 'string' || !text.trim()) return undefined
+
+  const normalized = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  for (const word of normalized.split(/[^a-z]+/)) {
+    if (!word) continue
+    const hit = SKILL_BY_TEXT_WORD.get(word)
+    if (hit) return hit
+  }
+
+  return undefined
 }
 
 export function findSkillDefinition(skillName: string | null | undefined): SkillDefinition | undefined {
@@ -357,9 +415,10 @@ export const WEAPONS: readonly WeaponDefinition[] = [
 // app converte para o número, mantendo a regra no nosso lado. NÃO inclui os
 // modificadores mecânicos (ferimento/Edge/Hindrance), aplicados pelo rule-engine.
 
-export type DifficultyLabel = 'normal' | 'dificil' | 'extremo'
+export type DifficultyLabel = 'facil' | 'normal' | 'dificil' | 'extremo'
 
 export const DIFFICULTY_MODIFIER: Record<DifficultyLabel, number> = {
+  facil: 2,
   normal: 0,
   dificil: -2,
   extremo: -4

@@ -196,6 +196,27 @@
   color: var(--text-muted);
 }
 
+/* Sub-section header inside a merged section card */
+.subsection-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.subsection-head h4 {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.subsection-divider {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: var(--space-5) 0 var(--space-4);
+}
+
 /* ─── Badges / Pills ──────────────────────────────── */
 
 .badge {
