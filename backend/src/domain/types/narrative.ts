@@ -220,6 +220,12 @@ export type NarratorTurnResponse = {
   npcAttacks?: NpcAttackEntry[]
   /** Preenchido apenas quando o desfecho narrado diverge do resultado mecânico, com a justificativa na ficção */
   outcomeOverride?: OutcomeOverride | null
+  /**
+   * Gancho de história: evento ou indício ocorrido fora de cena que cria tensão ou
+   * curiosidade para o próximo turno. 1 frase curta. Omitir quando não houver nada
+   * relevante acontecendo além da consequência direta da ação.
+   */
+  storyHook?: string | null
   /** true quando o conteúdo é um fallback estático por falha do LLM */
   isFallback?: boolean
 }

@@ -1945,12 +1945,23 @@ export class GeminiAdapter implements Narrator {
       'NEVER redirect the story back to the planned arc if the player has already deviated from it — the emergent story IS the story.',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
-      '━━━ PRIMARY RULE FOR THE NARRATOR SEGMENTS ━━━',
+      '━━━ PRIMARY RULE FOR THE NARRATOR SEGMENTS + STORY HOOK ━━━',
+      'The response is divided into TWO distinct narrative parts:',
+      '',
+      'PART 1 — segments (direct consequence):',
       'Narrate ONLY the direct consequence of the player\'s current action. The narration MUST stop exactly when the consequence is visible — do NOT describe what the player does after this moment.',
       'MANDATORY: The narrator segments cover ONE beat: what changed RIGHT NOW as a result of this action. The player\'s next move is ALWAYS chosen from the "options" field, NEVER decided inside the segments.',
       'FOCUS: what changed, what happened. Avoid recaps, state repetitions, and editorial conclusions.',
       '',
-      'DO NOT WRITE:',
+      'PART 2 — storyHook (off-screen event):',
+      'After narrating the consequence, add a storyHook: a single short sentence about something happening OFF-SCREEN — someone did something, something changed elsewhere, a threat is approaching. This creates tension and curiosity for the next turn.',
+      'storyHook RULES:',
+      '  • 1 short sentence. Past or present tense. Concrete. ("Ao longe, uma explosão sacode o horizonte." / "Passos apressados ecoam corredor acima.")',
+      '  • Must be about something OUTSIDE the direct consequence of the current action — a different person, place, or force.',
+      '  • Set to null when nothing meaningful is happening off-screen (e.g. trivial exploration turns, dialogue without tension).',
+      '  • NEVER repeat what already happened in segments. NEVER mention dice or rules.',
+      '',
+      'DO NOT WRITE in segments:',
       '  • states that didn\'t change, absent things, or generic filler ("nothing changed", "time passes", "no threats in sight")',
       '  • any mention of rules, dice, or mechanics — including literal terms ("Shaken", "Wounded", "Fatigue"). Narrate the effect instead: "the arm gives out", "vision blurs".',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
@@ -1994,7 +2005,8 @@ export class GeminiAdapter implements Narrator {
       '  ],',
       '  "npcAttacks": [',
       '    { "npcId": "<id of the attacking NPC>", "skillDie": <6|8|10|12>, "damageFormula": "<str+d6 or 2d6 etc>", "ap": 0 }',
-      '  ]',
+      '  ],',
+      '  "storyHook": "<1 short sentence about something happening OFF-SCREEN that creates tension — or null>"',
       '},',
       '',
       'diceCheck FIELD RULES (REQUIRED in EVERY option):',
@@ -2698,6 +2710,10 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
+    const storyHook = typeof raw.storyHook === 'string' && raw.storyHook.trim()
+      ? raw.storyHook.trim()
+      : null
+
     return {
       segments,
       options,
@@ -2705,7 +2721,8 @@ export class GeminiAdapter implements Narrator {
       itemChanges,
       statusChanges,
       npcAttacks,
-      ...(outcomeOverride ? { outcomeOverride } : {})
+      ...(outcomeOverride ? { outcomeOverride } : {}),
+      ...(storyHook ? { storyHook } : {})
     }
   }
 
