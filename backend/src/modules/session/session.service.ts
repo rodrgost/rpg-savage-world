@@ -13,8 +13,10 @@ import {
   buildCanonicalPromptSection,
   type CanonicalAnchors,
 } from '../../services/canonical-anchors.js'
+import { deriveCanonicalFacts, buildCanonicalFactsPromptSection } from '../../services/canonical-facts.js'
 import { SessionEventRepo } from '../../repositories/sessionEvent.repo.js'
 import { SessionSummaryRepo } from '../../repositories/sessionSummary.repo.js'
+import { CanonicalFactRepo } from '../../repositories/canonicalFact.repo.js'
 import { ChatMessageRepo, type ChatMessageRow } from '../../repositories/chatMessage.repo.js'
 import { buildLlmContext } from '../../services/contextBuilder.js'
 import { segmentsToText } from '../../domain/segments.js'
@@ -127,6 +129,7 @@ export class SessionService {
   private readonly summaries = new SummaryService()
   private readonly summaryRepo = new SessionSummaryRepo()
   private readonly events = new SessionEventRepo()
+  private readonly facts = new CanonicalFactRepo()
   private readonly worlds = new WorldsRepo()
   private readonly campaigns = new CampaignsRepo()
   private readonly characters = new CharactersRepo()
@@ -169,8 +172,8 @@ export class SessionService {
     return { state: normalizedState, summary, events, context, messages }
   }
 
-  private buildStrictRulesDigest(baseRulesDigest: string | undefined, anchors: CanonicalAnchors): string {
-    return [baseRulesDigest?.trim(), buildCanonicalPromptSection(anchors)].filter(Boolean).join('\n\n')
+  private buildStrictRulesDigest(baseRulesDigest: string | undefined, anchors: CanonicalAnchors, factsSection?: string | null): string {
+    return [baseRulesDigest?.trim(), buildCanonicalPromptSection(anchors), factsSection].filter(Boolean).join('\n\n')
   }
 
   private createNarrativeNpcStub(
@@ -1010,7 +1013,7 @@ export class SessionService {
     const simpleVocabulary = typeof sessionData.simpleVocabulary === 'boolean' ? sessionData.simpleVocabulary : undefined
 
     // ── Apagar subcollections ──
-    const subcollections = ['messages', 'archivedMessages', 'snapshots', 'events', '_meta']
+    const subcollections = ['messages', 'archivedMessages', 'snapshots', 'events', 'facts', '_meta']
     for (const sub of subcollections) {
       const colRef = sessionDoc.collection(sub)
       const docs = await colRef.listDocuments()
@@ -1150,10 +1153,11 @@ export class SessionService {
     const sessionWorldId = typeof sessionData.worldId === 'string' && sessionData.worldId
       ? sessionData.worldId
       : current.meta.worldId
-    const [summary, recentMessages, sessionWorld] = await Promise.all([
+    const [summary, recentMessages, sessionWorld, canonicalFacts] = await Promise.all([
       this.summaryRepo.getSummary(params.sessionId),
       this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT),
-      sessionWorldId ? this.worlds.get(sessionWorldId) : Promise.resolve(null)
+      sessionWorldId ? this.worlds.get(sessionWorldId) : Promise.resolve(null),
+      this.facts.listBySession(params.sessionId)
     ])
     const currentWithSceneNpcs = this.hydrateSceneNpcsFromRecentNarration(current, recentMessages)
     const context = buildLlmContext({ state: currentWithSceneNpcs, summary, recentMessages, npcCatalog: sessionWorld?.npcCatalog })
@@ -1177,7 +1181,7 @@ export class SessionService {
         inventory: context.stateBrief.inventory,
         activeStatusEffects: context.stateBrief.activeStatusEffects,
         playerSkills: context.stateBrief.playerSkills,
-        rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors)
+        rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors, buildCanonicalFactsPromptSection(canonicalFacts))
       },
       recentMessages: context.recentMessages
     })
@@ -1274,13 +1278,14 @@ export class SessionService {
 
     // 3. Buscar contexto, campanha e mundo para a LLM (em paralelo para reduzir latência)
     const worldIdDirect = result.nextState.meta.worldId || null
-    const [summary, recentMessages, campaignDoc, worldDocDirect] = await Promise.all([
+    const [summary, recentMessages, campaignDoc, worldDocDirect, canonicalFacts] = await Promise.all([
       this.summaryRepo.getSummary(params.sessionId),
       this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT),
       result.nextState.meta.campaignId
         ? this.campaigns.get(result.nextState.meta.campaignId)
         : Promise.resolve(null),
-      worldIdDirect ? this.worlds.get(worldIdDirect) : Promise.resolve(null)
+      worldIdDirect ? this.worlds.get(worldIdDirect) : Promise.resolve(null),
+      this.facts.listBySession(params.sessionId)
     ])
     const worldDoc = worldDocDirect ?? (campaignDoc?.worldId ? await this.worlds.get(campaignDoc.worldId) : null)
     const context = buildLlmContext({ state: result.nextState, summary, recentMessages, npcCatalog: worldDoc?.npcCatalog })
@@ -1318,7 +1323,7 @@ export class SessionService {
           inventory: context.stateBrief.inventory,
           activeStatusEffects: context.stateBrief.activeStatusEffects,
           playerSkills: context.stateBrief.playerSkills,
-          rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors),
+          rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors, buildCanonicalFactsPromptSection(canonicalFacts)),
           situation: context.stateBrief.situation,
           npcCatalog: context.stateBrief.npcCatalog
         },
@@ -1356,6 +1361,10 @@ export class SessionService {
     // em defeatedNpcIds — espelhando o comportamento do engine para ataques mecânicos.
     // IMPORTANTE: nunca "ressuscitamos" um NPC aqui; status 'active' vindo da IA é ignorado,
     // impedindo que a narrativa traga de volta um inimigo já derrotado.
+    const npcNameById = new Map<string, string>()
+    for (const npc of finalState.npcs) npcNameById.set(npc.id, npc.displayName ?? npc.name)
+    for (const npc of narratorResponse.npcs) npcNameById.set(npc.id, npc.displayName ?? npc.name)
+
     const NARRATIVE_DOWN_STATUSES = new Set(['defeated', 'dead', 'incapacitated'])
     const narrativeDownIds = new Set(
       narratorResponse.npcs
@@ -1370,6 +1379,18 @@ export class SessionService {
         npcs: finalState.npcs.filter((n) => !narrativeDownIds.has(n.id)),
         defeatedNpcIds: [...mergedDefeated]
       }
+    }
+
+    // 5.45. Registrar fatos canônicos derivados deste turno (mortes de NPC, inversão de
+    // desfecho, itens de missão) — ledger append-only, nunca resumido nem apagado.
+    const newCanonicalFacts = deriveCanonicalFacts({
+      stateBeforeTurn: current,
+      finalState,
+      narratorResponse,
+      npcNameById
+    })
+    if (newCanonicalFacts.length) {
+      await this.facts.appendBatch(params.sessionId, newCanonicalFacts)
     }
 
     // 5.5. Processar ataques de NPCs contra o jogador
