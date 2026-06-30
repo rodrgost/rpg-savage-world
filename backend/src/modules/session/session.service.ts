@@ -1010,7 +1010,7 @@ export class SessionService {
     const simpleVocabulary = typeof sessionData.simpleVocabulary === 'boolean' ? sessionData.simpleVocabulary : undefined
 
     // ── Apagar subcollections ──
-    const subcollections = ['messages', 'snapshots', 'events', '_meta']
+    const subcollections = ['messages', 'archivedMessages', 'snapshots', 'events', '_meta']
     for (const sub of subcollections) {
       const colRef = sessionDoc.collection(sub)
       const docs = await colRef.listDocuments()

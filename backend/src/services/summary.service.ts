@@ -77,16 +77,22 @@ export class SummaryService {
     }).filter((m) => m.text.trim())
   }
 
-  private async deleteCompactedMessages(sessionId: string, messages: ChatMessageRow[]): Promise<void> {
-    const messageIds = [...new Set(messages.map((m) => m.messageId).filter(Boolean))]
-    if (!messageIds.length) return
+  /**
+   * Move as mensagens já incorporadas ao resumo para a coleção de arquivo, em vez de
+   * apagá-las. O texto bruto sobrevive para auditoria e para reconstrução completa
+   * do resumo (rebuildSummary), mesmo que o resumo gerado pelo LLM tenha perdido
+   * algum detalhe na compressão.
+   */
+  private async archiveCompactedMessages(sessionId: string, messages: ChatMessageRow[]): Promise<void> {
+    const unique = [...new Map(messages.filter((m) => m.messageId).map((m) => [m.messageId, m])).values()]
+    if (!unique.length) return
 
     try {
-      await this.chatMessages.deleteBatch(sessionId, messageIds)
-      log('summarizeHistory', `Deleted ${messageIds.length} compacted messages from session storage`)
+      await this.chatMessages.archiveBatch(sessionId, unique)
+      log('summarizeHistory', `Archived ${unique.length} compacted messages (raw text preserved for audit/rebuild)`)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      warn('summarizeHistory', `Summary updated but compacted messages were not deleted: ${message}`)
+      warn('summarizeHistory', `Summary updated but compacted messages were not archived: ${message}`)
     }
   }
 
@@ -127,7 +133,7 @@ export class SummaryService {
           summaryStructured: summarySeed
         })
       }
-      await this.deleteCompactedMessages(sessionId, oldestMessages)
+      await this.archiveCompactedMessages(sessionId, oldestMessages)
       return
     }
 
@@ -157,7 +163,7 @@ export class SummaryService {
       summaryStructured: nextSummary
     })
 
-    await this.deleteCompactedMessages(sessionId, oldestMessages)
+    await this.archiveCompactedMessages(sessionId, oldestMessages)
     log('summarizeHistory', `Done — summary updated with ${nextSummaryText.length} chars`)
   }
 
@@ -179,22 +185,39 @@ export class SummaryService {
     }
   }
 
+  /**
+   * Reconstrói o resumo canônico do zero, a partir do texto bruto completo da sessão
+   * (mensagens arquivadas + ativas), ignorando o resumo já salvo. Só é possível com
+   * fidelidade total porque as mensagens compactadas são arquivadas, não apagadas
+   * (ver archiveCompactedMessages). Processa em lotes cronológicos, dobrando cada
+   * lote sobre o resumo acumulado do lote anterior — mesma operação usada na
+   * compactação incremental, aplicada em sequência ao histórico inteiro.
+   */
   async rebuildSummary(params: { state: GameState }): Promise<string> {
     const { state } = params
     const sessionId = state.meta.sessionId
-    const existing = await this.summaries.getSummary(sessionId)
-    const messages = await this.chatMessages.listBySession(sessionId)
-    const summarySeed = this.buildSummarySeed(existing, messages)
-    const messagesForLlm = this.buildMessagesForSummary(messages)
 
-    const nextSummary = messagesForLlm.length
-      ? await this.narrator.summarizeHistory({
-          previousSummary: summarySeed,
-          messages: messagesForLlm,
-          currentState: state
-        })
-      : (summarySeed ?? { locations: [], current: { name: state.worldState.activeLocation, turn: state.meta.turn, situation: '' } })
+    const [archived, active] = await Promise.all([
+      this.chatMessages.listArchivedBySession(sessionId),
+      this.chatMessages.listBySession(sessionId)
+    ])
+    const allMessages = [...archived, ...active].sort((a, b) => a.seq - b.seq || a.turn - b.turn)
+    const messagesForLlm = this.buildMessagesForSummary(allMessages)
 
+    const batchSize = SummaryService.RECENT_MESSAGES_TO_KEEP * 2
+    let summary: StructuredSummary | null = null
+
+    for (let i = 0; i < messagesForLlm.length; i += batchSize) {
+      const chunk = messagesForLlm.slice(i, i + batchSize)
+      if (!chunk.length) continue
+      summary = await this.narrator.summarizeHistory({
+        previousSummary: summary,
+        messages: chunk,
+        currentState: state
+      })
+    }
+
+    const nextSummary = summary ?? { locations: [], current: { name: state.worldState.activeLocation, turn: state.meta.turn, situation: '' } }
     const nextSummaryText = renderStructuredSummary(nextSummary)
     await this.summaries.upsertSummary({
       sessionId,
@@ -203,7 +226,7 @@ export class SummaryService {
       summaryStructured: nextSummary
     })
 
-    log('summarizeHistory', `Canonical summary rebuilt on demand with ${nextSummaryText.length} chars`)
+    log('summarizeHistory', `Canonical summary rebuilt from full archive (${messagesForLlm.length} messages, ${nextSummaryText.length} chars)`)
     return nextSummaryText
   }
 }
