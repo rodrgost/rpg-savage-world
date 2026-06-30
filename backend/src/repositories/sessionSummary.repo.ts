@@ -1,9 +1,13 @@
 import { FieldValue, firestore } from '../infrastructure/firebase.js'
+import type { StructuredSummary } from '../llm/summary-format.js'
 
 export type SessionSummaryRow = {
   sessionId: string
   lastTurnIncluded: number
+  /** Texto renderizado a partir de summaryStructured — é o que entra no prompt do narrador. */
   summaryText: string
+  /** Resumo estruturado (fonte de verdade); ausente em sessões antigas pré-migração JSON. */
+  summaryStructured?: StructuredSummary
   keyEvents?: unknown
 }
 
@@ -12,6 +16,7 @@ type StoredSessionSummaryDoc = {
   lastTurnIncluded?: number
   summaryText?: string
   historySummaryText?: string
+  summaryStructured?: StructuredSummary
   keyEvents?: unknown
 }
 
@@ -24,6 +29,7 @@ export class SessionSummaryRepo {
     sessionId: string
     lastTurnIncluded: number
     summaryText: string
+    summaryStructured?: StructuredSummary
     keyEvents?: unknown
   }): Promise<void> {
     const data: Record<string, unknown> = {
@@ -32,6 +38,10 @@ export class SessionSummaryRepo {
       summaryText: params.summaryText,
       historySummaryText: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp()
+    }
+
+    if (params.summaryStructured !== undefined) {
+      data.summaryStructured = params.summaryStructured
     }
 
     if (params.keyEvents !== undefined) {
@@ -52,6 +62,7 @@ export class SessionSummaryRepo {
       sessionId,
       lastTurnIncluded: data.lastTurnIncluded ?? 0,
       summaryText: data.summaryText ?? data.historySummaryText ?? '',
+      summaryStructured: data.summaryStructured,
       keyEvents: data.keyEvents ?? undefined
     }
   }

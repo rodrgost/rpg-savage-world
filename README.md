@@ -1,22 +1,18 @@
 # RPG-ADAPTAVEL
 
-Monorepo Node + TypeScript para um RPG adaptável com três frentes de execução:
+Monorepo Node + TypeScript para um RPG adaptável com duas frentes de execução:
 
 - `frontend/`: interface React + Vite
-- `backend/`: API HTTP em NestJS usada pelo frontend hoje
-- `functions/`: Cloud Functions/Firebase para callable functions, emuladores e deploy
+- `backend/`: API HTTP em NestJS usada pelo frontend
 
 ## Estrutura do repositório
 
 - `frontend/`: interface web atual. O Vite usa `envDir: '..'`, então lê variáveis do `.env` da raiz.
-- `backend/`: API HTTP em NestJS. É o caminho principal do fluxo web no estado atual do projeto.
-- `functions/`: implementação voltada ao ecossistema Firebase, com engine determinística e integração com Firestore.
+- `backend/`: API HTTP em NestJS. É o caminho do fluxo web do projeto, incluindo o pipeline de narração (LLM), engine de regras e persistência no Firestore.
 - `scripts/`: scripts de migração de dados.
-- `firebase.json` e `firestore.rules`: configuração local do Firebase.
+- `firebase.json` e `firestore.rules`: configuração local do Firestore (regras e emulador).
 
 ## Fluxos de execução
-
-### Fluxo web atual
 
 Para rodar a aplicação web completa localmente:
 
@@ -28,13 +24,7 @@ Para rodar a aplicação web completa localmente:
 
 O frontend usa `VITE_BACKEND_URL`, que por padrão aponta para `http://localhost:3100`.
 
-### Fluxo Firebase
-
-Para trabalhar com Functions/Firebase:
-
-- `npm run dev:functions`: watch local de `functions/`
-- `npm run dev:emulators`: emuladores de Functions e Firestore
-- `npm run build`: build das Cloud Functions
+Para rodar o emulador do Firestore localmente: `npm run dev:emulators`.
 
 ## Configuração de ambiente
 
@@ -57,6 +47,9 @@ No fluxo atual, apenas o narrador textual suporta DeepSeek. A geração de image
 
 - **Snapshot mecânico completo** por turno: `sessions/{sessionId}/snapshots/{turn}`
 - **Resumo narrativo progressivo** para contexto de LLM: `sessions/{sessionId}/_meta/summary`
+- **Mensagens de chat ativas** (janela recente): `sessions/{sessionId}/messages/*`
+- **Mensagens compactadas arquivadas** (auditoria/reconstrução do resumo): `sessions/{sessionId}/archivedMessages/*`
+- **Fatos canônicos** (eventos irreversíveis, ledger append-only): `sessions/{sessionId}/facts/*`
 - **Eventos estruturados** por sessão: `sessions/{sessionId}/events/*`
 
 Coleções base do MVP:
@@ -68,15 +61,12 @@ Coleções base do MVP:
 
 ## Comandos úteis
 
-- `npm run dev`: watch local de `functions/`
+- `npm run dev` / `npm run dev:backend`: inicia o backend HTTP
 - `npm run dev:frontend`: inicia o frontend
-- `npm run dev:backend`: inicia o backend HTTP
-- `npm run dev:functions`: inicia o watch de `functions/`
-- `npm run dev:emulators`: inicia os emuladores do Firebase
+- `npm run dev:emulators`: inicia o emulador do Firestore
 - `npm -w frontend run build`: build do frontend
 - `npm -w backend run build`: build do backend HTTP
-- `npm -w functions run build`: build das Functions
-- `npm run build:all`: executa os builds de backend, frontend e functions em sequência
+- `npm run build:all`: executa os builds de backend e frontend em sequência
 - `npm run validate`: atalho de validação mínima (equivalente a `build:all`)
 
 ## Validação mínima recomendada
@@ -84,7 +74,7 @@ Coleções base do MVP:
 Antes de publicar mudanças, execute:
 
 1. `npm run validate`
-2. Corrija qualquer erro de compilação de backend/frontend/functions
+2. Corrija qualquer erro de compilação de backend/frontend
 
 Isso garante consistência de contratos TypeScript e detecta regressões de integração básica entre os workspaces.
 
@@ -92,4 +82,3 @@ Isso garante consistência de contratos TypeScript e detecta regressões de inte
 
 - **A LLM nunca decide regras**: ela narra, resume e condensa.
 - **O estado não nasce do resumo**: a fonte da verdade é sempre o snapshot.
-- **O frontend usa backend HTTP por padrão no momento**: a trilha via Functions continua disponível, mas não é o fluxo web principal hoje.

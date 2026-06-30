@@ -18,10 +18,15 @@ export const env = {
   firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? '',
   firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
 
-  /** Nº mínimo de mensagens excedentes para justificar uma chamada LLM de compactação.
-   *  Abaixo deste limiar, o excedente acumula até o próximo turno.
-   *  Default: 15 → compactação a cada ~7-8 turnos (dado RECENT_MESSAGES_TO_KEEP=20). */
-  compactBatchMin: Number(process.env.COMPACT_BATCH_MIN ?? '15'),
+  /** Orçamento de tokens (estimativa ~4 chars/token) para a janela de histórico recente
+   *  mantida fora do resumo — substitui um teto fixo de N mensagens, robusto a turnos
+   *  com mensagens muito curtas ou muito longas. Default: 6000 tokens. */
+  recentTokenBudget: Number(process.env.RECENT_TOKEN_BUDGET ?? '6000'),
+
+  /** Nº mínimo de tokens excedentes (além da janela recente) para justificar uma chamada
+   *  LLM de compactação. Abaixo deste limiar, o excedente acumula até o próximo turno.
+   *  Default: 4500 (~75% do orçamento da janela recente). */
+  compactBatchMinTokens: Number(process.env.COMPACT_BATCH_MIN_TOKENS ?? '4500'),
 
   // Origens adicionais permitidas no CORS (ex.: domínio customizado no Railway)
   allowedOrigins: (process.env.ALLOWED_ORIGIN ?? '').split(',').map(o => o.trim()).filter(Boolean)

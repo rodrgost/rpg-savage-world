@@ -40,6 +40,11 @@ export class ChatMessageRepo {
     return firestore.collection('sessions').doc(sessionId).collection('messages')
   }
 
+  /** Mensagens já incorporadas ao resumo canônico — mantidas só para auditoria/reconstrução, fora da janela ativa do narrador. */
+  private archivedMessagesCollection(sessionId: string) {
+    return firestore.collection('sessions').doc(sessionId).collection('archivedMessages')
+  }
+
   /** Contador atômico por sessão para garantir ordenação determinística */
   private async nextSeq(sessionId: string): Promise<number> {
     const metaRef = firestore.collection('sessions').doc(sessionId).collection('_meta').doc('counter')
@@ -170,5 +175,37 @@ export class ChatMessageRepo {
       }
       await batch.commit()
     }
+  }
+
+  /**
+   * Move mensagens da coleção ativa para a coleção de arquivo (escreve no arquivo +
+   * remove da ativa). Usada na compactação: o texto bruto sobrevive para auditoria/
+   * reconstrução em vez de ser perdido quando o resumo as incorpora.
+   * Cada mensagem custa 2 operações (set + delete); o Firestore limita batches a 500
+   * operações, daí o chunk de 250 mensagens.
+   */
+  async archiveBatch(sessionId: string, messages: ChatMessageRow[]): Promise<void> {
+    if (!messages.length) return
+    const activeCol = this.messagesCollection(sessionId)
+    const archiveCol = this.archivedMessagesCollection(sessionId)
+    const chunkSize = 250
+    for (let i = 0; i < messages.length; i += chunkSize) {
+      const batch = firestore.batch()
+      const chunk = messages.slice(i, i + chunkSize)
+      for (const message of chunk) {
+        batch.set(archiveCol.doc(message.messageId), stripUndefined({ ...message, archivedAt: FieldValue.serverTimestamp() }))
+        batch.delete(activeCol.doc(message.messageId))
+      }
+      await batch.commit()
+    }
+  }
+
+  /** Mensagens já arquivadas (compactadas em algum resumo anterior), em ordem cronológica. Usado para reconstrução completa do resumo. */
+  async listArchivedBySession(sessionId: string): Promise<ChatMessageRow[]> {
+    let qs = await this.archivedMessagesCollection(sessionId).orderBy('seq', 'asc').get()
+    if (qs.empty) {
+      qs = await this.archivedMessagesCollection(sessionId).orderBy('createdAt', 'asc').get()
+    }
+    return qs.docs.map((d) => d.data() as ChatMessageRow)
   }
 }
