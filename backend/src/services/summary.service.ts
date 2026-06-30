@@ -7,6 +7,7 @@ import type { Narrator } from '../llm/narrator.js'
 import { GeminiAdapter } from '../llm/gemini.adapter.js'
 import type { StructuredSummary } from '../llm/summary-format.js'
 import { renderStructuredSummary, isEmptyStructuredSummary } from '../llm/summary-format.js'
+import { estimateMessageTokens, estimateTokens, selectRecentWindowByTokenBudget, chunkByTokenBudget } from './token-estimate.js'
 import { log, warn } from '../utils/file-logger.js'
 import { messageText } from '../domain/segments.js'
 
@@ -32,10 +33,27 @@ function wrapLegacyTextAsStructuredSummary(text: string, lastTurnIncluded: numbe
 }
 
 export class SummaryService {
-  /** Número de mensagens recentes mantidas fora do resumo canônico.
-   *  Deve ser igual a RECENT_LLM_MESSAGE_LIMIT em session.service.ts.
-   *  Use esta constante como fonte única da verdade. */
-  static readonly RECENT_MESSAGES_TO_KEEP = 20
+  /** Teto de segurança para a busca no Firestore do histórico ativo recente — a janela
+   *  real é decidida por orçamento de tokens (RECENT_TOKEN_BUDGET); este valor só evita
+   *  buscas ilimitadas. Mensagens compactadas continuamente mantêm o ativo bem abaixo disso. */
+  static readonly RECENT_FETCH_CEILING = 80
+
+  /** Orçamento de tokens (estimativa ~4 chars/token) para a janela de histórico recente
+   *  mantida fora do resumo — substitui um teto fixo de N mensagens, robusto a turnos com
+   *  mensagens de tamanho muito variável. Fonte única da verdade: usado tanto para decidir
+   *  quando compactar quanto para o texto bruto reenviado ao narrador a cada turno
+   *  (ver getRecentWindow, usado por session.service.ts). */
+  static readonly RECENT_TOKEN_BUDGET = env.recentTokenBudget
+
+  /**
+   * Mensagens recentes (ordem cronológica) que cabem no orçamento de tokens — fonte única
+   * usada tanto pela decisão de compactação quanto pelo histórico enviado ao narrador a
+   * cada turno, eliminando o risco de as duas janelas divergirem.
+   */
+  async getRecentWindow(sessionId: string): Promise<ChatMessageRow[]> {
+    const candidates = await this.chatMessages.getRecent(sessionId, SummaryService.RECENT_FETCH_CEILING)
+    return selectRecentWindowByTokenBudget(candidates, SummaryService.RECENT_TOKEN_BUDGET)
+  }
 
   private isPersistedLegacySummary(message: {
     role: 'narrator' | 'player' | 'system'
@@ -102,19 +120,12 @@ export class SummaryService {
     private readonly narrator: Narrator = new GeminiAdapter()
   ) {}
 
-  /** Integra ao resumo apenas o excedente, preservando as RECENT_MESSAGES_TO_KEEP mensagens mais recentes. */
-  private async compactOldMessages(params: { state: GameState; stateForSummary?: GameState }): Promise<void> {
-    const { state, stateForSummary } = params
+  /** Integra ao resumo apenas o excedente (mensagens fora da janela recente por orçamento de tokens), preservando as demais intactas. */
+  private async compactOldMessages(params: { state: GameState; stateForSummary?: GameState; oldestMessages: ChatMessageRow[] }): Promise<void> {
+    const { state, stateForSummary, oldestMessages } = params
     const sessionId = state.meta.sessionId
-    const totalMessages = await this.chatMessages.countBySession(sessionId)
-    const messagesToCompact = totalMessages - SummaryService.RECENT_MESSAGES_TO_KEEP
 
-    if (messagesToCompact <= 0) return
-
-    log('summarizeHistory', `${totalMessages} messages, compacting oldest ${messagesToCompact} — keeping last ${SummaryService.RECENT_MESSAGES_TO_KEEP} intact`)
-
-    const oldestMessages = await this.chatMessages.getOldest(sessionId, messagesToCompact)
-    if (oldestMessages.length < messagesToCompact) return
+    if (!oldestMessages.length) return
 
     const existing = await this.summaries.getSummary(sessionId)
     const summarySeed = this.buildSummarySeed(existing, oldestMessages)
@@ -169,19 +180,23 @@ export class SummaryService {
 
   /**
    * Ponto de entrada único para gerenciamento de resumo após cada turno.
-   * Compacta as mensagens mais antigas quando o excedente atinge env.compactBatchMin,
-   * atualizando o resumo canônico e apagando as mensagens incorporadas.
+   * Compacta as mensagens fora da janela recente (orçamento de tokens) quando o
+   * excedente atinge env.compactBatchMinTokens, atualizando o resumo canônico e
+   * arquivando as mensagens incorporadas.
    */
   async manageSummaryAfterTurn(params: { state: GameState; stateBeforeTurn?: GameState }): Promise<void> {
     const { state, stateBeforeTurn } = params
     const sessionId = state.meta.sessionId
 
-    const totalMessages = await this.chatMessages.countBySession(sessionId)
-    const messagesToCompact = totalMessages - SummaryService.RECENT_MESSAGES_TO_KEEP
+    const activeAsc = [...(await this.chatMessages.listBySession(sessionId))]
+      .sort((a, b) => a.seq - b.seq || a.turn - b.turn)
+    const recentWindow = selectRecentWindowByTokenBudget(activeAsc, SummaryService.RECENT_TOKEN_BUDGET)
+    const oldestMessages = activeAsc.slice(0, activeAsc.length - recentWindow.length)
+    const excessTokens = oldestMessages.reduce((sum, m) => sum + estimateMessageTokens(m), 0)
 
-    if (messagesToCompact >= env.compactBatchMin) {
-      log('manageSummary', `Compacting ${messagesToCompact} old messages (threshold=${env.compactBatchMin})`)
-      await this.compactOldMessages({ state, stateForSummary: stateBeforeTurn })
+    if (excessTokens >= env.compactBatchMinTokens) {
+      log('manageSummary', `Compacting ${oldestMessages.length} old messages (~${excessTokens} tokens, threshold=${env.compactBatchMinTokens})`)
+      await this.compactOldMessages({ state, stateForSummary: stateBeforeTurn, oldestMessages })
     }
   }
 
@@ -204,12 +219,10 @@ export class SummaryService {
     const allMessages = [...archived, ...active].sort((a, b) => a.seq - b.seq || a.turn - b.turn)
     const messagesForLlm = this.buildMessagesForSummary(allMessages)
 
-    const batchSize = SummaryService.RECENT_MESSAGES_TO_KEEP * 2
+    const chunks = chunkByTokenBudget(messagesForLlm, SummaryService.RECENT_TOKEN_BUDGET, (m) => estimateTokens(m.text))
     let summary: StructuredSummary | null = null
 
-    for (let i = 0; i < messagesForLlm.length; i += batchSize) {
-      const chunk = messagesForLlm.slice(i, i + batchSize)
-      if (!chunk.length) continue
+    for (const chunk of chunks) {
       summary = await this.narrator.summarizeHistory({
         previousSummary: summary,
         messages: chunk,

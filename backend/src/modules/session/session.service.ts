@@ -39,9 +39,6 @@ type ReusableSessionCandidate = {
   createdAtMillis: number
 }
 
-/** Derivado de SummaryService: mesma janela usada para compactação de histórico. */
-const RECENT_LLM_MESSAGE_LIMIT = SummaryService.RECENT_MESSAGES_TO_KEEP
-
 function normalizeNarrativeStyle(value: unknown): NarrativeStyle | undefined {
   if (value === 'concise' || value === 'balanced') return value
   if (value === 'theatrical') return 'balanced'
@@ -163,7 +160,7 @@ export class SessionService {
 
     const [summary, recentMessages, messages, events] = await Promise.all([
       this.summaryRepo.getSummary(sessionId),
-      this.chatMessages.getRecent(sessionId, 20),
+      this.summaries.getRecentWindow(sessionId),
       this.chatMessages.listBySession(sessionId),
       this.events.listSince({ sessionId, afterTurn: -1 })
     ])
@@ -1155,7 +1152,7 @@ export class SessionService {
       : current.meta.worldId
     const [summary, recentMessages, sessionWorld, canonicalFacts] = await Promise.all([
       this.summaryRepo.getSummary(params.sessionId),
-      this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT),
+      this.summaries.getRecentWindow(params.sessionId),
       sessionWorldId ? this.worlds.get(sessionWorldId) : Promise.resolve(null),
       this.facts.listBySession(params.sessionId)
     ])
@@ -1211,7 +1208,7 @@ export class SessionService {
     const sessionSimpleVocabulary = typeof sessionData.simpleVocabulary === 'boolean' ? sessionData.simpleVocabulary : undefined
     const current = await this.snapshots.getLatestState(params.sessionId)
     if (!current) throw new NotFoundException('Sessão não encontrada')
-    const recentMessagesBeforeTurn = await this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT)
+    const recentMessagesBeforeTurn = await this.summaries.getRecentWindow(params.sessionId)
     const currentWithSceneNpcs = this.hydrateSceneNpcsFromRecentNarration(current, recentMessagesBeforeTurn)
 
     // 1. Aplicar mecânicas do rule-engine
@@ -1280,7 +1277,7 @@ export class SessionService {
     const worldIdDirect = result.nextState.meta.worldId || null
     const [summary, recentMessages, campaignDoc, worldDocDirect, canonicalFacts] = await Promise.all([
       this.summaryRepo.getSummary(params.sessionId),
-      this.chatMessages.getRecent(params.sessionId, RECENT_LLM_MESSAGE_LIMIT),
+      this.summaries.getRecentWindow(params.sessionId),
       result.nextState.meta.campaignId
         ? this.campaigns.get(result.nextState.meta.campaignId)
         : Promise.resolve(null),
