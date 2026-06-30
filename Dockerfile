@@ -26,7 +26,6 @@ ENV VITE_BACKEND_URL=${VITE_BACKEND_URL}
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
-COPY functions/package.json functions/package.json
 
 RUN npm ci
 
@@ -42,7 +41,6 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
-COPY functions/package.json functions/package.json
 RUN npm ci --omit=dev
 
 COPY --from=build /app/backend/dist /app/backend/dist
