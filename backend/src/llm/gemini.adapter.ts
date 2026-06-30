@@ -28,6 +28,9 @@ import type {
 import { segmentsToText } from '../domain/segments.js'
 import { randomUUID, createHash } from 'node:crypto'
 import { NARRATOR_RESPONSE_SCHEMA } from './schemas/narrator-response.schema.js'
+import { SUMMARY_RESPONSE_SCHEMA } from './schemas/summary-response.schema.js'
+import type { StructuredSummary, SummaryLocationBlock, SummaryCurrentBlock } from './summary-format.js'
+import { emptyStructuredSummary } from './summary-format.js'
 import { findSkillDefinition, getCanonicalSkillLabel, inferSkillFromText } from '../domain/savage-worlds/constants.js'
 import { logLlmRequest, logLlmResponse, logLlmError, log, warn, error as logErr } from '../utils/file-logger.js'
 import { classifyTrivialAction } from '../core/trivial-action.js'
@@ -1140,7 +1143,45 @@ export class GeminiAdapter implements Narrator {
     return result.text
   }
 
-  async summarizeHistory(req: SummarizeHistoryRequest): Promise<string> {
+  /** Converte um registro JSON parseado (e potencialmente sujo) em StructuredSummary, com defaults seguros. */
+  private buildStructuredSummaryFromRecord(source: Record<string, unknown>, fallback: { name: string; turn: number }): StructuredSummary {
+    const toText = (value: unknown): string => sanitizeNarrativeOutput(typeof value === 'string' ? value : '')
+    const toOptionalText = (value: unknown): string | undefined => {
+      const text = toText(value)
+      return text ? text : undefined
+    }
+    const toInt = (value: unknown, fallbackValue: number): number => {
+      const n = typeof value === 'number' ? value : Number(value)
+      return Number.isFinite(n) ? Math.trunc(n) : fallbackValue
+    }
+
+    const rawLocations = Array.isArray(source.locations) ? source.locations : []
+    const locations: SummaryLocationBlock[] = rawLocations
+      .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+      .map((entry) => ({
+        name: toText(entry.name) || 'Local desconhecido',
+        turnStart: toInt(entry.turnStart, fallback.turn),
+        turnEnd: toInt(entry.turnEnd, fallback.turn),
+        situation: toText(entry.situation),
+        npcs: toOptionalText(entry.npcs),
+        tensions: toOptionalText(entry.tensions)
+      }))
+      .filter((loc) => loc.situation.length > 0)
+
+    const rawCurrent = (source.current && typeof source.current === 'object') ? source.current as Record<string, unknown> : {}
+    const current: SummaryCurrentBlock = {
+      name: toText(rawCurrent.name) || fallback.name,
+      turn: toInt(rawCurrent.turn, fallback.turn),
+      situation: toText(rawCurrent.situation),
+      npcs: toOptionalText(rawCurrent.npcs),
+      goals: toOptionalText(rawCurrent.goals),
+      tensions: toOptionalText(rawCurrent.tensions)
+    }
+
+    return { locations, current }
+  }
+
+  async summarizeHistory(req: SummarizeHistoryRequest): Promise<StructuredSummary> {
     const state = req.currentState
     const npcsAtLocation = state.npcs.filter((npc) => !npc.location || npc.location === state.worldState.activeLocation)
     const hostileNpcs = npcsAtLocation.filter((npc) => npc.disposition === 'hostile')
@@ -1166,28 +1207,29 @@ export class GeminiAdapter implements Narrator {
     const activeFlagsText = activeFlags.length ? activeFlags.join(', ') : 'nenhuma'
 
     const sysPrompt = [
-      'Você é o guardião da memória de continuidade de uma sessão de RPG. Sua saída é contexto interno para o LLM narrador — nunca mostrado aos jogadores.',
+      'Você é o guardião da memória de continuidade de uma sessão de RPG. Sua saída é JSON estruturado consumido pelo app — nunca mostrado aos jogadores.',
       '',
-      'Organize os fatos em blocos por LOCAL, em ordem cronológica. Um bloco por local distinto (mescle visitas contíguas ao mesmo local; mantenha separados se o personagem saiu e voltou).',
+      'Responda SOMENTE com um objeto JSON válido, sem markdown, seguindo exatamente este formato:',
+      '{"locations":[{"name":"...","turnStart":N,"turnEnd":N,"situation":"...","npcs":"...","tensions":"..."}],"current":{"name":"...","turn":N,"situation":"...","npcs":"...","goals":"...","tensions":"..."}}',
       '',
-      'FORMATO DOS BLOCOS ANTERIORES (repita para cada local visitado, exceto o atual):',
-      '[LOCAL: <nome do local> | T<primeiro>–T<último>]',
-      'Situação: <o que aconteceu aqui — máx 2 frases>',
-      'NPCs: <nome> (<1 traço>, <disposição>); <nome> (...)   ← omita esta linha se nenhum NPC relevante',
-      'Tensões: <fios narrativos abertos, mistérios, promessas não cumpridas>   ← omita se nada em aberto',
+      'Organize os fatos em blocos por LOCAL, em ordem cronológica. Um item em "locations" por local distinto já visitado (mescle visitas contíguas ao mesmo local; mantenha itens separados se o personagem saiu e voltou). NÃO inclua o local atual em "locations" — ele vai em "current".',
       '',
-      'BLOCO ATUAL (sempre presente, sempre por último):',
-      '[ATUAL: <nome do local> | T<turno atual>]',
-      'Situação: <cena atual e ameaças imediatas>',
-      'NPCs: <quem está presente e disposição>   ← omita se nenhum',
-      'Objetivos: <metas ainda pendentes do personagem>   ← omita se nenhum',
-      'Tensões: <tensões ativas não resolvidas>   ← omita se nenhuma',
+      'Campos de cada item de "locations":',
+      '  situation: o que aconteceu aqui — máx 2 frases.',
+      '  npcs: "Nome (1 traço, disposição); Nome2 (...)" — omita (string vazia) se nenhum NPC relevante.',
+      '  tensions: fios narrativos abertos, mistérios, promessas não cumpridas — omita se nada em aberto.',
+      '',
+      'Campo "current" (sempre presente, é o local/turno atual):',
+      '  situation: cena atual e ameaças imediatas.',
+      '  npcs: quem está presente e disposição — omita se nenhum.',
+      '  goals: metas ainda pendentes do personagem — omita se nenhuma.',
+      '  tensions: tensões ativas não resolvidas — omita se nenhuma.',
       '',
       'REGRAS:',
-      '• Telegráfico e factual — sem narração, atmosfera ou recriação de cenas.',
+      '• Telegráfico e factual nos textos — sem narração, atmosfera ou recriação de cenas.',
       '• Cada frase termina com ponto final.',
       '• Descarte: eventos resolvidos; golpes/mortes antigas sem consequência duradoura; inventário (rastreado separadamente pelo motor).',
-      '• Se há resumo anterior, integre seus fatos — mantenha o que ainda é relevante, descarte o que foi superado.',
+      '• Se há resumo anterior em JSON, integre seus fatos — mantenha o que ainda é relevante, descarte o que foi superado, mescle locais repetidos.',
       '• Apenas português do Brasil.'
     ].join('\n')
 
@@ -1196,7 +1238,11 @@ export class GeminiAdapter implements Narrator {
       .join('\n')
 
     const prompt = [
-      ...(req.previousSummary ? [`=== Resumo anterior (integre e descarte o que foi superado) ===`, req.previousSummary, ''] : []),
+      ...(req.previousSummary ? [
+        '=== Resumo anterior em JSON (integre e descarte o que foi superado) ===',
+        JSON.stringify(req.previousSummary),
+        ''
+      ] : []),
       '=== Mensagens (ordem cronológica, mais antiga → mais recente) ===',
       messagesText,
       '',
@@ -1207,9 +1253,10 @@ export class GeminiAdapter implements Narrator {
       `NPCs presentes: ${forcesText}`,
       `Flags ativas: ${activeFlagsText}`,
       '',
-      'Agrupe em blocos por local e produza a memória atualizada. Descarte o que foi resolvido. Use o estado atual acima para corrigir contradições.'
+      'Agrupe em blocos por local e produza a memória atualizada em JSON. Descarte o que foi resolvido. Use o estado atual acima para corrigir contradições e preencher "current".'
     ].join('\n')
 
+    const fallback = { name: state.worldState.activeLocation, turn: state.meta.turn }
     let lastError: Error | null = null
     const attempts = [
       { maxOutputTokens: 2048, temperature: this.summaryHistoryTemperature },
@@ -1223,23 +1270,33 @@ export class GeminiAdapter implements Narrator {
         const result = await this.generateTextDetailed(prompt, {
           systemInstruction: sysPrompt,
           maxOutputTokens: current.maxOutputTokens,
-          temperature: current.temperature
+          temperature: current.temperature,
+          responseMimeType: 'application/json',
+          ...(this.provider === 'deepseek' ? {} : { responseSchema: SUMMARY_RESPONSE_SCHEMA })
         }, index + 1)
-        const cleaned = sanitizeNarrativeOutput(result.text)
 
-        if (!cleaned) {
-          lastError = new Error('Resumo histórico vazio')
-          warn('summarizeHistory', `Tentativa ${index + 1} retornou resumo vazio`)
+        const parsed = parseJsonObjectDetailed(result.text)
+        if (!parsed) {
+          lastError = new Error('Resumo histórico sem JSON válido')
+          warn('summarizeHistory', `Tentativa ${index + 1} não retornou JSON parseável`)
           continue
         }
 
-        if (result.finishReason === 'MAX_TOKENS' || (!endsWithSentenceBoundary(cleaned) && cleaned.length >= 180)) {
+        const truncatedJson = result.finishReason === 'MAX_TOKENS' && parsed.source !== 'direct'
+        if (truncatedJson) {
           lastError = new Error(`Resumo histórico truncado (finish=${result.finishReason ?? 'unknown'})`)
-          warn('summarizeHistory', `Tentativa ${index + 1} truncou o resumo histórico (finish=${result.finishReason ?? 'unknown'}, len=${cleaned.length})`)
+          warn('summarizeHistory', `Tentativa ${index + 1} truncou o resumo histórico (source=${parsed.source})`)
           continue
         }
 
-        return cleaned
+        const structured = this.buildStructuredSummaryFromRecord(parsed.value, fallback)
+        if (!structured.current.situation && structured.locations.length === 0) {
+          lastError = new Error('Resumo histórico vazio')
+          warn('summarizeHistory', `Tentativa ${index + 1} retornou resumo estruturalmente vazio`)
+          continue
+        }
+
+        return structured
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
         warn('summarizeHistory', `Tentativa ${index + 1} falhou: ${lastError.message}`)

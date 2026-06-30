@@ -6,9 +6,13 @@ import type {
   ValidateActionRequest,
   ValidateActionResponse
 } from '../domain/types/narrative.js'
+import type { StructuredSummary } from './summary-format.js'
+
+export type { StructuredSummary, SummaryLocationBlock, SummaryCurrentBlock } from './summary-format.js'
 
 export type SummarizeHistoryRequest = {
-  previousSummary: string
+  /** null quando não há resumo anterior (primeira compactação da sessão). */
+  previousSummary: StructuredSummary | null
   messages: Array<{ role: string; text: string; turn: number }>
   currentState: GameState
 }
@@ -102,7 +106,7 @@ export type GenerateImageDescriptionRequest =
     }
 
 export interface Narrator {
-  summarizeHistory(req: SummarizeHistoryRequest): Promise<string>
+  summarizeHistory(req: SummarizeHistoryRequest): Promise<StructuredSummary>
   expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult>
   expandWorldLore(req: ExpandWorldLoreRequest): Promise<{ lore: string; loreEn?: string }>
   generateImageDescription(req: GenerateImageDescriptionRequest): Promise<string>

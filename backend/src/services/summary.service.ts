@@ -5,6 +5,8 @@ import type { ChatMessageRow } from '../repositories/chatMessage.repo.js'
 import type { GameState } from '../domain/types/gameState.js'
 import type { Narrator } from '../llm/narrator.js'
 import { GeminiAdapter } from '../llm/gemini.adapter.js'
+import type { StructuredSummary } from '../llm/summary-format.js'
+import { renderStructuredSummary, isEmptyStructuredSummary } from '../llm/summary-format.js'
 import { log, warn } from '../utils/file-logger.js'
 import { messageText } from '../domain/segments.js'
 
@@ -21,6 +23,14 @@ function trimIncompleteSummaryText(text: string): string {
   return normalized.slice(0, index + last[0].length).trim()
 }
 
+/** Resumo legado (prosa livre) migrado para o formato estruturado — vira o bloco "atual" até a próxima compactação reorganizá-lo por local. */
+function wrapLegacyTextAsStructuredSummary(text: string, lastTurnIncluded: number): StructuredSummary {
+  return {
+    locations: [],
+    current: { name: 'Resumo anterior', turn: lastTurnIncluded, situation: text }
+  }
+}
+
 export class SummaryService {
   /** Número de mensagens recentes mantidas fora do resumo canônico.
    *  Deve ser igual a RECENT_LLM_MESSAGE_LIMIT em session.service.ts.
@@ -35,18 +45,25 @@ export class SummaryService {
     return message.role === 'system' && Boolean(message.narrative?.trim()) && !(message.engineEvents?.length)
   }
 
+  /** Resumo anterior como StructuredSummary. Migra resumos legados (prosa livre, pré-JSON) na primeira leitura. */
   private buildSummarySeed(
-    existing: { summaryText?: string | null } | null,
+    existing: { summaryText?: string | null; summaryStructured?: StructuredSummary; lastTurnIncluded?: number } | null,
     messages: Array<{
       role: 'narrator' | 'player' | 'system'
       narrative?: string
       engineEvents?: Array<{ type: string; payload: Record<string, unknown> }>
     }>
-  ): string {
+  ): StructuredSummary | null {
+    if (existing?.summaryStructured && !isEmptyStructuredSummary(existing.summaryStructured)) {
+      return existing.summaryStructured
+    }
+
     const legacySummaryMessage = messages.find((message) => this.isPersistedLegacySummary(message))
-    return trimIncompleteSummaryText(
+    const legacyText = trimIncompleteSummaryText(
       existing?.summaryText?.trim() || legacySummaryMessage?.narrative?.trim() || ''
     )
+
+    return legacyText ? wrapLegacyTextAsStructuredSummary(legacyText, existing?.lastTurnIncluded ?? 0) : null
   }
 
   private buildMessagesForSummary(messages: ChatMessageRow[]) {
@@ -106,35 +123,38 @@ export class SummaryService {
         await this.summaries.upsertSummary({
           sessionId,
           lastTurnIncluded: coveredTurn,
-          summaryText: summarySeed
+          summaryText: renderStructuredSummary(summarySeed),
+          summaryStructured: summarySeed
         })
       }
       await this.deleteCompactedMessages(sessionId, oldestMessages)
       return
     }
 
-    let nextSummaryText: string
+    let nextSummary: StructuredSummary
     try {
-      nextSummaryText = trimIncompleteSummaryText(await this.narrator.summarizeHistory({
+      nextSummary = await this.narrator.summarizeHistory({
         previousSummary: summarySeed,
         messages: messagesForLlm,
         currentState: stateForSummary ?? state
-      }))
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       log('summarizeHistory', `Skipped history compaction because summary generation was unreliable: ${message}`)
       return
     }
 
-    if (!nextSummaryText) {
-      log('summarizeHistory', 'Skipped history compaction because summary text ended empty after cleanup')
+    if (isEmptyStructuredSummary(nextSummary)) {
+      log('summarizeHistory', 'Skipped history compaction because summary ended empty after cleanup')
       return
     }
 
+    const nextSummaryText = renderStructuredSummary(nextSummary)
     await this.summaries.upsertSummary({
       sessionId,
       lastTurnIncluded: coveredTurn,
-      summaryText: nextSummaryText
+      summaryText: nextSummaryText,
+      summaryStructured: nextSummary
     })
 
     await this.deleteCompactedMessages(sessionId, oldestMessages)
@@ -168,20 +188,22 @@ export class SummaryService {
     const messagesForLlm = this.buildMessagesForSummary(messages)
 
     const nextSummary = messagesForLlm.length
-      ? trimIncompleteSummaryText(await this.narrator.summarizeHistory({
+      ? await this.narrator.summarizeHistory({
           previousSummary: summarySeed,
           messages: messagesForLlm,
           currentState: state
-        }))
-      : summarySeed
+        })
+      : (summarySeed ?? { locations: [], current: { name: state.worldState.activeLocation, turn: state.meta.turn, situation: '' } })
 
+    const nextSummaryText = renderStructuredSummary(nextSummary)
     await this.summaries.upsertSummary({
       sessionId,
       lastTurnIncluded: state.meta.turn,
-      summaryText: nextSummary
+      summaryText: nextSummaryText,
+      summaryStructured: nextSummary
     })
 
-    log('summarizeHistory', `Canonical summary rebuilt on demand with ${nextSummary.length} chars`)
-    return nextSummary
+    log('summarizeHistory', `Canonical summary rebuilt on demand with ${nextSummaryText.length} chars`)
+    return nextSummaryText
   }
 }
