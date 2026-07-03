@@ -237,6 +237,7 @@ export type NarrateStartRequest = {
     name?: string
     description?: string
     lore?: string
+    narrativeStyleGuide?: string
   }
   campaign: {
     storyDescription: string
@@ -269,6 +270,7 @@ export type NarrateTurnRequest = {
     name?: string
     description?: string
     lore?: string
+    narrativeStyleGuide?: string
   }
   /** Dados da campanha (história) — injetados no systemInstruction */
   campaign?: {

@@ -73,6 +73,7 @@ const CreateWorldBody = z.object({
   name: z.string().min(1),
   description: z.string().optional().default(''),
   lore: z.string().optional().default(''),
+  narrativeStyleGuide: z.string().optional().default(''),
   ruleSetId: z.string().optional(),
   visibility: VisibilityBody.optional(),
   image: StoredImageBody.optional()
@@ -82,6 +83,7 @@ const UpdateWorldBody = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   lore: z.string().optional(),
+  narrativeStyleGuide: z.string().optional(),
   ruleSetId: z.string().optional(),
   visibility: VisibilityBody.optional(),
   image: StoredImageBody.optional()

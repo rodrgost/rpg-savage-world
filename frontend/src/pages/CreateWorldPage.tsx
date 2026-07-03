@@ -29,6 +29,7 @@ export function CreateWorldPage({ uid }: Props) {
 
   const [name, setName] = useState('')
   const [lore, setLore] = useState('')
+  const [narrativeStyleGuide, setNarrativeStyleGuide] = useState('')
   const [ownerId, setOwnerId] = useState('')
   const [visibility, setVisibility] = useState<Visibility>('private')
   const [imagePreview, setImagePreview] = useState<StoredImage | null>(null)
@@ -52,6 +53,7 @@ export function CreateWorldPage({ uid }: Props) {
           setVisibility(world.visibility)
           setName(world.name)
           setLore(world.lore ?? '')
+          setNarrativeStyleGuide(world.narrativeStyleGuide ?? '')
           setImagePreview(world.image ?? null)
         }
       } catch (loadError) {
@@ -90,8 +92,9 @@ export function CreateWorldPage({ uid }: Props) {
       setError('')
       setLoreLoading(true)
       try {
-        const generatedLore = await generateWorldLore(worldId)
-        setLore(generatedLore)
+        const generated = await generateWorldLore(worldId)
+        setLore(generated.lore)
+        setNarrativeStyleGuide(generated.narrativeStyleGuide ?? '')
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Falha ao gerar lore do universo')
       } finally {
@@ -106,7 +109,13 @@ export function CreateWorldPage({ uid }: Props) {
       setError('')
       setLoading(true)
       try {
-        const newWorldId = await createWorld({ name, lore, visibility, image: imagePreview ?? undefined })
+        const newWorldId = await createWorld({
+          name,
+          lore,
+          narrativeStyleGuide,
+          visibility,
+          image: imagePreview ?? undefined
+        })
         navigate(`/worlds/${newWorldId}/edit`)
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Falha ao salvar universo')
@@ -125,9 +134,9 @@ export function CreateWorldPage({ uid }: Props) {
 
     try {
       if (isEditMode && worldId) {
-        await updateWorld(worldId, { name, lore, visibility, image: imagePreview ?? undefined })
+        await updateWorld(worldId, { name, lore, narrativeStyleGuide, visibility, image: imagePreview ?? undefined })
       } else {
-        await createWorld({ name, lore, visibility, image: imagePreview ?? undefined })
+        await createWorld({ name, lore, narrativeStyleGuide, visibility, image: imagePreview ?? undefined })
       }
       navigate('/worlds')
     } catch (submitError) {
@@ -242,6 +251,18 @@ export function CreateWorldPage({ uid }: Props) {
             </button>
           )}
         </div>
+
+        <label>
+          Tom e humor do universo
+          <textarea
+            value={narrativeStyleGuide}
+            onChange={(event) => setNarrativeStyleGuide(event.target.value)}
+            placeholder="Ex: Humor seco e tensão constante; pouco lirismo, ironia amarga, sensação de desgaste social e ameaça sempre próxima."
+            rows={5}
+            disabled={isEditMode && !isOwner}
+          />
+          <span className="muted">Opcional. Se preenchido, isso orienta o tom, o humor e o clima emocional da narração e das sugestões de personagem deste universo.</span>
+        </label>
 
         <p className="muted">As regras do jogo são baseadas em Savage Worlds.</p>
 

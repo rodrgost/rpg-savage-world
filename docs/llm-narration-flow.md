@@ -9,7 +9,7 @@ Documentação do pipeline de narração gerado pelo modelo de linguagem (LLM �
 | Arquivo | Papel |
 |---|---|
 | [`backend/src/llm/narrator.ts`](../backend/src/llm/narrator.ts) | Interface `Narrator` e todos os tipos de requisição/resposta do narrador |
-| [`backend/src/llm/gemini.adapter.ts`](../backend/src/llm/gemini.adapter.ts) | Implementação concreta `GeminiAdapter` — suporta Gemini e DeepSeek |
+| [`backend/src/llm/gemini.adapter.ts`](../backend/src/llm/gemini.adapter.ts) | Implementação concreta `GeminiAdapter` — suporta Gemini, DeepSeek e OpenAI |
 | [`backend/src/domain/types/narrative.ts`](../backend/src/domain/types/narrative.ts) | Tipos de saída: `NarratorTurnResponse`, `DiceCheck`, `ItemChange`, `StatusChange`, `NPCMention` |
 | [`backend/src/services/contextBuilder.ts`](../backend/src/services/contextBuilder.ts) | Constrói `rulesDigest`, mapa de perícias e contexto dinâmico do turno |
 | [`backend/src/core/trivial-action.ts`](../backend/src/core/trivial-action.ts) | Classifica ações triviais sem chamar o LLM |
@@ -25,6 +25,7 @@ Selecionado via variável de ambiente `LLM_PROVIDER`:
 |---|---|---|
 | **Gemini** (padrão) | `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_BASE_URL` | `POST /v1beta/models/{model}:generateContent?key=…` |
 | **DeepSeek** | `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL` | `POST /chat/completions` (compatível com OpenAI) |
+| **OpenAI** | `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL` | `POST /chat/completions` |
 
 ---
 
@@ -371,16 +372,16 @@ História da aventura: <storyDescription>.
 
 ## Parâmetros de temperatura por operação
 
-| Operação | Gemini (padrão) | DeepSeek |
-|---|---|---|
-| `narrateStart` | 0.25 | 0.25 |
-| `narrateTurn` | 0.20 | 0.20 |
-| `summarize` | 0.20 | 0.15 |
-| `summarizeHistory` | 0.15 | 0.10 |
-| `suggestCharacterFromWorld` | 1.0 | 1.0 |
-| `validateAction` | 0.20 | 0.20 |
-| `generateImageDescription` | 0.55 | 0.55 |
-| `expandWorld` / `expandWorldLore` | valor padrão | valor padrão |
+| Operação | Gemini (padrão) | DeepSeek | OpenAI |
+|---|---|---|---|
+| `narrateStart` | 0.25 | 0.25 | 0.25 |
+| `narrateTurn` | 0.20 | 0.20 | 0.20 |
+| `summarize` | 0.20 | 0.15 | 0.15 |
+| `summarizeHistory` | 0.15 | 0.10 | 0.10 |
+| `suggestCharacterFromWorld` | 1.0 | 1.0 | 1.0 |
+| `validateAction` | 0.20 | 0.20 | 0.20 |
+| `generateImageDescription` | 0.55 | 0.55 | 0.55 |
+| `expandWorld` / `expandWorldLore` | valor padrão | valor padrão | valor padrão |
 
 > **Nota de mudança (junho 2026)**: Temperaturas de narração foram reduzidas (narrateStart: 0.50→0.25, narrateTurn: 0.45→0.20) para aumentar determinismo e reduzir variabilidade em `itemChanges` especulativos. Temperatura de retry foi ajustada para mínimo 0.10 (antes: 0.05) para evitar respostas robóticas demais na segunda tentativa.
 
@@ -414,7 +415,7 @@ Quando há dúvida, o narrador deixa `itemChanges` vazio `[]`. O engine mecânic
 ## Variáveis de ambiente relevantes
 
 ```dotenv
-LLM_PROVIDER="gemini"               # ou "deepseek"
+LLM_PROVIDER="gemini"               # ou "deepseek" ou "openai"
 
 # Gemini
 GEMINI_API_KEY="…"
@@ -437,4 +438,15 @@ DEEPSEEK_NARRATE_START_MAX_TOKENS="16384"
 DEEPSEEK_NARRATE_TURN_MAX_TOKENS="16384"
 DEEPSEEK_TIMEOUT_MS="90000"
 DEEPSEEK_NARRATOR_TIMEOUT_MS="120000"
+
+# OpenAI
+OPENAI_API_KEY="…"
+OPENAI_MODEL="gpt-4.1-mini"
+OPENAI_BASE_URL="https://api.openai.com/v1"
+OPENAI_TEMPERATURE="0.3"
+OPENAI_MAX_OUTPUT_TOKENS="8192"
+OPENAI_NARRATE_START_MAX_TOKENS="16384"
+OPENAI_NARRATE_TURN_MAX_TOKENS="16384"
+OPENAI_TIMEOUT_MS="90000"
+OPENAI_NARRATOR_TIMEOUT_MS="120000"
 ```

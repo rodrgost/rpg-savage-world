@@ -23,7 +23,7 @@ export type StructuredSummary = {
 
 /**
  * Renderiza o resumo estruturado para o mesmo formato textual que o prompt do
- * narrador já espera em "=== ADVENTURE SUMMARY (ESTABLISHED CANON) ===".
+ * narrador já espera em "=== RESUMO DA AVENTURA (CÂNONE ESTABELECIDO) ===".
  * Mantém o contrato de prompt existente estável mesmo com a mudança interna
  * de prosa livre para JSON estruturado e validável.
  */

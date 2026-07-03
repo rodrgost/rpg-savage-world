@@ -45,6 +45,7 @@ export type World = {
   name: string
   description: string
   lore: string
+  narrativeStyleGuide?: string
   ruleSetId: string
   image?: {
     mimeType: string

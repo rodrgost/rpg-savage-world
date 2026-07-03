@@ -10,6 +10,8 @@ export type WorldDoc = {
   name: string
   description: string
   lore: string
+  narrativeStyleGuide?: string
+  lorePtBrief?: string
   loreEn?: string
   image?: {
     mimeType: string
@@ -50,6 +52,7 @@ export class WorldsRepo {
     name: string
     description: string
     lore?: string
+    narrativeStyleGuide?: string
     image?: { mimeType: string; base64: string }
   }): Promise<void> {
     const image = params.image
@@ -63,6 +66,7 @@ export class WorldsRepo {
         name: params.name,
         description: params.description,
         lore: params.lore ?? '',
+        ...(params.narrativeStyleGuide?.trim() ? { narrativeStyleGuide: params.narrativeStyleGuide.trim() } : {}),
         ...(image ? { image } : {}),
         status: 'active',
         createdAt: FieldValue.serverTimestamp(),
@@ -100,11 +104,13 @@ export class WorldsRepo {
     await firestore.collection('worlds').doc(worldId).delete()
   }
 
-  async updateLore(worldId: string, lore: string, loreEn?: string): Promise<void> {
+  async updateLore(worldId: string, lore: string, lorePtBrief?: string, loreEn?: string, narrativeStyleGuide?: string): Promise<void> {
     await firestore.collection('worlds').doc(worldId).set(
       {
         lore,
+        ...(lorePtBrief ? { lorePtBrief } : {}),
         ...(loreEn ? { loreEn } : {}),
+        ...(narrativeStyleGuide !== undefined ? { narrativeStyleGuide } : {}),
         updatedAt: FieldValue.serverTimestamp()
       },
       { merge: true }
@@ -123,6 +129,7 @@ export class WorldsRepo {
     name?: string
     description?: string
     lore?: string
+    narrativeStyleGuide?: string
     ruleSetId?: string
     visibility?: Visibility
     image?: { mimeType: string; base64: string }
@@ -134,6 +141,7 @@ export class WorldsRepo {
     if (params.name !== undefined) data.name = params.name
     if (params.description !== undefined) data.description = params.description
     if (params.lore !== undefined) data.lore = params.lore
+    if (params.narrativeStyleGuide !== undefined) data.narrativeStyleGuide = params.narrativeStyleGuide
     if (params.ruleSetId !== undefined) data.ruleSetId = params.ruleSetId
     if (params.visibility !== undefined) data.visibility = params.visibility
     if (image) data.image = image

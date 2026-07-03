@@ -381,6 +381,7 @@ export class GameDataService {
     name: string
     description: string
     lore?: string
+    narrativeStyleGuide?: string
     ruleSetId?: string
     visibility?: Visibility
     image?: StoredImage
@@ -398,6 +399,7 @@ export class GameDataService {
       name: params.name,
       description: params.description?.trim() ?? '',
       lore: params.lore?.trim() ?? '',
+      narrativeStyleGuide: params.narrativeStyleGuide?.trim() ?? '',
       image: normalizedImage
     })
 
@@ -440,6 +442,7 @@ export class GameDataService {
     name?: string
     description?: string
     lore?: string
+    narrativeStyleGuide?: string
     ruleSetId?: string
     visibility?: Visibility
     image?: StoredImage
@@ -466,6 +469,7 @@ export class GameDataService {
       name: params.name,
       description: params.description?.trim(),
       lore: params.lore?.trim(),
+      narrativeStyleGuide: params.narrativeStyleGuide?.trim(),
       ruleSetId: params.ruleSetId,
       visibility: params.visibility ? normalizeVisibility(params.visibility) : undefined,
       image: normalizedImage
@@ -502,8 +506,8 @@ export class GameDataService {
       description: world.description
     })
 
-    await this.worlds.updateLore(world.id, result.lore, result.loreEn)
-    return { lore: result.lore }
+    await this.worlds.updateLore(world.id, result.lore, result.lorePtBrief, result.loreEn, result.narrativeStyleGuide)
+    return { lore: result.lore, narrativeStyleGuide: result.narrativeStyleGuide ?? '' }
   }
 
   // ─── Campaign (campanha dentro de um mundo) ───
@@ -860,6 +864,7 @@ export class GameDataService {
 
     const worldName = world.name?.trim() ?? ''
     const worldLore = (world.loreEn ?? world.lore ?? '').trim()
+    const worldNarrativeStyleGuide = world.narrativeStyleGuide?.trim() ?? ''
     if (!worldLore) {
       warn('suggestCharacterFromWorld', `Mundo sem lore para worldId=${params.worldId}`)
       throw new BadRequestException('Este mundo ainda não possui lore para gerar personagem.')
@@ -880,6 +885,7 @@ export class GameDataService {
         worldName,
         storyDescription,
         worldLore,
+        worldNarrativeStyleGuide,
         existingFields
       })
 
@@ -939,6 +945,7 @@ export class GameDataService {
 
     const worldName = world.name?.trim() ?? ''
     const worldLore = (world.loreEn ?? world.lore ?? '').trim()
+    const worldNarrativeStyleGuide = world.narrativeStyleGuide?.trim() ?? ''
     const campaignName = ''
     const storyDescription = ''
 
@@ -947,6 +954,7 @@ export class GameDataService {
         characterConcept: params.characterConcept.trim(),
         worldName,
         worldLore,
+        worldNarrativeStyleGuide,
         campaignThematic: campaignName,
         storyDescription
       })

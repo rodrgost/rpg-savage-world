@@ -85,7 +85,7 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
         type: 'OBJECT',
         properties: {
           // `id` é opcional: para NPCs já presentes, copie o id (hash) listado em
-          // PRESENT NPCS; para novos NPCs, o sistema gera o id a partir do displayName.
+          // NPCS PRESENTES; para novos NPCs, o sistema gera o id a partir do displayName.
           id: { type: 'STRING', nullable: true },
           displayName: { type: 'STRING' },
           disposition: { type: 'STRING', enum: ['hostile', 'neutral', 'friendly'] },

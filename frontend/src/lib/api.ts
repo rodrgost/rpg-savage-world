@@ -190,6 +190,7 @@ function mapWorldRecord(item: {
   name?: string
   description?: string
   lore?: string
+  narrativeStyleGuide?: string
   ruleSetId?: string
   image?: { mimeType?: string; base64?: string }
 }): World {
@@ -201,6 +202,7 @@ function mapWorldRecord(item: {
     name: item.name ?? '',
     description: item.description ?? '',
     lore: item.lore ?? '',
+    narrativeStyleGuide: item.narrativeStyleGuide ?? '',
     ruleSetId: item.ruleSetId ?? 'savage-worlds',
     image: mapStoredImage(item.image)
   }
@@ -418,6 +420,7 @@ export async function generateCampaignImagePreview(params: {
 export async function createWorld(params: {
   name: string
   lore?: string
+  narrativeStyleGuide?: string
   ruleSetId?: string
   visibility?: Visibility
   image?: StoredImage
@@ -439,6 +442,7 @@ export async function listWorlds(): Promise<World[]> {
       name: string
       description?: string
       lore?: string
+      narrativeStyleGuide?: string
       ruleSetId?: string
       image?: { mimeType?: string; base64?: string }
     }>
@@ -457,6 +461,7 @@ export async function getWorld(worldId: string): Promise<World> {
       name: string
       description?: string
       lore?: string
+      narrativeStyleGuide?: string
       ruleSetId?: string
       image?: { mimeType?: string; base64?: string }
     }
@@ -467,7 +472,7 @@ export async function getWorld(worldId: string): Promise<World> {
 
 export async function updateWorld(
   worldId: string,
-  params: { name?: string; description?: string; lore?: string; ruleSetId?: string; visibility?: Visibility; image?: StoredImage }
+  params: { name?: string; description?: string; lore?: string; narrativeStyleGuide?: string; ruleSetId?: string; visibility?: Visibility; image?: StoredImage }
 ): Promise<void> {
   await apiRequest<{ ok: true }>(`/worlds/${encodeURIComponent(worldId)}`, {
     method: 'PUT',
@@ -481,11 +486,11 @@ export async function deleteWorld(worldId: string): Promise<void> {
   })
 }
 
-export async function generateWorldLore(worldId: string): Promise<string> {
-  const response = await apiRequest<{ lore: string }>(`/worlds/${encodeURIComponent(worldId)}/generate-lore`, {
+export async function generateWorldLore(worldId: string): Promise<{ lore: string; narrativeStyleGuide?: string }> {
+  const response = await apiRequest<{ lore: string; narrativeStyleGuide?: string }>(`/worlds/${encodeURIComponent(worldId)}/generate-lore`, {
     method: 'POST'
   })
-  return response.lore
+  return response
 }
 
 export async function generateWorldImagePreview(params: { name: string }): Promise<StoredImage> {

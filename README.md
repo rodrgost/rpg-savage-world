@@ -35,8 +35,9 @@ O arquivo `.env.example` na raiz concentra as variáveis usadas pelo frontend e 
 - `VITE_BACKEND_URL`: URL base do backend HTTP
 - `OAUTH2_CLIENT_ID`: configuração de autenticação OAuth2
 - `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_PATH` ou `FIREBASE_SERVICE_ACCOUNT_JSON`: credenciais administrativas
-- `LLM_PROVIDER`: seleciona o provedor do narrador (`gemini` ou `deepseek`)
+- `LLM_PROVIDER`: seleciona o provedor do narrador (`gemini`, `deepseek` ou `openai`)
 - `DEEPSEEK_*`: configuração do narrador quando o provedor for DeepSeek
+- `OPENAI_*`: configuração do narrador quando o provedor for OpenAI
 - `GEMINI_*`: configuração do narrador quando o provedor for Gemini e da geração de imagem
 
 Se usar `FIREBASE_SERVICE_ACCOUNT_PATH`, mantenha o JSON fora do repositório ou em um caminho já ignorado pelo Git.

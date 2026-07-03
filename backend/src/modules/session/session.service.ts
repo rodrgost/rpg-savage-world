@@ -909,18 +909,23 @@ export class SessionService {
     const narratorResponse = this.validateNarratorResponse({
       response: await this.narrator.narrateStart({
         world: world
-          ? { name: world.name, description: world.description, lore: world.loreEn ?? world.lore }
+          ? {
+              name: world.name,
+              description: world.description,
+              lore: world.lorePtBrief ?? world.lore ?? world.loreEn,
+              narrativeStyleGuide: world.narrativeStyleGuide
+            }
           : undefined,
         campaign: {
-          storyDescription: campaign.storyDescriptionEn ?? campaign.storyDescription ?? '',
+          storyDescription: campaign.storyDescription ?? campaign.storyDescriptionEn ?? '',
           name: campaign.name
         },
         character: {
           name: character.name ?? 'Aventureiro',
-          profession: character.professionEn ?? character.profession,
-          race: character.raceEn ?? character.race,
-          gender: character.genderEn ?? character.gender,
-          description: character.descriptionEn ?? character.description,
+          profession: character.profession ?? character.professionEn,
+          race: character.race ?? character.raceEn,
+          gender: character.gender ?? character.genderEn,
+          description: character.description ?? character.descriptionEn,
           edges,
           hindrances: hindrances.map((h) => ({ name: h.name, severity: h.severity }))
         },
@@ -1074,20 +1079,25 @@ export class SessionService {
     const narratorResponse = this.validateNarratorResponse({
       response: await this.narrator.narrateStart({
         world: world
-          ? { name: world.name, description: world.description, lore: world.loreEn ?? world.lore }
+          ? {
+              name: world.name,
+              description: world.description,
+              lore: world.lorePtBrief ?? world.lore ?? world.loreEn,
+              narrativeStyleGuide: world.narrativeStyleGuide
+            }
           : undefined,
         campaign: campaign
           ? {
-              storyDescription: campaign.storyDescriptionEn ?? campaign.storyDescription ?? '',
+              storyDescription: campaign.storyDescription ?? campaign.storyDescriptionEn ?? '',
               name: campaign.name
             }
           : { storyDescription: '' },
         character: {
           name: character.name ?? 'Aventureiro',
-          profession: character.professionEn ?? character.profession,
-          race: character.raceEn ?? character.race,
-          gender: character.genderEn ?? character.gender,
-          description: character.descriptionEn ?? character.description,
+          profession: character.profession ?? character.professionEn,
+          race: character.race ?? character.raceEn,
+          gender: character.gender ?? character.genderEn,
+          description: character.description ?? character.descriptionEn,
           edges,
           hindrances: hindrances.map((h) => ({ name: h.name, severity: h.severity }))
         },
@@ -1303,10 +1313,15 @@ export class SessionService {
         },
         engineEvents: result.emittedEvents,
         world: worldDoc
-          ? { name: worldDoc.name, description: worldDoc.description, lore: worldDoc.loreEn ?? worldDoc.lore }
+          ? {
+              name: worldDoc.name,
+              description: worldDoc.description,
+              lore: worldDoc.lorePtBrief ?? worldDoc.lore ?? worldDoc.loreEn,
+              narrativeStyleGuide: worldDoc.narrativeStyleGuide
+            }
           : undefined,
         campaign: campaignDoc
-          ? { name: campaignDoc.name, storyDescription: campaignDoc.storyDescriptionEn ?? campaignDoc.storyDescription }
+          ? { name: campaignDoc.name, storyDescription: campaignDoc.storyDescription ?? campaignDoc.storyDescriptionEn }
           : undefined,
         context: {
           summaryText: context.summaryText,

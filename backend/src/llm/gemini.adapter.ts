@@ -51,9 +51,9 @@ type GeminiGenerateContentResponse = {
   }
 }
 
-type SupportedLlmProvider = 'gemini' | 'deepseek'
+type SupportedLlmProvider = 'gemini' | 'deepseek' | 'openai'
 
-type DeepSeekChatCompletionResponse = {
+type OpenAiCompatibleChatCompletionResponse = {
   choices?: Array<{
     message?: {
       content?: string | null
@@ -126,9 +126,9 @@ function readEnv(name: string, fallback = ''): string {
 }
 
 function readLlmProvider(): SupportedLlmProvider {
-  return readEnv('LLM_PROVIDER', 'gemini').toLowerCase() === 'deepseek'
-    ? 'deepseek'
-    : 'gemini'
+  const provider = readEnv('LLM_PROVIDER', 'gemini').toLowerCase()
+  if (provider === 'deepseek' || provider === 'openai') return provider
+  return 'gemini'
 }
 
 function toNumber(value: string, fallback: number): number {
@@ -252,7 +252,7 @@ function extractText(response: GeminiGenerateContentResponse): string {
   return text
 }
 
-function extractDeepSeekText(response: DeepSeekChatCompletionResponse): string {
+function extractOpenAiCompatibleText(response: OpenAiCompatibleChatCompletionResponse): string {
   const content = response.choices?.[0]?.message?.content
   return typeof content === 'string' ? content.trim() : ''
 }
@@ -575,6 +575,59 @@ function buildNameDiversityLine(conditional = false): string {
   return `${prefix}. Never use any of these overused names: ${OVERUSED_SUGGESTION_NAMES.join(', ')}.`
 }
 
+function buildUniverseStyleInferenceLines(opts: {
+  concise?: boolean
+  forCharacterSuggestion?: boolean
+  explicitGuide?: string
+} = {}): string[] {
+  const { concise = false, forCharacterSuggestion = false, explicitGuide = '' } = opts
+  const guide = explicitGuide.trim()
+
+  if (forCharacterSuggestion) {
+    return [
+      ...(guide
+        ? [
+            `Use this explicit universe tone-and-mood guide as the primary direction: ${guide}`,
+            'Treat this guide as higher priority than automatic inference. Use the world name, lore, and adventure story only to complement missing details and keep coherence.'
+          ]
+        : []),
+      'Before choosing the character details, infer from the world name, lore, and adventure story a brief tonal direction for this universe: mood, humor, emotional temperature, social texture, vocabulary, and the kinds of concrete professions and conflicts that belong here.',
+      'Do not output this tonal direction explicitly. Apply it internally so the profession, description, and campaign role feel native to this universe rather than generic fantasy/sci-fi RPG filler.',
+      'If the universe suggests melancholy, dry humor, pulp swagger, cosmic dread, tragic irony, paranoia, tenderness, brutality, or wonder, let that shape the character choices concretely.'
+    ]
+  }
+
+  if (concise) {
+    return [
+      '=== TOM E HUMOR DO UNIVERSO ===',
+      ...(guide
+        ? [
+            `Diretriz explícita de tom, humor e clima do universo (prioridade alta): ${guide}`,
+            'Use essa diretriz como camada principal do texto. Universo e campanha servem para complementar lacunas e manter coerência.'
+          ]
+        : []),
+      'Antes de escrever, infira silenciosamente a partir do UNIVERSO e da CAMPANHA uma diretriz de tom deste cenário: humor, clima emocional, nível de ironia, peso dramático, textura social e tipo de tensão dominante.',
+      'NÃO escreva essa diretriz. Apenas aplique o resultado no texto final.',
+      'Mesmo usando a diretriz do universo, mantenha a execução concisa: extraia sobretudo nomes próprios, conflitos, instituições, tecnologias, crenças, objetos característicos e o humor dominante da cena.',
+      'Evite copiar floreio atmosférico do lore. Converta o universo em escolhas específicas de palavras e fatos concretos.'
+    ]
+  }
+
+  return [
+    '=== TOM E HUMOR DO UNIVERSO ===',
+    ...(guide
+      ? [
+          `Diretriz explícita de tom, humor e clima do universo (prioridade alta): ${guide}`,
+          'Use essa diretriz como camada principal do texto. Universo e campanha servem para complementar lacunas e manter coerência.'
+        ]
+      : []),
+    'Antes de escrever, infira silenciosamente a partir do UNIVERSO e da CAMPANHA uma diretriz de tom deste cenário: humor, clima emocional, nível de ironia, peso dramático, textura social e tipo de tensão dominante.',
+    'NÃO escreva essa diretriz. Apenas aplique o resultado no texto final.',
+    'A narração deve soar nativa deste universo, não como fantasia/RPG genérico. Se o mundo pede humor seco, melancolia, paranoia, solenidade, brutalidade, ternura, ironia ou assombro, isso deve aparecer nas palavras escolhidas e nos detalhes concretos da cena.',
+    'Nunca use linguagem neutra de manual. Prefira imagens, instituições, objetos, tecnologias, crenças, conflitos e um humor compatível com este mundo.'
+  ]
+}
+
 function getSuggestedCharacterIssues(character: SuggestedCharacter): string[] {
   const issues: string[] = []
   const description = character.description.trim()
@@ -787,108 +840,119 @@ function buildSuggestedCharacterFromRecord(source: Record<string, unknown>): Sug
 
 export class GeminiAdapter implements Narrator {
   private readonly provider = readLlmProvider()
-  private readonly providerLabel = this.provider === 'deepseek' ? 'DeepSeek' : 'Gemini'
-  private readonly logTag = this.provider === 'deepseek' ? 'deepseek' : 'gemini'
-  private readonly apiKeyEnvName = this.provider === 'deepseek' ? 'DEEPSEEK_API_KEY' : 'GEMINI_API_KEY'
-  private readonly apiKey = this.provider === 'deepseek'
-    ? readEnv('DEEPSEEK_API_KEY')
-    : readEnv('GEMINI_API_KEY')
-  private readonly model = this.provider === 'deepseek'
-    ? readEnv('DEEPSEEK_MODEL', 'deepseek-chat')
-    : readEnv('GEMINI_MODEL', 'gemini-2.5-flash')
-  private readonly baseUrl = this.provider === 'deepseek'
-    ? readEnv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
-    : readEnv('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com')
+  private readonly providerLabel = this.provider === 'deepseek'
+    ? 'DeepSeek'
+    : this.provider === 'openai'
+      ? 'OpenAI'
+      : 'Gemini'
+  private readonly logTag = this.provider === 'gemini' ? 'gemini' : this.provider
+  private readonly openAiCompatibleEnvPrefix = this.provider === 'openai' ? 'OPENAI' : 'DEEPSEEK'
+  private readonly apiKeyEnvName = this.provider === 'gemini'
+    ? 'GEMINI_API_KEY'
+    : `${this.openAiCompatibleEnvPrefix}_API_KEY`
+  private readonly apiKey = this.provider === 'gemini'
+    ? readEnv('GEMINI_API_KEY')
+    : readEnv(`${this.openAiCompatibleEnvPrefix}_API_KEY`)
+  private readonly model = this.provider === 'gemini'
+    ? readEnv('GEMINI_MODEL', 'gemini-2.5-flash')
+    : this.provider === 'openai'
+      ? readEnv('OPENAI_MODEL', 'gpt-4.1-mini')
+      : readEnv('DEEPSEEK_MODEL', 'deepseek-chat')
+  private readonly baseUrl = this.provider === 'gemini'
+    ? readEnv('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com')
+    : this.provider === 'openai'
+      ? readEnv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+      : readEnv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
   private readonly temperature = toNumber(
-    this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_TEMPERATURE', '0.4')
-      : readEnv('GEMINI_TEMPERATURE', '0.4'),
+    this.provider === 'gemini'
+      ? readEnv('GEMINI_TEMPERATURE', '0.4')
+      : readEnv(`${this.openAiCompatibleEnvPrefix}_TEMPERATURE`, '0.4'),
     0.4
   )
   private readonly maxOutputTokens = withMin(
     toNumber(
-      this.provider === 'deepseek'
-        ? readEnv('DEEPSEEK_MAX_OUTPUT_TOKENS', '8192')
-        : readEnv('GEMINI_MAX_OUTPUT_TOKENS', '8192'),
+      this.provider === 'gemini'
+        ? readEnv('GEMINI_MAX_OUTPUT_TOKENS', '8192')
+        : readEnv(`${this.openAiCompatibleEnvPrefix}_MAX_OUTPUT_TOKENS`, '8192'),
       8192
     ),
     8192
   )
   private readonly worldMaxOutputTokens = withMin(
     toNumber(
-      this.provider === 'deepseek'
-        ? readEnv('DEEPSEEK_WORLD_MAX_OUTPUT_TOKENS', '16384')
-        : readEnv('GEMINI_WORLD_MAX_OUTPUT_TOKENS', '16384'),
+      this.provider === 'gemini'
+        ? readEnv('GEMINI_WORLD_MAX_OUTPUT_TOKENS', '16384')
+        : readEnv(`${this.openAiCompatibleEnvPrefix}_WORLD_MAX_OUTPUT_TOKENS`, '16384'),
       16384
     ),
     4096
   )
   private readonly narrateStartMaxTokens = withMin(
     toNumber(
-      this.provider === 'deepseek'
-        ? readEnv('DEEPSEEK_NARRATE_START_MAX_TOKENS', '8192')
-        : readEnv('GEMINI_NARRATE_START_MAX_TOKENS', '8192'),
+      this.provider === 'gemini'
+        ? readEnv('GEMINI_NARRATE_START_MAX_TOKENS', '8192')
+        : readEnv(`${this.openAiCompatibleEnvPrefix}_NARRATE_START_MAX_TOKENS`, '8192'),
       8192
     ),
     2048
   )
   private readonly narrateTurnMaxTokens = withMin(
     toNumber(
-      this.provider === 'deepseek'
-        ? readEnv('DEEPSEEK_NARRATE_TURN_MAX_TOKENS', '8192')
-        : readEnv('GEMINI_NARRATE_TURN_MAX_TOKENS', '8192'),
+      this.provider === 'gemini'
+        ? readEnv('GEMINI_NARRATE_TURN_MAX_TOKENS', '8192')
+        : readEnv(`${this.openAiCompatibleEnvPrefix}_NARRATE_TURN_MAX_TOKENS`, '8192'),
       8192
     ),
     2048
   )
   private readonly timeoutMs = withMin(
     toNumber(
-      this.provider === 'deepseek'
-        ? readEnv('DEEPSEEK_TIMEOUT_MS', '90000')
-        : readEnv('GEMINI_TIMEOUT_MS', '90000'),
+      this.provider === 'gemini'
+        ? readEnv('GEMINI_TIMEOUT_MS', '90000')
+        : readEnv(`${this.openAiCompatibleEnvPrefix}_TIMEOUT_MS`, '90000'),
       90000
     ),
     15000
   )
   private readonly narratorTimeoutMs = withMin(
     toNumber(
-      this.provider === 'deepseek'
-        ? readEnv('DEEPSEEK_NARRATOR_TIMEOUT_MS', '120000')
-        : readEnv('GEMINI_NARRATOR_TIMEOUT_MS', '120000'),
+      this.provider === 'gemini'
+        ? readEnv('GEMINI_NARRATOR_TIMEOUT_MS', '120000')
+        : readEnv(`${this.openAiCompatibleEnvPrefix}_NARRATOR_TIMEOUT_MS`, '120000'),
       120000
     ),
     30000
   )
   private readonly narrateStartTemperature = toNumber(
-    this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_NARRATE_START_TEMPERATURE', '0.25')
-      : readEnv('GEMINI_NARRATE_START_TEMPERATURE', '0.25'),
-    this.provider === 'deepseek' ? 0.25 : 0.25
+    this.provider === 'gemini'
+      ? readEnv('GEMINI_NARRATE_START_TEMPERATURE', '0.25')
+      : readEnv(`${this.openAiCompatibleEnvPrefix}_NARRATE_START_TEMPERATURE`, '0.25'),
+    0.25
   )
   private readonly narrateTurnTemperature = toNumber(
-    this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_NARRATE_TURN_TEMPERATURE', '0.20')
-      : readEnv('GEMINI_NARRATE_TURN_TEMPERATURE', '0.20'),
-    this.provider === 'deepseek' ? 0.20 : 0.20
+    this.provider === 'gemini'
+      ? readEnv('GEMINI_NARRATE_TURN_TEMPERATURE', '0.20')
+      : readEnv(`${this.openAiCompatibleEnvPrefix}_NARRATE_TURN_TEMPERATURE`, '0.20'),
+    0.20
   )
   private readonly summaryTemperature = toNumber(
-    this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_SUMMARY_TEMPERATURE', '0.15')
-      : readEnv('GEMINI_SUMMARY_TEMPERATURE', '0.20'),
-    this.provider === 'deepseek' ? 0.15 : 0.20
+    this.provider === 'gemini'
+      ? readEnv('GEMINI_SUMMARY_TEMPERATURE', '0.20')
+      : readEnv(`${this.openAiCompatibleEnvPrefix}_SUMMARY_TEMPERATURE`, '0.15'),
+    this.provider === 'gemini' ? 0.20 : 0.15
   )
   private readonly summaryHistoryTemperature = toNumber(
-    this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_SUMMARY_HISTORY_TEMPERATURE', '0.10')
-      : readEnv('GEMINI_SUMMARY_HISTORY_TEMPERATURE', '0.15'),
-    this.provider === 'deepseek' ? 0.10 : 0.15
+    this.provider === 'gemini'
+      ? readEnv('GEMINI_SUMMARY_HISTORY_TEMPERATURE', '0.15')
+      : readEnv(`${this.openAiCompatibleEnvPrefix}_SUMMARY_HISTORY_TEMPERATURE`, '0.10'),
+    this.provider === 'gemini' ? 0.15 : 0.10
   )
   private readonly characterSuggestionMaxOutputTokens = withMin(
     toNumber(
-      this.provider === 'deepseek'
-        ? readEnv('DEEPSEEK_CHARACTER_SUGGEST_MAX_OUTPUT_TOKENS', '2048')
-        : readEnv('GEMINI_CHARACTER_SUGGEST_MAX_OUTPUT_TOKENS', '4096'),
-      this.provider === 'deepseek' ? 2048 : 4096
+      this.provider === 'gemini'
+        ? readEnv('GEMINI_CHARACTER_SUGGEST_MAX_OUTPUT_TOKENS', '4096')
+        : readEnv(`${this.openAiCompatibleEnvPrefix}_CHARACTER_SUGGEST_MAX_OUTPUT_TOKENS`, '2048'),
+      this.provider === 'gemini' ? 4096 : 2048
     ),
     2048
   )
@@ -898,9 +962,9 @@ export class GeminiAdapter implements Narrator {
   )
   // Temperatura global das descrições visuais (mundo, campanha e personagem)
   private readonly imageDescriptionTemperature = toNumber(
-    this.provider === 'deepseek'
-      ? readEnv('DEEPSEEK_IMAGE_DESCRIPTION_TEMPERATURE', '0.8')
-      : readEnv('GEMINI_IMAGE_DESCRIPTION_TEMPERATURE', '0.8'),
+    this.provider === 'gemini'
+      ? readEnv('GEMINI_IMAGE_DESCRIPTION_TEMPERATURE', '0.8')
+      : readEnv(`${this.openAiCompatibleEnvPrefix}_IMAGE_DESCRIPTION_TEMPERATURE`, '0.8'),
     0.8
   )
   private readonly normalizedBaseUrl = this.baseUrl.replace(/\/+$/, '')
@@ -922,8 +986,8 @@ export class GeminiAdapter implements Narrator {
     options: GenerateTextOptions = {},
     attempt: number = 1
   ): Promise<GenerateTextResult> {
-    if (this.provider === 'deepseek') {
-      return await this.generateDeepSeekTextDetailed(promptOrContents, options, attempt)
+    if (this.provider !== 'gemini') {
+      return await this.generateOpenAiCompatibleTextDetailed(promptOrContents, options, attempt)
     }
 
     return await this.generateGeminiTextDetailed(promptOrContents, options, attempt)
@@ -1033,7 +1097,7 @@ export class GeminiAdapter implements Narrator {
     }
   }
 
-  private async generateDeepSeekTextDetailed(
+  private async generateOpenAiCompatibleTextDetailed(
     promptOrContents: string | ContentEntry[],
     options: GenerateTextOptions = {},
     attempt: number = 1
@@ -1047,14 +1111,16 @@ export class GeminiAdapter implements Narrator {
 
     const controller = new AbortController()
     const requestedMaxOutputTokens = options.maxOutputTokens ?? this.maxOutputTokens
-    const maxOutputTokens = clamp(requestedMaxOutputTokens, 1, DEEPSEEK_MAX_TOKENS_LIMIT)
+    const maxOutputTokens = this.provider === 'deepseek'
+      ? clamp(requestedMaxOutputTokens, 1, DEEPSEEK_MAX_TOKENS_LIMIT)
+      : withMin(requestedMaxOutputTokens, 1)
     const timeoutMs = options.timeoutMs ?? this.timeoutMs
     const responseMimeType = options.responseMimeType
     const temperature = options.temperature ?? this.temperature
     const systemInstruction = options.systemInstruction
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
-    if (maxOutputTokens !== requestedMaxOutputTokens) {
+    if (this.provider === 'deepseek' && maxOutputTokens !== requestedMaxOutputTokens) {
       warn(
         this.logTag,
         `max_tokens ajustado de ${requestedMaxOutputTokens} para ${maxOutputTokens} (limite do DeepSeek)`
@@ -1083,7 +1149,9 @@ export class GeminiAdapter implements Narrator {
           model: this.model,
           messages: buildOpenAiCompatibleMessages(promptOrContents, systemInstruction),
           temperature,
-          max_tokens: maxOutputTokens,
+          ...(this.provider === 'openai'
+            ? { max_completion_tokens: maxOutputTokens }
+            : { max_tokens: maxOutputTokens }),
           stream: false,
           ...(responseMimeType === 'application/json'
             ? { response_format: { type: 'json_object' } }
@@ -1099,8 +1167,8 @@ export class GeminiAdapter implements Narrator {
         throw err
       }
 
-      const parsed = raw ? (JSON.parse(raw) as DeepSeekChatCompletionResponse) : {}
-      const text = extractDeepSeekText(parsed)
+      const parsed = raw ? (JSON.parse(raw) as OpenAiCompatibleChatCompletionResponse) : {}
+      const text = extractOpenAiCompatibleText(parsed)
       if (!text) {
         const err = new Error(`${this.providerLabel} retornou conteúdo vazio`)
         logLlmError(callTag, err)
@@ -1389,7 +1457,7 @@ export class GeminiAdapter implements Narrator {
     }
   }
 
-  async expandWorldLore(req: ExpandWorldLoreRequest): Promise<{ lore: string; loreEn?: string }> {
+  async expandWorldLore(req: ExpandWorldLoreRequest): Promise<{ lore: string; narrativeStyleGuide?: string; lorePtBrief?: string; loreEn?: string }> {
     const sysPrompt = [
       'You are a senior worldbuilder specialized in history.',
       '',
@@ -1398,8 +1466,10 @@ export class GeminiAdapter implements Narrator {
       'Create internal coherence: proper names, locations, and factions mentioned in one section must reappear and reinforce each other in the others.',
       'The writing can be atmospheric and literary, but never assume the reader already knows the setting.',
       '',
-      'Return a valid JSON object with exactly two keys:',
+      'Return a valid JSON object with exactly four keys:',
       '  "lore": the full lore written in Brazilian Portuguese, using the section headings as instructed.',
+      '  "narrativeStyleGuide": a short Brazilian Portuguese tone-and-mood guide (80-220 words) explaining the narrator\'s humor, emotional climate, irony level, dramatic weight, vocabulary, and what to avoid in this universe. Write as direct instructions for narration, not as lore summary.',
+      '  "lorePtBrief": a condensed Brazilian Portuguese narration brief (500-900 words) covering the world\'s core identity, key factions, main locations, magic/technology rules, and the most important narrative tensions — optimized for a game master who needs a quick mental model of the setting. No section headings; flowing prose.',
       '  "loreEn": a condensed English narration brief (500-900 words) covering the world\'s core identity, key factions, main locations, magic/technology rules, and the most important narrative tensions — optimized for a game master who needs a quick mental model of the setting. No section headings; flowing prose.'
     ].join('\n')
 
@@ -1485,16 +1555,23 @@ export class GeminiAdapter implements Narrator {
           const lore = typeof parsed.lore === 'string' && parsed.lore.trim()
             ? sanitizeNarrativeOutput(parsed.lore)
             : sanitizeNarrativeOutput(generated)
+          const narrativeStyleGuide = typeof parsed.narrativeStyleGuide === 'string' && parsed.narrativeStyleGuide.trim()
+            ? sanitizeNarrativeOutput(parsed.narrativeStyleGuide)
+            : undefined
+          const lorePtBrief = typeof parsed.lorePtBrief === 'string' && parsed.lorePtBrief.trim()
+            ? sanitizeNarrativeOutput(parsed.lorePtBrief)
+            : lore
           const loreEn = typeof parsed.loreEn === 'string' && parsed.loreEn.trim()
             ? parsed.loreEn.trim()
             : undefined
-          return { lore, loreEn }
+          return { lore, narrativeStyleGuide, lorePtBrief, loreEn }
         }
       } catch {
         // fall through to plain text fallback
       }
 
-      return { lore: sanitizeNarrativeOutput(generated) }
+      const fallbackLore = sanitizeNarrativeOutput(generated)
+      return { lore: fallbackLore, lorePtBrief: fallbackLore }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
       throw new Error(`Falha ao gerar lore com ${this.providerLabel}: ${message}`)
@@ -1558,6 +1635,7 @@ export class GeminiAdapter implements Narrator {
     const hasExisting = Object.values(existing).some(v => v?.trim())
     const worldName = req.worldName?.trim() ?? ''
     const worldLore = req.worldLore?.trim() ?? ''
+    const worldNarrativeStyleGuide = req.worldNarrativeStyleGuide?.trim() ?? ''
     const storyDescription = req.storyDescription?.trim() ?? ''
     const promptWorldLore = worldLore.length > 6000 ? `${worldLore.slice(0, 6000)}...` : worldLore
     const promptStoryDescription = storyDescription.length > 2800 ? `${storyDescription.slice(0, 2800)}...` : storyDescription
@@ -1578,6 +1656,7 @@ export class GeminiAdapter implements Narrator {
     const sysPrompt = [
       'You are a character designer.',
       'Read the world name, universe lore, and adventure story. Create a character whose role and profession emerge NATURALLY from that data, without using pre-defined archetypes from the system.',
+      ...buildUniverseStyleInferenceLines({ forCharacterSuggestion: true, explicitGuide: worldNarrativeStyleGuide }),
       'Respond ONLY in valid JSON, without markdown or comments.',
       'Always return all 11 keys; gender, race, genderPt, and racePt can be empty string when the context does not support an inference.',
       '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
@@ -1673,6 +1752,7 @@ export class GeminiAdapter implements Narrator {
     const characterConcept = req.characterConcept?.trim() ?? ''
     const worldName = req.worldName?.trim() ?? ''
     const worldLore = req.worldLore?.trim() ?? ''
+    const worldNarrativeStyleGuide = req.worldNarrativeStyleGuide?.trim() ?? ''
     const campaignThematic = req.campaignThematic?.trim() ?? ''
     const storyDescription = req.storyDescription?.trim() ?? ''
     const promptWorldLore = worldLore.length > 4000 ? `${worldLore.slice(0, 4000)}...` : worldLore
@@ -1682,6 +1762,7 @@ export class GeminiAdapter implements Narrator {
       'You are a character designer for a tabletop RPG.',
       'The player has written a free-form concept describing the character they want to create.',
       'Your task is to expand that concept into a complete character profile that fits the world and campaign context.',
+      ...buildUniverseStyleInferenceLines({ forCharacterSuggestion: true, explicitGuide: worldNarrativeStyleGuide }),
       'Respond ONLY in valid JSON, without markdown or comments.',
       'Always return all 11 keys; gender, race, genderPt, and racePt can be empty string when not mentioned or inferable.',
       '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
@@ -1757,7 +1838,7 @@ export class GeminiAdapter implements Narrator {
   // ─── Narrative Chat Methods ───
 
   private getCachedNarratorSystemPrompt(opts: {
-    world?: { name?: string; description?: string; lore?: string }
+    world?: { name?: string; description?: string; lore?: string; narrativeStyleGuide?: string }
     campaign?: { name?: string; storyDescription?: string }
     rulesDigest?: string
     summaryText?: string
@@ -1770,6 +1851,7 @@ export class GeminiAdapter implements Narrator {
       wn: opts.world?.name,
       wd: opts.world?.description,
       wl: opts.world?.lore,
+      wg: opts.world?.narrativeStyleGuide,
       cn: opts.campaign?.name,
       cs: opts.campaign?.storyDescription,
       rd: opts.rulesDigest,
@@ -1801,7 +1883,7 @@ export class GeminiAdapter implements Narrator {
    * resumo da aventura e perícias do jogador — tudo que é (quase) estático entre turnos.
    */
   private buildNarratorSystemPrompt(opts: {
-    world?: { name?: string; description?: string; lore?: string }
+    world?: { name?: string; description?: string; lore?: string; narrativeStyleGuide?: string }
     campaign?: { name?: string; storyDescription?: string }
     rulesDigest?: string
     summaryText?: string
@@ -1816,10 +1898,10 @@ export class GeminiAdapter implements Narrator {
       '',
       '━━━ HIERARQUIA CANÔNICA — LEIA ISTO PRIMEIRO ━━━',
       'Há duas camadas de contexto neste prompt:',
-      '  1. CONTEXTO PRÉ-ESCRITO (UNIVERSE, CAMPAIGN): material de fundo — o cenário pretendido e o arco de história planejado. Use-o para tom, vocabulário e coerência do mundo.',
-      '  2. HISTÓRICO JOGADO (ADVENTURE SUMMARY + mensagens recentes): o registro autoritativo do que REALMENTE aconteceu durante o jogo. É a única fonte de verdade para fatos do jogo.',
+      '  1. CONTEXTO PRÉ-ESCRITO (UNIVERSO, CAMPANHA): material de fundo — o cenário pretendido e o arco de história planejado. Use-o para tom, vocabulário e coerência do mundo.',
+      '  2. HISTÓRICO JOGADO (RESUMO DA AVENTURA + mensagens recentes): o registro autoritativo do que REALMENTE aconteceu durante o jogo. É a única fonte de verdade para fatos do jogo.',
       'REGRA: Quando houver QUALQUER conflito entre o contexto pré-escrito e o histórico jogado, o histórico jogado SEMPRE vence.',
-      'NUNCA use as descrições de UNIVERSE ou CAMPAIGN para contradizer, desfazer ou sobrepor eventos já estabelecidos no ADVENTURE SUMMARY ou nos turnos recentes.',
+      'NUNCA use as descrições de UNIVERSO ou CAMPANHA para contradizer, desfazer ou sobrepor eventos já estabelecidos no RESUMO DA AVENTURA ou nos turnos recentes.',
       'NUNCA redirecione a história de volta ao arco planejado se o jogador já se desviou dele — a história emergente É a história.',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
@@ -1858,7 +1940,7 @@ export class GeminiAdapter implements Narrator {
       '    {',
       '      "id": "<uuid>",',
       '      "text": "<descrição narrativa da opção (rótulo da ação, 1 frase curta)>",',
-      '      "actionType": "<tipo mecânico da ação: custom|trait_test|attack|travel|flag>",',
+      '      "actionType": "<tipo mecânico da ação: custom|trait_test|attack|travel|flag|heal>",',
       '      "actionPayload": { <campos parciais para montar a ação mecânica> },',
       '      "requiredItems": ["<nome do item do inventário, se exigido pela ação>"],',
       '      "feasible": true,',
@@ -1873,7 +1955,7 @@ export class GeminiAdapter implements Narrator {
       '    }',
       '  ],',
       '  "npcs": [',
-      '    { "displayName": "<nome amigável exibido ao jogador>", "id": "<copie o hash de PRESENT NPCS se já estiver presente; omita para NPCs novos>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false, "status": "active|incapacitated|defeated|dead" }',
+      '    { "displayName": "<nome amigável exibido ao jogador>", "id": "<copie o hash de NPCS PRESENTES se já estiver presente; omita para NPCs novos>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false, "status": "active|incapacitated|defeated|dead" }',
       '  ],',
       '  "itemChanges": [',
       '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|money|vehicle|property|quest|misc" }',
@@ -1884,6 +1966,7 @@ export class GeminiAdapter implements Narrator {
       '  "npcAttacks": [',
       '    { "npcId": "<id do NPC atacante>", "skillDie": <6|8|10|12>, "damageFormula": "<str+d6 ou 2d6 etc>", "ap": 0 }',
       '  ],',
+      '  "outcomeOverride": { "mechanicalResult": "success|failure", "narratedOutcome": "success|failure", "justification": "<causa narrativa da inversão>" } | null,',
       '  "storyHook": "<1 frase curta sobre algo acontecendo FORA DE CENA que cria tensão — ou null>"',
       '},',
       '',
@@ -1896,11 +1979,11 @@ export class GeminiAdapter implements Narrator {
       'Sempre AUTOVERIFIQUE essa exclusividade antes de emitir a resposta, para evitar erros de parsing.',
       '',
       'REGRAS GERAIS:',
-      '- "segments": type="narrator" é o PADRÃO e carrega TODA a prosa/descrição/ação/consequência. Adicione um segment type="npc" SOMENTE quando um NPC fala uma fala LITERAL em voz alta neste turno — nunca para gestos, silêncio, ou ser descrito sem palavras, e nunca invente diálogo para preencher um. Em um segment npc, "text" = apenas as palavras faladas; defina "npcDisplayName" com o mesmo nome usado em "npcs"/PRESENT NPCS e copie "npcId" quando já presente.',
+      '- "segments": type="narrator" é o PADRÃO e carrega TODA a prosa/descrição/ação/consequência. Adicione um segment type="npc" SOMENTE quando um NPC fala uma fala LITERAL em voz alta neste turno — nunca para gestos, silêncio, ou ser descrito sem palavras, e nunca invente diálogo para preencher um. Em um segment npc, "text" = apenas as palavras faladas; defina "npcDisplayName" com o mesmo nome usado em "npcs"/NPCS PRESENTES e copie "npcId" quando já presente.',
       '- o array "options" é OBRIGATÓRIO e NUNCA pode ficar vazio. Sempre retorne EXATAMENTE 4 opções.',
-      '- Escolha as 4 opções que fazem mais sentido para a cena atual; deixe a situação decidir. Se oferecer um ataque (actionType "attack"), NUNCA use como targetId um NPC listado em DEFEATED NPCS — esses inimigos estão fora de combate.',
+      '- Escolha as 4 opções que fazem mais sentido para a cena atual; deixe a situação decidir. Se oferecer um ataque (actionType "attack"), NUNCA use como targetId um NPC listado em NPCS DERROTADOS — esses inimigos estão fora de combate.',
       '- o campo "feasible" deve ser false se o jogador não tiver os itens/condições necessários.',
-      '- ITENS NECESSÁRIOS E VIABILIDADE: se uma opção usa um item específico, esse item DEVE estar listado em "requiredItems" E deve existir na lista atual de ── INVENTORY ── (correspondência por nome). Se o item NÃO estiver no inventário atual, defina feasible=false com um feasibilityReason citando o item ausente. NUNCA ofereça uma opção viável que dependa de um item que o jogador não tem mais (ex.: um artefato largado, consumido ou confiscado em um turno anterior). Na dúvida sobre se um item ainda está em posse, trate-o como ausente.',
+      '- ITENS NECESSÁRIOS E VIABILIDADE: se uma opção usa um item específico, esse item DEVE estar listado em "requiredItems" E deve existir na lista atual de ── INVENTÁRIO ── (correspondência por nome). Se o item NÃO estiver no inventário atual, defina feasible=false com um feasibilityReason citando o item ausente. NUNCA ofereça uma opção viável que dependa de um item que o jogador não tem mais (ex.: um artefato largado, consumido ou confiscado em um turno anterior). Na dúvida sobre se um item ainda está em posse, trate-o como ausente.',
       '- Para actionType "attack", inclua APENAS "targetId" no actionPayload. NÃO envie damageFormula ou ap — o app resolve o dano da arma do jogador a partir da arma equipada.',
       '- Para actionType "heal": inclua actionPayload: {} (cura o jogador) ou actionPayload: { targetId: "<id do NPC aliado>" }.',
       '- ATAQUES DE NPC: ataques de NPC hostil neste turno → preencha "npcAttacks": [{ "npcId", "skillDie": 6|8|10|12 (6=comum, 8=treinado, 10=campeão, 12=elite), "damageFormula" (ex.: "str+d6", "2d6"), "ap": 0 }]. Sem ataque → [].',
@@ -1911,8 +1994,8 @@ export class GeminiAdapter implements Narrator {
       '- Para actionType "custom", inclua "input" no actionPayload com a descrição da ação.',
       '- Itens ganhos devem ter nomes criativos e coerentes com o cenário. O campo "name" deve conter APENAS o nome do item — NUNCA inclua quantidade ou sufixos no estilo "x3" no nome (use o campo "quantity" para isso).',
       '- REGRA CRÍTICA — itemChanges:',
-      '  • changeType "gained": SOMENTE quando o MECHANICAL RESULT contém evidência explícita ([item_gained]). Nunca invente itens ganhos só pela narrativa.',
-      '  • changeType "lost" ou "used": registre quando (a) o MECHANICAL RESULT tem evidência explícita ([item_lost], [item_used], [ammunition_consumed]), OU (b) sua narrativa NESTE turno descreve explicitamente o item sendo largado, destruído, confiscado, consumido, ou de alguma forma saindo da posse do jogador. Exemplo: se a narrativa diz "forçando você a soltá-lo" sobre um item, registre esse item com changeType "lost".',
+      '  • changeType "gained": SOMENTE quando o RESULTADO MECÂNICO contém evidência explícita ([item_gained]). Nunca invente itens ganhos só pela narrativa.',
+      '  • changeType "lost" ou "used": registre quando (a) o RESULTADO MECÂNICO tem evidência explícita ([item_lost], [item_used], [ammunition_consumed]), OU (b) sua narrativa NESTE turno descreve explicitamente o item sendo largado, destruído, confiscado, consumido, ou de alguma forma saindo da posse do jogador. Exemplo: se a narrativa diz "forçando você a soltá-lo" sobre um item, registre esse item com changeType "lost".',
       '  ⚠️ NÃO REGISTRAR UMA PERDA DE ITEM NARRADA É UM BUG: se sua narrativa diz que um item foi perdido mas você omite a entrada em itemChanges, o item permanece no inventário e turnos futuros vão contradizer a história.',
       '  • CONSUMÍVEL vs DURÁVEL — distinção OBRIGATÓRIA: apenas itens de categoria "consumable" (poções, rações, etc.) e "ammunition" são GASTOS ao serem usados e devem sair do inventário com changeType "used"/"lost". Itens DURÁVEIS — categorias "weapon", "armor", "vehicle", "property", "quest", "misc" — NÃO se gastam com o uso. Usar uma espada, vestir uma armadura, dirigir um veículo ou empunhar um artefato NÃO os remove do inventário.',
       '  • Um item durável só sai do inventário (changeType "lost") se a narrativa DESTE turno descreve explicitamente que ele foi QUEBRADO/destruído, perdido, largado, roubado ou confiscado. Na dúvida, NÃO registre a perda: o jogador mantém o item. Nunca marque uma arma ou equipamento como "used" apenas porque o jogador o utilizou na ação.',
@@ -1971,57 +2054,43 @@ export class GeminiAdapter implements Narrator {
     // ─── REGRA: ITENS NA NARRATIVA ───
     lines.push(
       '',
-      '⚠️ ITENS NA NARRATIVA: todo item mencionado deve vir de: (1) INVENTORY do jogador, (2) equipamento de NPC já estabelecido, ou (3) objeto de cena já descrito. Item ausente → narre que não foi encontrado. Item novo → estabeleça-o na narrativa DESTE turno primeiro. (Apenas texto narrativo — não afeta os campos JSON.)'
+      '⚠️ ITENS NA NARRATIVA: todo item mencionado deve vir de: (1) INVENTÁRIO do jogador, (2) equipamento de NPC já estabelecido, ou (3) objeto de cena já descrito. Item ausente → narre que não foi encontrado. Item novo → estabeleça-o na narrativa DESTE turno primeiro. (Apenas texto narrativo — não afeta os campos JSON.)'
     )
 
-    // ─── REGRA: NARRAÇÃO DE INCAPACITAÇÃO ───
-    lines.push(
-      '',
-      ' INCAPACITAÇÃO: se o personagem está Incapacitado (wounds >= maxWounds, ou seja, 4+ ferimentos),',
-      'a narrativa DEVE refletir isso explicitamente: descreva o colapso, a escuridão, a luta pela consciência.',
-      'As opções devem ser consistentes com a condição (ex.: "Lutar pela sobrevivência", "Perder a consciência", "Pedir ajuda").',
-      'NÃO ofereça ações normais de combate, exploração ou diálogo quando o personagem está incapacitado.'
-    )
+    // ─── REGRA: NARRAÇÃO DE INCAPACITAÇÃO (não se aplica à abertura de sessão — personagem começa ileso) ───
+    if (mode !== 'start') {
+      lines.push(
+        '',
+        ' INCAPACITAÇÃO: se o personagem está Incapacitado (wounds >= maxWounds, ou seja, 4+ ferimentos),',
+        'a narrativa DEVE refletir isso explicitamente: descreva o colapso, a escuridão, a luta pela consciência.',
+        'As opções devem ser consistentes com a condição (ex.: "Lutar pela sobrevivência", "Perder a consciência", "Pedir ajuda").',
+        'NÃO ofereça ações normais de combate, exploração ou diálogo quando o personagem está incapacitado.'
+      )
+    }
 
     // Injeta o contexto do universo (lore macro — fixo durante toda a sessão)
     if (world && (world.description || world.lore)) {
       lines.push(
         '',
-        '=== UNIVERSE ===',
+        '=== UNIVERSO ===',
         'As seções abaixo são a bíblia canônica deste universo.',
+        'Mesmo que o texto abaixo esteja em outro idioma, sua resposta (segments, options, storyHook) DEVE ser sempre em português do Brasil — traduza mentalmente antes de narrar.',
         `Nome: ${world.name ?? 'Sem nome'}`,
         ...(world.description ? [`Descrição: ${world.description}`] : []),
         ...(world.lore ? ['', world.lore] : [])
       )
 
-      // Instrução de voz narrativa baseada no lore do universo
-      if (narrativeStyle === 'concise') {
-        lines.push(
-          '',
-          '=== NARRATIVE VOICE ===',
-          'O texto do universo acima pode conter escrita atmosférica, literária ou sensorial — IGNORE completamente seu estilo e tom.',
-          'Extraia dele APENAS nomes próprios: nomes de lugares, facções, tecnologias, termos culturais, nomes de personagens.',
-          'NÃO espelhe nenhuma linguagem sensorial ou ambiental do lore (cheiros, qualidade do ar, sons, texturas, luz, eletricidade, etc.).',
-          '- Evite clichês genéricos de RPG ("você avança corajosamente", "o inimigo é derrotado").',
-          '- Mantenha-se direto e concreto: apenas declare fatos e consequências.'
-        )
-      } else {
-        lines.push(
-          '',
-          '=== NARRATIVE VOICE ===',
-          'Use as seções do universo acima para calibrar vocabulário e tom. Nunca use linguagem genérica de RPG ("você avança corajosamente", "o inimigo é derrotado") — prefira imagens concretas deste mundo.',
-          '- Tom neutro de manual de regras é PROIBIDO. A narrativa deve carregar o sotaque deste universo.',
-          '- Se o universo tem uma atmosfera de decadência, use decadência — palavras gastas, ferrugem, silêncios. Se tem grandiosidade, use grandiosidade — escala, mito, peso.',
-          '- A voz narrativa deve ser sentida nas escolhas de palavras e metáforas, nunca declarada.'
-        )
-      }
+      lines.push('', ...buildUniverseStyleInferenceLines({
+        concise: narrativeStyle === 'concise',
+        explicitGuide: world.narrativeStyleGuide
+      }))
     }
 
     // Injeta o contexto da campanha (história específica)
     if (campaign && campaign.storyDescription) {
       lines.push(
         '',
-        '=== CAMPAIGN (PLANNED ARC — background only) ===',
+        '=== CAMPANHA (ARCO PLANEJADO — apenas contexto de fundo) ===',
         'Apenas temática e cor do mundo — não um roteiro (ver HIERARQUIA CANÔNICA).',
         `Nome: ${campaign.name ?? 'Sem nome'}`,
         `História: ${campaign.storyDescription ?? ''}`
@@ -2040,7 +2109,7 @@ export class GeminiAdapter implements Narrator {
         .map(([label, die]) => `${label}: ${die}`)
       lines.push(
         '',
-        '=== PLAYER SKILL LEVELS ===',
+        '=== PERÍCIAS DO PERSONAGEM ===',
         'Estas são as perícias treinadas do personagem com seu dado atual. Use-as ao sugerir opções trait_test — prefira perícias que o personagem realmente treinou.',
         ...skillLines
       )
@@ -2050,7 +2119,7 @@ export class GeminiAdapter implements Narrator {
     if (summaryText) {
       lines.push(
         '',
-        '=== ADVENTURE SUMMARY (ESTABLISHED CANON) ===',
+        '=== RESUMO DA AVENTURA (CÂNONE ESTABELECIDO) ===',
         '⚠️ Cânone autoritativo do que já aconteceu — construa a partir daqui; nunca contradiga.',
         summaryText
       )
@@ -2059,16 +2128,13 @@ export class GeminiAdapter implements Narrator {
     if (mode === 'start') {
       lines.push(
         '',
-        '=== SESSION START RULES ===',
-        '- Você DEVE preencher itemChanges com changeType "gained" para dar ao personagem seu kit inicial. Seja generoso — busque de 4 a 8 itens coerentes com a profissão e o histórico do personagem.',
-        '- Inclua equipamento apropriado à classe: armas e armaduras para combatentes, ferramentas e kits para especialistas, provisões e corda para exploradores, bolsas de moedas e mercadorias para mercadores, pergaminhos ou reagentes para magos, etc.',
-        '- Sempre inclua uma pequena quantia de dinheiro (categoria "money"), a menos que o conceito proíba explicitamente.',
-        '- Os itens devem representar posses que o personagem plausivelmente já tem no início da aventura — kit pessoal, não recompensas ou saque.'
+        '=== REGRAS DE INÍCIO DE SESSÃO ===',
+        '- Você DEVE preencher itemChanges com changeType "gained" para dar ao personagem seu kit inicial (4 a 8 itens coerentes com o personagem — mesma faixa exigida no prompt do usuário).',
       )
     } else {
       lines.push(
         '',
-        '=== CANONICAL TURN RULES ===',
+        '=== REGRAS DO TURNO CANÔNICO ===',
         '- CONTAGEM OBRIGATÓRIA: se a narrativa menciona um número específico de NPCs/criaturas/agentes ("dois agentes", "três guardas", "um grupo de cinco", "uma patrulha de quatro"), você DEVE criar exatamente esse número de entradas separadas no array "npcs". Cada entrada precisa de um "displayName" DISTINTO (ex.: "Agente UCT #1", "Agente UCT #2") e a mesma disposição. Ao mencionar um grupo sem número explícito ("um grupo de", "vários", "alguns"), crie pelo menos 2-3 entradas para representar a ameaça múltipla.',
         '',
         '  EXEMPLO CORRETO:',
@@ -2080,13 +2146,13 @@ export class GeminiAdapter implements Narrator {
         '',
         '- GANHO DE ITEM em um turno normal: use changeType "gained" sempre que a narrativa deste turno justificar — seja generoso. Situações válidas: visitar uma loja ou mercado (jogador compra ou troca por itens), saquear um inimigo derrotado ou contêiner, receber uma recompensa, presente ou pagamento de um NPC, encontrar um item abandonado na cena, ou receber equipamento de uma facção ou aliado. Registre TODOS os itens que a narrativa estabelece que o personagem obteve neste turno, incluindo armas, armaduras e qualquer categoria.',
         '- statusChanges "applied": APENAS para efeitos narrativos não mecânicos (veneno ambiental, queimadura narrativa, um medo ou maldição guiados pela história). NUNCA registre estados do motor de combate via statusChanges — Abalado (Shaken), Ferido (Wounded), Fadiga e todas as condições mecânicas de combate são gerenciadas EXCLUSIVAMENTE pelo motor de regras. Se você os registrar aqui, serão descartados.',
-        '- statusChanges "removed": APENAS para efeitos já listados em ACTIVE EFFECTS. Use o effectId ou nome exatos. Não invente remoções para efeitos que não estão listados.',
+        '- statusChanges "removed": APENAS para efeitos já listados em EFEITOS ATIVOS. Use o effectId ou nome exatos. Não invente remoções para efeitos que não estão listados.',
         '- Se a ação ou narrativa estabelece descanso seguro, hospitalização, alta médica, ou a passagem de semanas/meses, remova em statusChanges os efeitos temporários que foram curados ou expiraram.',
         '- Para remover um status temporário, use changeType "removed" com o effectId/nome exato do efeito ativo. Para status do jogador use targetType "player"; para status de NPC use targetType "npc" e o targetId do NPC afetado.',
         '- turnsRemaining representa apenas duração curta em turnos narrativos. Quando há um salto temporal longo, não confie em turnsRemaining: registre remoções explícitas em statusChanges.',
         '- Não remova status permanentes, complicações, sequelas ou condições de personagem sem evidência narrativa direta de cura ou resolução.',
         '- Em statusChanges, sempre indique targetType. Use targetType "npc" e o targetId do NPC afetado quando o efeito resulta de ataque, dano, veneno, queimadura, medo, ou condição aplicada ao inimigo. Use targetType "player" apenas para efeitos no personagem do jogador.',
-        '- Para actionPayload.targetId, referencie NPCs já listados em PRESENT NPCS (pelo seu id hash) ou NPCs novos desta narrativa (pelo handle de id temporário ou displayName exato que você registrou em "npcs").',
+        '- Para actionPayload.targetId, referencie NPCs já listados em NPCS PRESENTES (pelo seu id hash) ou NPCs novos desta narrativa (pelo handle de id temporário ou displayName exato que você registrou em "npcs").',
         '- Se faltar evidência canônica para uma mutação de estado, deixe os campos mutáveis vazios/null.',
         '- Se algum NPC for derrubado, não o inclua em turnos subsequentes. Descreva-o como derrubado, fugindo, ou caindo, mas não o mantenha como alvo de ações futuras.'
       )
@@ -2095,17 +2161,17 @@ export class GeminiAdapter implements Narrator {
     // Instruções estáticas de narração
     lines.push(
       '',
-      '=== NARRATION INSTRUCTIONS ===',
+      '=== INSTRUÇÕES DE NARRAÇÃO ===',
       'RESULTADO DA AÇÃO:',
       '  • Sucesso: descreva a consequência positiva concreta + seu impacto imediato no mundo ou nos NPCs presentes.',
       '  • Fracasso: descreva especificamente o que falhou + 50% de chance de complicações.',
       '  • Sucesso com Raise: narre um benefício extra inesperado além do esperado.',
       '',
       'PLAUSIBILIDADE NARRATIVA:',
-      '  • O MECHANICAL RESULT é o desfecho PADRÃO: a menos que um override abaixo se aplique, um sucesso permanece sucesso e um fracasso permanece fracasso.',
+      '  • O RESULTADO MECÂNICO é o desfecho PADRÃO: a menos que um override abaixo se aplique, um sucesso permanece sucesso e um fracasso permanece fracasso.',
       '  • INVERSÃO JUSTIFICADA DE DESFECHO: você PODE inverter o desfecho narrado em relação ao resultado mecânico — narrar um sucesso mecânico como um revés, ou um fracasso mecânico como um ganho inesperado — APENAS quando uma causa explícita na ficção justificar isso (ex.: interferência de terceiros, uma reviravolta ambiental, uma reação inesperada de NPC, uma complicação oculta revelada agora, ou um golpe de sorte). Ao inverter, o TEXTO narrativo deve declarar essa causa claramente para que o jogador veja POR QUE o desfecho diferiu do que a rolagem implicava — a inversão nunca deve parecer arbitrária ou uma contradição dos dados. Se não houver causa narrativa explícita, mantenha o resultado mecânico.',
       '  • QUANDO — E SOMENTE QUANDO — você inverter o desfecho, você DEVE também preencher o campo JSON "outcomeOverride" com: mechanicalResult (o resultado dos dados: "success" ou "failure"), narratedOutcome (o que você de fato narrou, o valor oposto), e justification (uma frase curta nomeando a causa na ficção). Se você NÃO inverter, OMITA "outcomeOverride" completamente (ou defina como null). Nunca preencha quando narratedOutcome for igual a mechanicalResult.',
-      '  • INVERSÃO POR PREMISSA DE ITEM (tem precedência sobre o MECHANICAL RESULT): se a ação escolhida pelo jogador depende de um item específico que NÃO está na lista atual de ── INVENTORY ──, NÃO narre esse item sendo usado e NÃO o fabrique. Narre em vez disso que o personagem busca por ele e ele sumiu/está indisponível, e faça as opções resultantes refletirem isso. Isso sobrepõe um "success" mecânico porque a premissa da ação é inválida — um sucesso não pode ser concedido por usar um item que o jogador não tem.',
+      '  • INVERSÃO POR PREMISSA DE ITEM (tem precedência sobre o RESULTADO MECÂNICO): se a ação escolhida pelo jogador depende de um item específico que NÃO está na lista atual de ── INVENTÁRIO ──, NÃO narre esse item sendo usado e NÃO o fabrique. Narre em vez disso que o personagem busca por ele e ele sumiu/está indisponível, e faça as opções resultantes refletirem isso. Isso sobrepõe um "success" mecânico porque a premissa da ação é inválida — um sucesso não pode ser concedido por usar um item que o jogador não tem.',
       '  • Use os resultados para semear tramas futuras naturalmente (dívida social, inimigo alertado, pista incompleta).',
       '  • CAMPOS JSON: registre apenas elementos com suporte explícito no contexto estruturado — sem estado inventado.',
       '  • TEXTO NARRATIVO: adicione livremente atmosfera, detalhes sensoriais, indícios, cor do mundo — mantenha FORA dos campos JSON.',
@@ -2114,7 +2180,7 @@ export class GeminiAdapter implements Narrator {
     // Regras de participação de personagem dos NPCs
     lines.push(
       '',
-      '=== NPC CHARACTER & PARTICIPATION ===',
+      '=== CARÁTER E PARTICIPAÇÃO DOS NPCS ===',
       'Quando um NPC PRESENTE tem campos de Personalidade, Motivação ou Fala:',
       '  • Use-os para moldar TODA reação, fala de diálogo e escolha de comportamento desse NPC.',
       '  • NPCs são PERSONAGENS, não fichas de combate. Eles têm opiniões, medo, orgulho, objetivos.',
@@ -2189,13 +2255,14 @@ export class GeminiAdapter implements Narrator {
           }
         }
 
-        if (!hasTrait) {
-          if (candidate.actionType === 'trait_test') {
+        if (!hasTrait && needsTrait) {
+          const wasTraitTest = candidate.actionType === 'trait_test'
+          if (wasTraitTest) {
             candidate.actionType = 'custom'
             if (!sanitizeInlineText(actionPayload.input, '')) actionPayload.input = text
           }
           if (diceCheck?.required) diceCheck = { ...diceCheck, required: false }
-          warn('sanitizeNarratorResponse', `Sem trait inferível para "${text}": rolagem rebaixada${candidate.actionType === 'custom' ? ' e ação convertida para custom' : ''}`)
+          warn('sanitizeNarratorResponse', `Sem trait inferível para "${text}": rolagem rebaixada${wasTraitTest ? ' e ação convertida para custom' : ''}`)
         }
       }
 
@@ -2554,17 +2621,20 @@ export class GeminiAdapter implements Narrator {
       return [{ npcId, skillDie, damageFormula, ap: typeof e.ap === 'number' ? e.ap : 0 }]
     })
 
-    // Fix B: opções de ataque com targetId desconhecido → downgrade para custom.
+    // Fix B: opções de ataque sem targetId válido → downgrade para custom.
     // Antes, remapeia a referência (id cru/nome) para o id final estável.
     for (const option of options) {
       if (option.actionType !== 'attack') continue
-      const rawTargetId = sanitizeInlineText(option.actionPayload?.targetId, '')
+      // Robustez extra: alguns modelos ainda enviam "target" em vez de "targetId".
+      const targetFromAlias = sanitizeInlineText(option.actionPayload?.target, '')
+      const rawTargetId = sanitizeInlineText(option.actionPayload?.targetId, '') || targetFromAlias
       const targetId = resolveNpcRef(rawTargetId)
       if (targetId) {
         // Persiste o id final remapeado no payload para o engine resolver corretamente.
         option.actionPayload = { ...option.actionPayload, targetId }
-      } else if (rawTargetId) {
-        warn('sanitizeNarratorResponse', `Opção de ataque com targetId desconhecido convertida para custom: "${option.text}" (targetId: ${rawTargetId})`)
+      } else {
+        const rawTargetLabel = rawTargetId || '(ausente)'
+        warn('sanitizeNarratorResponse', `Opção de ataque sem targetId válido convertida para custom: "${option.text}" (targetId: ${rawTargetLabel})`)
         option.actionType = 'custom'
         option.actionPayload = { input: option.text }
         if (option.diceCheck) option.diceCheck = { ...option.diceCheck, required: false }
@@ -2680,7 +2750,7 @@ export class GeminiAdapter implements Narrator {
     return [
       basePrompt,
       '',
-      '=== MANDATORY CORRECTION ===',
+      '=== CORREÇÃO OBRIGATÓRIA ===',
       '- A resposta anterior foi rejeitada por estar incompleta, truncada, não-canônica, ou por violar a regra de agência.',
       '- Retorne um JSON completo e autoconsistente.',
       '- Não use entidades fora do contexto estruturado.',
@@ -2817,6 +2887,7 @@ export class GeminiAdapter implements Narrator {
     const sysPrompt = [
       'Você é o Narrador de uma história.',
       'O jogador digitou uma ação livre. Sua tarefa é VALIDAR se a ação é possível no contexto atual.',
+      'Use o envelope JSON do user prompt como contexto canônico.',
       '',
       'Você DEVE retornar APENAS um JSON válido (sem markdown, sem comentários) com esta estrutura:',
       '{',
@@ -2884,55 +2955,38 @@ export class GeminiAdapter implements Narrator {
     ].join('\n')
 
     const ctx = req.context
-    const inventoryText = ctx.inventory.length
-      ? ctx.inventory.map((i) => `${i.name} (x${i.quantity})`).join(', ')
-      : 'vazio'
-    const npcsText = ctx.npcsPresent.length
-      ? ctx.npcsPresent.map((n) => {
-          const tipo = n.isWildCard ? 'Wild Card' : 'Extra'
-          const disp = n.disposition ?? 'neutral'
-          const status = n.wounds > 0 ? ` ferido ${n.wounds}/${n.maxWounds}` : ''
-          const effects = (n.statusEffects ?? []).length
-            ? `, efeitos: ${(n.statusEffects ?? []).map((effect) => `${effect.name}${effect.turnsRemaining != null ? ` (${effect.turnsRemaining}t)` : ''}`).join(', ')}`
-            : ''
-          return `${n.displayName ?? n.name} (${n.id}) [${tipo}, ${disp}, Toughness ${n.toughness}, Parry ${n.parry}${status}${effects}]`
-        }).join(', ')
-      : 'nenhum'
-    const defeatedText = (ctx.defeatedNpcIds ?? []).length
-      ? (ctx.defeatedNpcIds ?? []).join(', ')
-      : null
-    const statusText = ctx.activeStatusEffects.length
-      ? ctx.activeStatusEffects.map((s) => `${s.name}${s.turnsRemaining ? ` (${s.turnsRemaining} turnos)` : ''}`).join(', ')
-      : 'nenhum'
-    const skillsText = ctx.playerSkills
-      ? Object.entries(ctx.playerSkills).map(([k, v]) => `${k}: ${v}`).join(', ')
-      : 'desconhecido'
-
-    const recentText = req.recentMessages
+    const recentMessagesForEnvelope = req.recentMessages
       .slice(-5)
-      .map((m) => m.role === 'narrator' ? `Narrador: ${segmentsToText(m.segments).slice(0, 200)}` : `Jogador: ${m.playerInput ?? ''}`)
-      .filter(Boolean)
-      .join('\n')
+      .map((m) => m.role === 'narrator'
+        ? { role: 'narrator', text: segmentsToText(m.segments).slice(0, 300) }
+        : { role: 'player', text: (m.playerInput ?? '').slice(0, 300) })
+
+    const validationEnvelope = {
+      schemaVersion: 'validate_action.v2',
+      actionInput: req.input,
+      context: {
+        location: ctx.location,
+        wounds: ctx.wounds,
+        fatigue: ctx.fatigue,
+        isShaken: ctx.isShaken,
+        bennies: ctx.bennies,
+        npcsPresent: ctx.npcsPresent,
+        defeatedNpcIds: ctx.defeatedNpcIds ?? [],
+        inventory: ctx.inventory,
+        activeStatusEffects: ctx.activeStatusEffects,
+        playerSkills: ctx.playerSkills ?? null,
+        rulesDigest: ctx.rulesDigest ?? null,
+        summaryText: ctx.summaryText ?? null,
+        recentMessages: recentMessagesForEnvelope
+      }
+    }
 
     const prompt = [
-      `AÇÃO DO JOGADOR: "${req.input}"`,
+      'VALIDAÇÃO DE AÇÃO — use o envelope JSON como contexto canônico e retorne APENAS o JSON de resposta.',
       '',
-      '── CONTEXTO DA CENA ──',
-      `Local: ${ctx.location}`,
-      `Ferimentos: ${ctx.wounds} | Fadiga: ${ctx.fatigue} | Abalado: ${ctx.isShaken ? 'sim' : 'não'} | Bennies: ${ctx.bennies}`,
-      `NPCs presentes: ${npcsText}`,
-      defeatedText ? `NPCs derrotados (não são ameaças ativas): ${defeatedText}` : '',
-      `Inventário: ${inventoryText}`,
-      `Efeitos ativos: ${statusText}`,
-      `Perícias do jogador: ${skillsText}`,
-      ctx.rulesDigest ? `\nREGRAS:\n${ctx.rulesDigest}` : '',
-      ctx.summaryText ? `\nRESUMO:\n${ctx.summaryText}` : '',
-      '',
-      '── MENSAGENS RECENTES ──',
-      recentText,
-      '',
-      'Valide a ação e retorne o JSON.'
-    ].filter(Boolean).join('\n')
+      'ENVELOPE_JSON:',
+      JSON.stringify(validationEnvelope, null, 2)
+    ].join('\n')
 
     try {
       const attempts = [
@@ -3013,25 +3067,45 @@ export class GeminiAdapter implements Narrator {
     if (req.character.edges.length) characterTraits.push(`Edges: ${req.character.edges.join(', ')}`)
     if (req.character.hindrances.length) characterTraits.push(`Hindrances: ${req.character.hindrances.map(h => `${h.name} (${h.severity})`).join(', ')}`)
 
+    const startEnvelope = {
+      schemaVersion: 'narrate_start.v2',
+      context: {
+        world: req.world ?? null,
+        campaign: req.campaign ?? null,
+        character: {
+          ...req.character,
+          traitsText: characterTraits
+        }
+      },
+      requirements: {
+        narrativeLanguage: 'pt-BR',
+        optionsCount: 4,
+        initialItems: {
+          min: 4,
+          max: 8,
+          includeMoney: true,
+          includeAmmoForRanged: true
+        }
+      }
+    }
+
     const userPrompt = [
       'INÍCIO DE SESSÃO — Narre a abertura desta história.',
       '',
-      `PERSONAGEM: ${req.character.name}`,
-      req.character.race ? `Raça: ${req.character.race}` : '',
-      req.character.gender ? `Gênero: ${req.character.gender}` : '',
-      req.character.profession ? `Profissão: ${req.character.profession}` : '',
-      req.character.description ? `Descrição: ${req.character.description}` : '',
-      ...characterTraits,
+      'Use o envelope JSON abaixo como contexto canônico da abertura.',
       '',
-      'Crie uma abertura rica, imersiva e específica que coloque o personagem no centro da ação.',
-      'Descreva a cena de abertura com detalhes sensoriais concretos — cheiros, sons, temperatura, visão — específicos deste universo, não genéricos.',
+      'ENVELOPE_JSON:',
+      JSON.stringify(startEnvelope, null, 2),
+      '',
+      'Crie uma abertura rica, imersiva que coloque o personagem no início de sua missão/campanha.',
+      'Descreva a cena de abertura com detalhes sensoriais concretos — específicos deste universo, não genéricos.',
       'Apresente um gancho narrativo claro: uma tensão palpável, um problema imediato, ou uma oportunidade que exige uma decisão agora.',
       'Estabeleça pelo menos 1 detalhe específico de worldbuilding (um nome de lugar, uma facção, um costume local, um objeto estranho) que o jogador possa explorar.',
       'Ofereça 4 opções de ação que façam mais sentido para esta cena de abertura — deixe a situação decidir quais ações se encaixam; cada opção deve parecer uma escolha de história, não um botão de menu.',
       'Para CADA opção, avalie se ela exige uma rolagem de dados (diceCheck) segundo as regras de Savage Worlds.',
       '',
       'ITENS INICIAIS (OBRIGATÓRIO):',
-      'Retorne em "itemChanges" de 3 a 10 itens iniciais com changeType "gained" que o personagem já possui no início da aventura.',
+      'Retorne em "itemChanges" de 4 a 8 itens iniciais com changeType "gained" que o personagem já possui no início da aventura.',
       'Escolha itens coerentes com a profissão, raça e cenário do mundo. Exemplos de categoria:',
       '- Arma principal apropriada à profissão (espada, arco, cajado, adaga, pistola, rifle, etc.)',
       '- Se a arma for à distância (arco, besta, pistola, rifle, espingarda, etc.), inclua OBRIGATORIAMENTE a munição correspondente como item separado (flechas, virotes, balas, cartuchos, etc.) com quantidade apropriada ao contexto',
@@ -3046,8 +3120,6 @@ export class GeminiAdapter implements Narrator {
 
     try {
       return await this.generateNarratorResponse(userPrompt, this.narrateStartMaxTokens, {
-        world: req.world,
-        campaign: req.campaign,
         mode: 'start',
         narrativeStyle: 'balanced', // Forçar 'balanced' para garantir abertura rica e imersiva
         simpleVocabulary: req.simpleVocabulary
@@ -3106,86 +3178,78 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
-    // ── Montar a última mensagem user com contexto dinâmico do turno ──
-    const inventoryList = req.context.inventory.length
-      ? req.context.inventory.map(i => {
-          const desc = (i.description ?? '').trim()
-          return desc ? `- ${i.name} (x${i.quantity}): ${desc}` : `- ${i.name} (x${i.quantity})`
-        }).join('\n')
-      : 'Nenhum item'
-
-    const statusList = req.context.activeStatusEffects.length
-      ? req.context.activeStatusEffects.map(s => `- ${s.name}${s.turnsRemaining !== undefined ? ` (${s.turnsRemaining} turnos)` : ''}`).join('\n')
-      : 'Nenhum efeito ativo'
-
-    const npcList = req.context.npcsPresent.length
-      ? req.context.npcsPresent.map(n => {
-          const tipo = n.isWildCard ? 'Wild Card' : 'Extra'
-          const disp = n.disposition ?? 'neutral'
-          const status = n.wounds > 0 ? ` | ferido ${n.wounds}/${n.maxWounds}` : ''
-          const effects = (n.statusEffects ?? []).length
-            ? ` | efeitos: ${(n.statusEffects ?? []).map(effect => `${effect.name}${effect.turnsRemaining !== undefined ? ` (${effect.turnsRemaining} turnos)` : ''}`).join(', ')}`
-            : ''
-          const personality = n.personality ? ` | Personalidade: ${n.personality}` : ''
-          const motivation = n.motivation ? ` | Motivação: ${n.motivation}` : ''
-          const speech = n.speechPattern ? ` | Fala: ${n.speechPattern}` : ''
-          const display = n.displayName ?? n.name
-          return `- displayName="${display}" id=${n.id} [${tipo}, ${disp}, Toughness ${n.toughness}, Parry ${n.parry}${status}${effects}${personality}${motivation}${speech}]`
-        }).join('\n')
-      : 'Nenhum NPC presente'
-
-    const defeatedNpcList = (req.context.defeatedNpcIds ?? []).length
-      ? (req.context.defeatedNpcIds ?? []).join(', ')
-      : null
-
-    const engineResultText = req.engineEvents.length
-      ? formatEngineEventsForPrompt(req.engineEvents)
-      : 'Nenhum resultado mecânico'
-
+    // ── Envelope JSON canônico do turno (contexto dinâmico no user prompt) ──
     const situationLabel = req.context.situation === 'combat'
       ? 'COMBATE'
       : req.context.situation === 'dialogo'
         ? 'DIÁLOGO'
         : 'EXPLORAÇÃO'
 
-    const npcCatalogList = (req.context.npcCatalog ?? []).length
-      ? (req.context.npcCatalog ?? []).map(n => {
-          const desc = n.description ? ` — ${n.description}` : ''
-          return `- ${n.name} (${n.id}) [disposição padrão: ${n.dispositionDefault}]${desc}`
-        }).join('\n')
-      : null
+    const recentMessagesForEnvelope = req.recentMessages
+      .slice(-8)
+      .map((msg) => {
+        if (msg.role === 'narrator') {
+          return {
+            role: 'narrator',
+            text: segmentsToText(msg.segments).slice(0, 500)
+          }
+        }
+
+        if (msg.role === 'player') {
+          return {
+            role: 'player',
+            text: (msg.playerInput ?? '').slice(0, 500)
+          }
+        }
+
+        return {
+          role: 'system',
+          text: formatEngineEventsForPrompt(msg.engineEvents ?? []).slice(0, 500)
+        }
+      })
+
+    const turnEnvelope = {
+      schemaVersion: 'narrate_turn.v2',
+      context: {
+        world: req.world ?? null,
+        campaign: req.campaign ?? null,
+        rulesDigest: req.context.rulesDigest ?? null,
+        summaryText: req.context.summaryText ?? null,
+        playerSkills: req.context.playerSkills ?? null,
+        state: {
+          location: req.context.location,
+          scene: situationLabel,
+          wounds: req.context.wounds,
+          fatigue: req.context.fatigue,
+          isShaken: req.context.isShaken,
+          bennies: req.context.bennies,
+          inventory: req.context.inventory,
+          activeStatusEffects: req.context.activeStatusEffects,
+          npcsPresent: req.context.npcsPresent,
+          defeatedNpcIds: req.context.defeatedNpcIds ?? [],
+          npcCatalog: req.context.npcCatalog ?? []
+        },
+        recentMessages: recentMessagesForEnvelope
+      },
+      currentTurn: {
+        playerAction: {
+          type: req.playerAction.type,
+          description: req.playerAction.description,
+          playerSpeech: req.playerAction.playerSpeech ?? null
+        },
+        engineEvents: req.engineEvents
+      }
+    }
 
     const currentTurnPrompt = [
       'TURNO DE JOGO — Narre a consequência da ação do jogador.',
       '',
-      '── CURRENT STATE ──',
-      `Local: ${req.context.location}`,
-      `Cena: ${situationLabel}`,
-      `Ferimentos: ${req.context.wounds} | Fadiga: ${req.context.fatigue} | Abalado: ${req.context.isShaken ? 'Sim' : 'Não'} | Bennies: ${req.context.bennies}`,
+      'Use o envelope JSON abaixo como fonte canônica para continuidade e consistência.',
+      'Não contradiga o bloco currentTurn.engineEvents. Não invente entidades fora do contexto.',
+      'NPCs já presentes devem reutilizar exatamente o mesmo id/displayName do envelope.',
       '',
-      '── INVENTORY ──',
-      inventoryList,
-      '',
-      '── ACTIVE EFFECTS ──',
-      statusList,
-      '',
-      '── PRESENT NPCS (cada linha mostra displayName + id hash; copie o id exatamente e reutilize o mesmo displayName — nunca os modifique nem os reutilize para NPCs novos) ──',
-      npcList,
-      ...(defeatedNpcList ? ['', '── DEFEATED NPCS (já eliminados — NÃO referencie como ameaças ativas) ──', defeatedNpcList] : []),
-      ...(npcCatalogList ? ['', '── WORLD NPC CATALOG (NPCs nomeados do mundo — use os IDs canônicos ao referenciá-los) ──', npcCatalogList] : []),
-      '',
-      '── PLAYER ACTION ──',
-      `Tipo: ${req.playerAction.type}`,
-      `Descrição: ${req.playerAction.description}`,
-      ...(req.playerAction.playerSpeech ? [
-        '',
-        '── PLAYER SAYS (diálogo direto falado em voz alta — o personagem literalmente disse estas palavras) ──',
-        `"${req.playerAction.playerSpeech}"`
-      ] : []),
-      '',
-      '── MECHANICAL RESULT ──',
-      'Use este bloco como âncora obrigatória: narre suas consequências sem contradizer nenhum sucesso, fracasso, dano, status, ou mudança nele descritos.',
-      engineResultText
+      'ENVELOPE_JSON:',
+      JSON.stringify(turnEnvelope, null, 2)
     ].join('\n')
 
     // Adicionar último user turn com contexto dinâmico
@@ -3199,11 +3263,6 @@ export class GeminiAdapter implements Narrator {
         sanitizedContents,
         this.narrateTurnMaxTokens,
         {
-          world: req.world,
-          campaign: req.campaign,
-          rulesDigest: req.context.rulesDigest,
-          summaryText: req.context.summaryText,
-          playerSkills: req.context.playerSkills,
           mode: 'turn',
           narrativeStyle: req.narrativeStyle,
           simpleVocabulary: req.simpleVocabulary

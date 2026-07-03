@@ -52,6 +52,7 @@ export type SuggestCharacterFromWorldRequest = {
   worldName: string
   storyDescription: string
   worldLore?: string
+  worldNarrativeStyleGuide?: string
   /** Campos já preenchidos pelo usuário — a IA não deve substituí-los */
   existingFields?: {
     name?: string
@@ -67,6 +68,7 @@ export type SuggestCharacterFromDescriptionRequest = {
   characterConcept: string
   worldName?: string
   worldLore?: string
+  worldNarrativeStyleGuide?: string
   campaignThematic?: string
   storyDescription?: string
 }
@@ -108,7 +110,7 @@ export type GenerateImageDescriptionRequest =
 export interface Narrator {
   summarizeHistory(req: SummarizeHistoryRequest): Promise<StructuredSummary>
   expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult>
-  expandWorldLore(req: ExpandWorldLoreRequest): Promise<{ lore: string; loreEn?: string }>
+  expandWorldLore(req: ExpandWorldLoreRequest): Promise<{ lore: string; narrativeStyleGuide?: string; lorePtBrief?: string; loreEn?: string }>
   generateImageDescription(req: GenerateImageDescriptionRequest): Promise<string>
   suggestCharacterFromWorld(req: SuggestCharacterFromWorldRequest): Promise<SuggestedCharacter>
   suggestCharacterFromDescription(req: SuggestCharacterFromDescriptionRequest): Promise<SuggestedCharacter>
