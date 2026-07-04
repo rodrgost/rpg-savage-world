@@ -230,6 +230,64 @@ function buildOptionSignature(option: {
   ].join('|')
 }
 
+/**
+ * Textos de fallback "seguros" (sem exigência de teste de dados) usados apenas quando
+ * NENHUMA das 4 opções finais sobra sem diceCheck.required=true. Mais de um texto para não
+ * repetir sempre a mesma frase em cenas consecutivas de combate prolongado. A escolha entre
+ * eles é determinística (hash da narrativa do turno), não randômica.
+ */
+const DICE_FREE_FALLBACK_OPTIONS = [
+  { text: 'Recuar e reavaliar a situação', reason: 'Recuo tático sem risco imediato' },
+  { text: 'Manter distância e observar com cautela', reason: 'Observação cautelosa sem exposição a risco' },
+  { text: 'Buscar uma posição defensiva e esperar a brecha certa', reason: 'Reposicionamento sem custo mecânico' }
+] as const
+
+function pickDiceFreeFallback(seed: string): (typeof DICE_FREE_FALLBACK_OPTIONS)[number] {
+  const digest = createHash('sha1').update(seed).digest()
+  return DICE_FREE_FALLBACK_OPTIONS[digest[0] % DICE_FREE_FALLBACK_OPTIONS.length]
+}
+
+/**
+ * Guarda determinístico de agência: garante que ao menos 1 das opções finais seja
+ * executável sem depender de teste de dados (feasible !== false && diceCheck.required ===
+ * false). Sem isso, uma cena legitimamente tensa (ex.: combate) poderia oferecer as 4
+ * opções com required=true, deixando o jogador "refém da sorte" — sem nenhuma via de
+ * progresso garantida. Não mexe no prompt do LLM: é 100% pós-processamento, sem custo de
+ * tokens.
+ *
+ * Preferência de substituição: uma opção já feasible=false primeiro (nada de valor
+ * mecânico é perdido); senão, a última opção do array. NUNCA rebaixa uma opção de
+ * attack/heal existente para required=false, pois isso equivaleria a um acerto/cura
+ * automático e quebraria o equilíbrio de Savage Worlds — a opção é substituída por inteiro.
+ */
+function ensureGuaranteedDiceFreeOption(options: ActionOption[], seed: string): void {
+  if (!options.length) return
+  const hasSafeOption = options.some((o) => o.feasible !== false && o.diceCheck?.required === false)
+  if (hasSafeOption) return
+
+  const infeasibleIndex = options.findIndex((o) => o.feasible === false)
+  const index = infeasibleIndex !== -1 ? infeasibleIndex : options.length - 1
+  const original = options[index]
+  const fallback = pickDiceFreeFallback(seed)
+
+  warn(
+    'sanitizeNarratorResponse',
+    `Nenhuma opção sem exigência de dado disponível: option[${index}] ("${original.text}") substituída por fallback seguro ("${fallback.text}")`
+  )
+
+  options[index] = {
+    ...original,
+    text: fallback.text,
+    playerSpeech: null,
+    actionType: 'custom',
+    actionPayload: { input: fallback.text },
+    requiredItems: null,
+    feasible: true,
+    feasibilityReason: null,
+    diceCheck: { required: false, skill: null, attribute: null, modifier: 0, tn: 4, reason: fallback.reason }
+  }
+}
+
 function extractText(response: GeminiGenerateContentResponse): string {
   const candidate = response.candidates?.[0]
   const parts = candidate?.content?.parts ?? []
@@ -2664,6 +2722,11 @@ export class GeminiAdapter implements Narrator {
         }
       }
     }
+
+    // Guarda determinístico de agência: garantir que o jogador nunca fique "refém da
+    // sorte" — sempre deve sobrar ao menos 1 opção executável sem exigir teste de dados.
+    // Roda por último, depois de todas as outras correções de feasible/diceCheck acima.
+    ensureGuaranteedDiceFreeOption(options, narrativeFallback)
 
     // Parse outcome override (inversão justificada de desfecho).
     // Só é mantido quando o desfecho narrado realmente diverge do mecânico
