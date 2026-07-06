@@ -687,10 +687,10 @@ function ActionOptions({
             <button
               key={option.id}
               style={{ animationDelay: `${idx * 55}ms` }}
-              className={`option-btn ${!option.feasible ? 'infeasible' : ''} ${hasDice ? 'has-dice-check' : ''}`}
+              className={`option-btn ${hasDice ? 'has-dice-check' : ''}`}
               onClick={() => onChoose(option.id)}
-              disabled={disabled || !option.feasible}
-              title={hasDice && dc?.reason ? dc.reason : option.feasible ? option.text : option.feasibilityReason ?? 'Não disponível'}
+              disabled={disabled}
+              title={hasDice && dc?.reason ? dc.reason : option.text}
             >
               <span className="option-text">
                 {hasDice && <span className="dice-check-badge">🎲</span>}
@@ -707,9 +707,6 @@ function ActionOptions({
                     {dc.modifier ? ` (${dc.modifier > 0 ? '+' : ''}${dc.modifier})` : ''}
                   </span>
                 </span>
-              )}
-              {!option.feasible && option.feasibilityReason && (
-                <span className="option-reason">{option.feasibilityReason}</span>
               )}
             </button>
           )

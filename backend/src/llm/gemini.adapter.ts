@@ -3077,16 +3077,6 @@ export class GeminiAdapter implements Narrator {
           traitsText: characterTraits
         }
       },
-      requirements: {
-        narrativeLanguage: 'pt-BR',
-        optionsCount: 4,
-        initialItems: {
-          min: 4,
-          max: 8,
-          includeMoney: true,
-          includeAmmoForRanged: true
-        }
-      }
     }
 
     const userPrompt = [
@@ -3185,37 +3175,9 @@ export class GeminiAdapter implements Narrator {
         ? 'DIÁLOGO'
         : 'EXPLORAÇÃO'
 
-    const recentMessagesForEnvelope = req.recentMessages
-      .slice(-8)
-      .map((msg) => {
-        if (msg.role === 'narrator') {
-          return {
-            role: 'narrator',
-            text: segmentsToText(msg.segments).slice(0, 500)
-          }
-        }
-
-        if (msg.role === 'player') {
-          return {
-            role: 'player',
-            text: (msg.playerInput ?? '').slice(0, 500)
-          }
-        }
-
-        return {
-          role: 'system',
-          text: formatEngineEventsForPrompt(msg.engineEvents ?? []).slice(0, 500)
-        }
-      })
-
     const turnEnvelope = {
       schemaVersion: 'narrate_turn.v2',
       context: {
-        world: req.world ?? null,
-        campaign: req.campaign ?? null,
-        rulesDigest: req.context.rulesDigest ?? null,
-        summaryText: req.context.summaryText ?? null,
-        playerSkills: req.context.playerSkills ?? null,
         state: {
           location: req.context.location,
           scene: situationLabel,
@@ -3228,8 +3190,7 @@ export class GeminiAdapter implements Narrator {
           npcsPresent: req.context.npcsPresent,
           defeatedNpcIds: req.context.defeatedNpcIds ?? [],
           npcCatalog: req.context.npcCatalog ?? []
-        },
-        recentMessages: recentMessagesForEnvelope
+        }
       },
       currentTurn: {
         playerAction: {
