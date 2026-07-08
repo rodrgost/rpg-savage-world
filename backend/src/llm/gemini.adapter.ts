@@ -2040,6 +2040,7 @@ export class GeminiAdapter implements Narrator {
       '- "segments": type="narrator" é o PADRÃO e carrega TODA a prosa/descrição/ação/consequência. Adicione um segment type="npc" SOMENTE quando um NPC fala uma fala LITERAL em voz alta neste turno — nunca para gestos, silêncio, ou ser descrito sem palavras, e nunca invente diálogo para preencher um. Em um segment npc, "text" = apenas as palavras faladas; defina "npcDisplayName" com o mesmo nome usado em "npcs"/NPCS PRESENTES e copie "npcId" quando já presente.',
       '- o array "options" é OBRIGATÓRIO e NUNCA pode ficar vazio. Sempre retorne EXATAMENTE 4 opções.',
       '- Escolha as 4 opções que fazem mais sentido para a cena atual; deixe a situação decidir. Se oferecer um ataque (actionType "attack"), NUNCA use como targetId um NPC listado em NPCS DERROTADOS — esses inimigos estão fora de combate.',
+      '- RITMO — evite estagnação: se as últimas mensagens do HISTÓRICO JOGADO já giraram em torno do MESMO objetivo informacional (perguntar mais detalhes ao mesmo NPC, voltar para avisar alguém, confirmar de novo o que já foi dito), NÃO ofereça 4 opções que sejam só mais uma via de coletar a mesma informação. Pelo menos 2 das 4 opções DEVEM forçar avanço concreto da cena: viagem (actionType "travel"), confronto, descoberta nova, ou uma decisão irreversível. Informação já obtida não precisa ser reconfirmada — avance a história.',
       '- o campo "feasible" deve ser false se o jogador não tiver os itens/condições necessários.',
       '- ITENS NECESSÁRIOS E VIABILIDADE: se uma opção usa um item específico, esse item DEVE estar listado em "requiredItems" E deve existir na lista atual de ── INVENTÁRIO ── (correspondência por nome). Se o item NÃO estiver no inventário atual, defina feasible=false com um feasibilityReason citando o item ausente. NUNCA ofereça uma opção viável que dependa de um item que o jogador não tem mais (ex.: um artefato largado, consumido ou confiscado em um turno anterior). Na dúvida sobre se um item ainda está em posse, trate-o como ausente.',
       '- Para actionType "attack", inclua APENAS "targetId" no actionPayload. NÃO envie damageFormula ou ap — o app resolve o dano da arma do jogador a partir da arma equipada.',
@@ -2048,8 +2049,10 @@ export class GeminiAdapter implements Narrator {
       '- NARRAÇÃO DE ATAQUE DE NPC: sempre que npcAttacks não estiver vazio, o texto do segment do narrador DEVE incluir uma descrição vívida de cena de ação do ataque — descreva o movimento do atacante, a arma ou técnica usada, e o impacto físico imediato ou ameaça ao jogador. Escreva como um beat de ação dinâmico, não uma menção passiva. Exemplo: "O guarda avança com o machado erguido e desfere um golpe violento em direção ao seu ombro."',
       '- Ao narrar Extras derrubados (isWildCard=false): descreva-os saindo de combate/fugindo/caindo com 1 único ferimento.',
       '- Ao narrar Wild Cards feridos: acumule penalidades, eles continuam lutando até 4+ ferimentos.',
+      '- RITMO EM COMBATE: ao narrar múltiplos turnos consecutivos do MESMO combate contra o MESMO alvo, escale a descrição a cada rodada (fadiga crescente, postura se deteriorando, ambiente reagindo, outros NPCs notando) e NUNCA repita a mesma frase de impacto usada em um turno anterior deste combate (ex.: não reuse "recua mas não cai" de novo) — varie o vocabulário mesmo quando o resultado mecânico for parecido.',
       '- Para actionType "travel", inclua "to" no actionPayload.',
       '- Para actionType "custom", inclua "input" no actionPayload com a descrição da ação.',
+      '- Para actionType "flag", inclua "key" no actionPayload: um identificador curto em snake_case para o estado/evento marcado (ex.: { "key": "observou_patrulha_do_portao" }). NUNCA use outro nome de campo (ex.: "flag", "flagName", "name") — o campo OBRIGATÓRIO é "key".',
       '- Itens ganhos devem ter nomes criativos e coerentes com o cenário. O campo "name" deve conter APENAS o nome do item — NUNCA inclua quantidade ou sufixos no estilo "x3" no nome (use o campo "quantity" para isso).',
       '- REGRA CRÍTICA — itemChanges:',
       '  • changeType "gained": SOMENTE quando o RESULTADO MECÂNICO contém evidência explícita ([item_gained]). Nunca invente itens ganhos só pela narrativa.',
@@ -2296,8 +2299,9 @@ export class GeminiAdapter implements Narrator {
       // A LLM NÃO envia mais "skill" (decidido no código): a skill é inferida pelo
       // verbo no texto da opção. Atributo puro continua vindo da LLM (não inferível).
       // Toda opção trait_test PRECISA de skill ou atributo na validação estrutural —
-      // por isso, se nada for inferível, convertemos para "custom" (sem trait) e
-      // rebaixamos required=false, em vez de invalidar a resposta inteira.
+      // por isso, se nada for inferível, caímos num atributo genérico (spirit) em vez
+      // de descartar a rolagem: o desafio pretendido (required=true ou trait_test)
+      // não pode virar uma ação livre só porque o verbo não bateu no dicionário.
       {
         const payloadAttribute = sanitizeNullableInlineText(actionPayload.attribute)
         let hasTrait = Boolean(diceCheck?.skill || diceCheck?.attribute || payloadSkill || payloadAttribute)
@@ -2313,14 +2317,18 @@ export class GeminiAdapter implements Narrator {
           }
         }
 
-        if (!hasTrait && needsTrait) {
+        // Ataque sempre rola pela perícia de combate da ficha, independente deste campo
+        // (ver buildActionFromOption) — não há rolagem "genérica" a preservar aqui.
+        // Exige diceCheck já presente: sem ele não há "reason" para hidratar, e a
+        // ausência total do campo já é pega por isNarratorResponseStructurallyValid.
+        if (!hasTrait && needsTrait && diceCheck && candidate.actionType !== 'attack') {
           const wasTraitTest = candidate.actionType === 'trait_test'
-          if (wasTraitTest) {
-            candidate.actionType = 'custom'
-            if (!sanitizeInlineText(actionPayload.input, '')) actionPayload.input = text
-          }
-          if (diceCheck?.required) diceCheck = { ...diceCheck, required: false }
-          warn('sanitizeNarratorResponse', `Sem trait inferível para "${text}": rolagem rebaixada${wasTraitTest ? ' e ação convertida para custom' : ''}`)
+          diceCheck = { ...diceCheck, required: true, attribute: 'spirit' }
+          if (wasTraitTest) actionPayload.attribute = 'spirit'
+          hasTrait = true
+          warn('sanitizeNarratorResponse', `Sem trait inferível para "${text}": rebaixado para atributo genérico (spirit) em vez de descartar a rolagem`)
+        } else if (!hasTrait && needsTrait && diceCheck?.required) {
+          diceCheck = { ...diceCheck, required: false }
         }
       }
 
@@ -2699,6 +2707,24 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
+    // Fix: opções "flag" sem "key" válido → tenta aliases comuns que o modelo usa por engano
+    // ("flag", "flagName", "name") antes de rebaixar para custom, em vez de invalidar a resposta inteira.
+    for (const option of options) {
+      if (option.actionType !== 'flag') continue
+      const key = sanitizeInlineText(option.actionPayload?.key, '')
+        || sanitizeInlineText(option.actionPayload?.flag, '')
+        || sanitizeInlineText(option.actionPayload?.flagName, '')
+        || sanitizeInlineText(option.actionPayload?.name, '')
+      if (key) {
+        option.actionPayload = { key }
+      } else {
+        warn('sanitizeNarratorResponse', `Opção "flag" sem key válida convertida para custom: "${option.text}"`)
+        option.actionType = 'custom'
+        option.actionPayload = { input: option.text }
+        if (option.diceCheck) option.diceCheck = { ...option.diceCheck, required: false }
+      }
+    }
+
     // Guarda determinístico de continuidade: uma opção que exige um item ausente
     // do inventário não pode ser viável. Evita que a IA ofereça (e o engine resolva)
     // ações com itens que o jogador não possui mais. Comparação ignora acento/caixa/pontuação.
@@ -3012,6 +3038,7 @@ export class GeminiAdapter implements Narrator {
       '- Para testes de perícia → actionType: "trait_test", inclua skill ou attribute em actionPayload.',
       '- Para movimento a um local DIFERENTE do atual → actionType: "travel", inclua "to" em actionPayload com o nome do local de destino.',
       '  NOTA: mover-se em direção a um NPC já presente na cena (ex.: "ir até o homem", "se aproximar do estranho") NÃO é "travel" — use actionType: "custom".',
+      '- Para marcar um estado/evento persistente → actionType: "flag", inclua "key" em actionPayload (identificador em snake_case). O campo OBRIGATÓRIO é "key" — nunca "flag" ou "flagName".',
       '- Para ações narrativas simples → actionType: "custom".',
       '- Use os nomes de PLAYER SKILL listados no contexto.',
       '- O campo "interpretation" deve ter 1 frase curta explicando o que o jogador quer fazer.'
