@@ -99,6 +99,11 @@ type SanitizedNarratorResponseOptions = {
   fillFallbackOptions?: boolean
   allowNarrativeFallback?: boolean
   /**
+   * Estilo de tamanho ativo na geração. Só o estilo "balanced" tem mínimo de
+   * frases (2) — usado para o aviso de narração curta demais.
+   */
+  narrativeStyle?: 'concise' | 'balanced'
+  /**
    * Nomes dos itens atualmente no inventário do jogador. Quando fornecido, opções
    * cujos requiredItems não estejam disponíveis são marcadas feasible=false
    * (guarda determinístico de continuidade). Comparação ignora acento/caixa/pontuação.
@@ -1987,6 +1992,7 @@ export class GeminiAdapter implements Narrator {
       'O contexto estruturado desta chamada é a única fonte canônica para os campos JSON.',
       'Se um NPC, item, efeito, destino, condição ou recurso não estiver no contexto estruturado, ele NÃO PODE ser criado nos campos JSON.',
       'Na dúvida, prefira manter npcs, itemChanges e statusChanges vazios/null e preservar a continuidade apenas na narrativa e nas options.',
+      'EXCEÇÃO OBRIGATÓRIA — NPCs em cena: se a SUA narrativa deste turno traz uma pessoa ou criatura para dentro da cena (alguém aparece, aborda, ataca ou fala), esse NPC DEVE ser declarado em npcs[] com newlyIntroduced=true. A proibição acima vale para entidades NÃO narradas — nunca deixe um NPC narrado em cena fora de npcs[].',
       '',
       'Você DEVE retornar APENAS um JSON válido (sem markdown, sem comentários) com a seguinte estrutura:',
       '{',
@@ -2041,6 +2047,8 @@ export class GeminiAdapter implements Narrator {
       '- o array "options" é OBRIGATÓRIO e NUNCA pode ficar vazio. Sempre retorne EXATAMENTE 4 opções.',
       '- Escolha as 4 opções que fazem mais sentido para a cena atual; deixe a situação decidir. Se oferecer um ataque (actionType "attack"), NUNCA use como targetId um NPC listado em NPCS DERROTADOS — esses inimigos estão fora de combate.',
       '- RITMO — evite estagnação: se as últimas mensagens do HISTÓRICO JOGADO já giraram em torno do MESMO objetivo informacional (perguntar mais detalhes ao mesmo NPC, voltar para avisar alguém, confirmar de novo o que já foi dito), NÃO ofereça 4 opções que sejam só mais uma via de coletar a mesma informação. Pelo menos 2 das 4 opções DEVEM forçar avanço concreto da cena: viagem (actionType "travel"), confronto, descoberta nova, ou uma decisão irreversível. Informação já obtida não precisa ser reconfirmada — avance a história.',
+      '- RITMO EM EXPLORAÇÃO — o mundo age: turnos seguidos de exploração sem NENHUM NPC, confronto ou descoberta que mude a situação são estagnação. Se o HISTÓRICO JOGADO mostra 3+ turnos assim, NESTE turno algo do mundo DEVE entrar em cena de verdade: concretize o último gancho narrado (a patrulha chega, a pessoa que trancou a porta aparece, a ameaça distante alcança o jogador) e declare o NPC em npcs[] com newlyIntroduced=true. Ganchos anunciados são PROMESSAS — pague-os em cena, não os deixe apenas "ao longe" para sempre.',
+      '- REPETIÇÃO DE IMAGEM: NUNCA reutilize a mesma imagem, pista ou frase-âncora de turnos anteriores do HISTÓRICO JOGADO (ex.: mencionar "marcas de arrasto" turno após turno). Cada narração deve trazer ao menos um elemento sensorial ou informativo NOVO.',
       '- o campo "feasible" deve ser false se o jogador não tiver os itens/condições necessários.',
       '- ITENS NECESSÁRIOS E VIABILIDADE: se uma opção usa um item específico, esse item DEVE estar listado em "requiredItems" E deve existir na lista atual de ── INVENTÁRIO ── (correspondência por nome). Se o item NÃO estiver no inventário atual, defina feasible=false com um feasibilityReason citando o item ausente. NUNCA ofereça uma opção viável que dependa de um item que o jogador não tem mais (ex.: um artefato largado, consumido ou confiscado em um turno anterior). Na dúvida sobre se um item ainda está em posse, trate-o como ausente.',
       '- Para actionType "attack", inclua APENAS "targetId" no actionPayload. NÃO envie damageFormula ou ap — o app resolve o dano da arma do jogador a partir da arma equipada.',
@@ -2781,6 +2789,32 @@ export class GeminiAdapter implements Narrator {
       ? raw.storyHook.trim()
       : null
 
+    // Observabilidade: só o estilo "balanced" tem mínimo (2–4 frases) — nos
+    // estilos conciso/padrão, 1 frase é permitida e não deve gerar alarme.
+    if (opts.narrativeStyle === 'balanced') {
+      const proseText = segments
+        .filter((segment) => segment.type === 'narrator')
+        .map((segment) => segment.text)
+        .join(' ')
+        .trim()
+      const sentenceCount = (proseText.match(/[.!?…](?=\s|$)/g) ?? []).length
+      if (proseText && sentenceCount < 2) {
+        warn('sanitizeNarratorResponse', `Narração curta demais (${sentenceCount || 1} frase) para o estilo balanced: mínimo de 2 frases exigido pelo prompt`)
+      }
+    }
+
+    // O storyHook vira o parágrafo final da narração: sem isso ele não é exibido
+    // ao jogador, não é persistido e não entra no histórico do próximo turno —
+    // os ganchos nunca se concretizariam em cena.
+    if (storyHook) {
+      const last = segments[segments.length - 1]
+      if (last?.type === 'narrator') {
+        if (!last.text.includes(storyHook)) last.text = `${last.text}\n\n${storyHook}`
+      } else {
+        segments.push({ type: 'narrator', text: storyHook })
+      }
+    }
+
     return {
       segments,
       options,
@@ -2932,6 +2966,7 @@ export class GeminiAdapter implements Narrator {
         const sanitized = this.sanitizeNarratorResponse(parsed.value, {
           fillFallbackOptions: false,
           allowNarrativeFallback: false,
+          narrativeStyle: systemPromptOpts.narrativeStyle,
           availableItemNames: sanitizeContext.availableItemNames,
           presentNpcs: sanitizeContext.presentNpcs
         })
@@ -3292,12 +3327,39 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
+    // Turnos consecutivos de narração sem nenhum NPC em cena: alimenta a regra
+    // anti-estagnação (RITMO EM EXPLORAÇÃO) com um sinal objetivo no prompt.
+    let turnsSinceLastNpc = 0
+    if (req.context.npcsPresent.length === 0) {
+      for (let i = req.recentMessages.length - 1; i >= 0; i--) {
+        const msg = req.recentMessages[i]
+        if (msg.role !== 'narrator') continue
+        if ((msg.segments ?? []).some((segment) => segment.type === 'npc')) break
+        turnsSinceLastNpc++
+      }
+    }
+
+    // Reforço das regras mais violadas junto da ação: em prompts longos com
+    // histórico crescente, o modelo passa a ignorar regras do meio do system
+    // prompt (narrações de 1 frase nos logs) — repetir aqui restaura a adesão.
+    const lengthReminder = req.narrativeStyle === 'concise'
+      ? 'LEMBRETE DE TAMANHO: máximo 2 frases curtas, em 1 parágrafo.'
+      : req.narrativeStyle === 'balanced'
+        ? 'LEMBRETE DE TAMANHO: sua narração DEVE ter entre 2 e 4 frases, em 1 ou 2 parágrafos. Uma narração de 1 frase única é INVÁLIDA.'
+        : 'LEMBRETE DE TAMANHO: máximo 3 frases curtas, em 1 parágrafo.'
+
     const currentTurnPrompt = [
       'TURNO DE JOGO — Narre a consequência da ação do jogador.',
       '',
       'Use o envelope JSON abaixo como fonte canônica para continuidade e consistência.',
       'Não contradiga o bloco currentTurn.engineEvents. Não invente entidades fora do contexto.',
       'NPCs já presentes devem reutilizar exatamente o mesmo id/displayName do envelope.',
+      lengthReminder,
+      ...(turnsSinceLastNpc >= 3
+        ? [
+            `RITMO CRÍTICO: já são ${turnsSinceLastNpc} turnos seguidos sem nenhum NPC ou evento concreto em cena. NESTE turno o mundo DEVE agir: concretize o último gancho narrado trazendo a pessoa/ameaça PARA DENTRO DA CENA e declare-a em npcs[] com newlyIntroduced=true.`
+          ]
+        : []),
       '',
       'ENVELOPE_JSON:',
       JSON.stringify(turnEnvelope, null, 2)

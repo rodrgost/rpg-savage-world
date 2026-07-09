@@ -308,6 +308,32 @@ export class SessionService {
       completed.push(option)
     }
 
+    // Reposição: descartes da validação não podem deixar o jogador com menos
+    // de 4 opções (o contrato do narrador é sempre 4).
+    if (completed.length < 4) {
+      const fallbackTexts = [
+        'Observar os arredores com atenção',
+        'Avaliar a situação antes de agir',
+        'Avançar com cautela',
+        'Examinar o local mais de perto'
+      ]
+      for (const text of fallbackTexts) {
+        if (completed.length >= 4) break
+        if (completed.some((option) => option.text.trim().toLowerCase() === text.toLowerCase())) continue
+        warn('completeValidatedOptions', `Repondo opção descartada com fallback genérico: "${text}"`)
+        completed.push({
+          id: randomUUID(),
+          text,
+          actionType: 'custom',
+          actionPayload: { input: text },
+          requiredItems: [],
+          feasible: true,
+          feasibilityReason: '',
+          diceCheck: { required: false, reason: 'Ação simples sem risco imediato' }
+        })
+      }
+    }
+
     return completed
   }
 
@@ -450,8 +476,15 @@ export class SessionService {
           return null
         }
         if (normalizeLookupValue(destination) === normalizeLookupValue(state.worldState.activeLocation)) {
-          warn('validateNarratorOption', `Descartando travel com destino igual ao local atual: "${destination}"`)
-          return null
+          // Deriva de localização: ações custom que movem o personagem não emitem
+          // location_change, então o LLM oferece "voltar" para o próprio local do
+          // estado. Converter preserva a intenção e mantém as 4 opções.
+          warn('validateNarratorOption', `Convertendo travel com destino igual ao local atual para custom: "${destination}"`)
+          option.actionType = 'custom'
+          delete actionPayload.to
+          actionPayload.input = option.text.trim()
+          if (diceCheck) diceCheck.required = false
+          break
         }
         actionPayload.to = destination
         break
@@ -465,7 +498,15 @@ export class SessionService {
       case 'flag': {
         const key = typeof actionPayload.key === 'string' ? actionPayload.key.trim() : ''
         if (!key) return null
+        // LLM por vezes gera keys com acento ("porta_fechada_no_cômodo") — slugificar
+        // garante identificadores snake_case estáveis para lookup posterior.
         actionPayload.key = key
+          .normalize('NFD')
+          .replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
+          .toLowerCase()
+          .replace(/[^a-z0-9_]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+        if (!actionPayload.key) return null
         break
       }
       default:
@@ -492,6 +533,10 @@ export class SessionService {
     mode: 'start' | 'turn',
     action?: PlayerAction
   ): NarratorTurnResponse['itemChanges'] {
+    // Categorias empilháveis podem receber "gained" de um item homônimo já
+    // possuído (achar mais balas/moedas); duráveis e itens únicos não.
+    const STACKABLE_CATEGORIES = new Set(['money', 'ammunition', 'consumable'])
+
     return changes.filter((change) => {
       if (change.quantity <= 0) return false
 
@@ -502,6 +547,23 @@ export class SessionService {
       if (change.changeType === 'used' && change.category === 'ammunition' && action?.type !== 'attack') {
         warn('validateNarratorItemChanges', `Descartando consumo de munição indevido fora de ataque: "${change.name}"`)
         return false
+      }
+
+      if (change.changeType === 'gained') {
+        const nameKey = normalizeLookupValue(change.name)
+        const existingByName = state.player.inventory?.find((item) => normalizeLookupValue(item.name) === nameKey)
+        if (existingByName && !STACKABLE_CATEGORIES.has(change.category ?? existingByName.category ?? '')) {
+          warn('validateNarratorItemChanges', `Descartando "gained" duplicado de item já no inventário: "${change.name}"`)
+          return false
+        }
+
+        // LLM por vezes recicla um itemId de turno anterior para um item diferente;
+        // manter a colisão sobrescreveria/mesclaria o item errado no inventário.
+        const existingById = state.player.inventory?.find((item) => item.id === change.itemId)
+        if (existingById && normalizeLookupValue(existingById.name) !== nameKey) {
+          warn('validateNarratorItemChanges', `itemId reciclado pela LLM em "${change.name}" (colidia com "${existingById.name}"): id regenerado`)
+          change.itemId = randomUUID()
+        }
       }
 
       if (change.changeType !== 'gained' && !this.inventory.hasItem(state, change.itemId) && !this.inventory.hasItem(state, change.name)) {
