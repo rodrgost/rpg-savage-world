@@ -87,7 +87,7 @@ const SKILL_VERB_ALIASES: Record<string, readonly string[]> = {
   language: ['Idioma', 'Idiomas', 'Traduzir'],
   notice: ['Perceber', 'Notar', 'Observar', 'Vigiar', 'Espiar', 'Buscar', 'Procurar', 'Vasculhar', 'Examinar', 'Inspecionar', 'Detectar', 'Avistar'],
   occult: ['Ocultismo'],
-  repair: ['Reparar', 'Consertar', 'Remendar', 'Restaurar'],
+  repair: ['Reparar', 'Consertar', 'Remendar', 'Restaurar', 'Ofícios', 'Ofício', 'Mecânica', 'Engenharia', 'Manutenção', 'Improvisar', 'Ajustar', 'Calibrar'],
   research: ['Investigar', 'Investigação', 'Averiguar', 'Apurar'],
   science: ['Ciência'],
   battle: ['Tática', 'Comandar', 'Estratégia'],
