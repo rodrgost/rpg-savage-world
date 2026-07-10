@@ -8,7 +8,8 @@ import { GeminiAdapter } from '../../llm/gemini.adapter.js'
 import { GeminiImageGenerator } from '../../llm/gemini-image.generator.js'
 import { normalizeToWebp, type StoredImage } from '../../utils/image-normalize.js'
 import { isDieType, CHARACTER_CREATION, ATTRIBUTE_KEYS } from '../../domain/savage-worlds/constants.js'
-import type { DieType, Hindrance, NpcDefinition } from '../../domain/types/gameState.js'
+import type { DieType, Hindrance, NpcDefinition, RelationalStatus } from '../../domain/types/gameState.js'
+import { KnownNpcsRepo } from '../../repositories/knownNpcs.repo.js'
 import { firebaseAuth, firestore } from '../../infrastructure/firebase.js'
 import { log, warn } from '../../utils/file-logger.js'
 
@@ -253,6 +254,7 @@ export class GameDataService {
   private readonly campaigns = new CampaignsRepo()
   private readonly worlds = new WorldsRepo()
   private readonly characters = new CharactersRepo()
+  private readonly knownNpcs = new KnownNpcsRepo()
   private readonly narrator = new GeminiAdapter()
   private readonly imageGenerator = new GeminiImageGenerator()
 
@@ -1058,6 +1060,41 @@ export class GameDataService {
   }
 
   // ─── NPC Catalog (catálogo de NPCs do mundo) ───
+
+  // ── Known NPCs (NPCs conhecidos do personagem) ──
+
+  private async requireOwnedCharacter(params: { userId: string; characterId: string }) {
+    const character = await this.characters.get(params.characterId)
+    if (!character) throw new NotFoundException('Personagem não encontrado')
+    if (getCharacterOwnerId(character) !== params.userId) {
+      throw new ForbiddenException('Sem permissão para este personagem')
+    }
+    return character
+  }
+
+  async listKnownNpcs(params: { userId: string; characterId: string }) {
+    await this.requireOwnedCharacter(params)
+    const knownNpcs = await this.knownNpcs.listByCharacter(params.characterId)
+    return { knownNpcs }
+  }
+
+  async updateKnownNpc(params: {
+    userId: string
+    characterId: string
+    npcId: string
+    relationalStatus?: RelationalStatus
+    notes?: string
+    resetToAuto?: boolean
+  }) {
+    await this.requireOwnedCharacter(params)
+    const knownNpc = await this.knownNpcs.updateManual(params.characterId, params.npcId, {
+      relationalStatus: params.relationalStatus,
+      notes: params.notes,
+      resetToAuto: params.resetToAuto
+    })
+    if (!knownNpc) throw new NotFoundException('NPC conhecido não encontrado')
+    return { ok: true, knownNpc }
+  }
 
   async listWorldNpcs(params: { userId: string; worldId: string }) {
     const world = await this.worlds.get(params.worldId)

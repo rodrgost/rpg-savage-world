@@ -53,6 +53,29 @@ export type NpcDefinition = {
   tags?: string[]
 }
 
+/**
+ * Status da relação de um NPC com o personagem do jogador.
+ * `desconhecido` é implícito (NPC ausente do registro) e nunca é gravado.
+ */
+export type RelationalStatus =
+  | 'desconhecido'
+  | 'conhecido'
+  | 'aliado'
+  | 'amigavel'
+  | 'neutro'
+  | 'desconfiado'
+  | 'hostil'
+  | 'inimigo'
+
+/** Mapeia a disposition de cena para o status relacional durável. */
+export const DISPOSITION_TO_RELATION: Readonly<
+  Record<'hostile' | 'neutral' | 'friendly', RelationalStatus>
+> = {
+  friendly: 'amigavel',
+  neutral: 'neutro',
+  hostile: 'hostil'
+}
+
 export type NPCCombatant = {
   /** Identificador estável (hash determinístico do displayName). */
   id: string

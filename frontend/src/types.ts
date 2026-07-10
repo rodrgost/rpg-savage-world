@@ -140,6 +140,41 @@ export type NPCMention = {
   newlyIntroduced: boolean
   /** Status do NPC se houver mudança narrativa (ex: incapacitado, derrotado) */
   status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
+  /** Mudança na relação do NPC com o personagem do jogador (omitir se inalterada) */
+  relation?: Exclude<RelationalStatus, 'desconhecido'>
+}
+
+/**
+ * Status da relação de um NPC com o personagem do jogador.
+ * `desconhecido` é implícito (NPC ausente do registro) e nunca é gravado.
+ */
+export type RelationalStatus =
+  | 'desconhecido'
+  | 'conhecido'
+  | 'aliado'
+  | 'amigavel'
+  | 'neutro'
+  | 'desconfiado'
+  | 'hostil'
+  | 'inimigo'
+
+/** Registro durável de um NPC conhecido pelo personagem (characters/{id}/knownNpcs). */
+export type KnownNpc = {
+  id: string
+  npcId: string
+  /** displayName do NPC no último avistamento */
+  name: string
+  relationalStatus: RelationalStatus
+  /** Edição manual vence sobre atualizações do narrador */
+  relationSource: 'auto' | 'manual'
+  notes?: string
+  disposition?: 'hostile' | 'neutral' | 'friendly'
+  conditionStatus?: 'active' | 'incapacitated' | 'defeated' | 'dead'
+  lastKnownLocation?: string
+  isCatalogNpc?: boolean
+  lastSessionId?: string
+  firstMetAt?: unknown
+  lastSeenAt?: unknown
 }
 
 export type NarrativeSegment =

@@ -2011,7 +2011,7 @@ export class GeminiAdapter implements Narrator {
       '    }',
       '  ],',
       '  "npcs": [',
-      '    { "displayName": "<nome amigável exibido ao jogador>", "id": "<copie o hash de NPCS PRESENTES se já estiver presente; omita para NPCs novos>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false, "status": "active|incapacitated|defeated|dead" }',
+      '    { "displayName": "<nome amigável exibido ao jogador>", "id": "<copie o hash de NPCS PRESENTES se já estiver presente; omita para NPCs novos>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false, "status": "active|incapacitated|defeated|dead", "relation": "conhecido|aliado|amigavel|neutro|desconfiado|hostil|inimigo" }',
       '  ],',
       '  "itemChanges": [',
       '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|money|vehicle|property|quest|misc" }',
@@ -2047,6 +2047,7 @@ export class GeminiAdapter implements Narrator {
       '- Para actionType "heal": inclua actionPayload: {} (cura o jogador) ou actionPayload: { targetId: "<id do NPC aliado>" }.',
       '- ATAQUES DE NPC: ataques de NPC hostil neste turno → preencha "npcAttacks": [{ "npcId", "skillDie": 6|8|10|12 (6=comum, 8=treinado, 10=campeão, 12=elite), "damageFormula" (ex.: "str+d6", "2d6"), "ap": 0 }]. Sem ataque → [].',
       '- NARRAÇÃO DE ATAQUE DE NPC: sempre que npcAttacks não estiver vazio, o texto do segment do narrador DEVE incluir uma descrição vívida de cena de ação do ataque — descreva o movimento do atacante, a arma ou técnica usada, e o impacto físico imediato ou ameaça ao jogador. Escreva como um beat de ação dinâmico, não uma menção passiva. Exemplo: "O guarda avança com o machado erguido e desfere um golpe violento em direção ao seu ombro."',
+      '- CAMPO "relation" em npcs[]: preencha SOMENTE quando a relação do NPC com o personagem do jogador muda de forma significativa NESTE turno (traição, aliança firmada, confiança ou desconfiança conquistada, inimizade declarada). Nos demais turnos, omita — o app mantém a relação registrada e a deriva de disposition quando necessário.',
       '- Ao narrar Extras derrubados (isWildCard=false): descreva-os saindo de combate/fugindo/caindo com 1 único ferimento.',
       '- Ao narrar Wild Cards feridos: acumule penalidades, eles continuam lutando até 4+ ferimentos.',
       '- RITMO EM COMBATE: ao narrar múltiplos turnos consecutivos do MESMO combate contra o MESMO alvo, escale a descrição a cada rodada (fadiga crescente, postura se deteriorando, ambiente reagindo, outros NPCs notando) e NUNCA repita a mesma frase de impacto usada em um turno anterior deste combate (ex.: não reuse "recua mas não cai" de novo) — varie o vocabulário mesmo quando o resultado mecânico for parecido.',
@@ -2486,6 +2487,9 @@ export class GeminiAdapter implements Narrator {
       const status = ['active', 'incapacitated', 'defeated', 'dead'].includes(npc.status as string)
         ? (npc.status as NPCMention['status'])
         : undefined
+      const relation = ['conhecido', 'aliado', 'amigavel', 'neutro', 'desconfiado', 'hostil', 'inimigo'].includes(npc.relation as string)
+        ? (npc.relation as NPCMention['relation'])
+        : undefined
       // Aceita `displayName` (novo) com fallback para `name` (legado).
       const displayName = sanitizeInlineText(
         (typeof npc.displayName === 'string' ? npc.displayName : npc.name) as string,
@@ -2513,7 +2517,8 @@ export class GeminiAdapter implements Narrator {
         displayName,
         disposition: (['hostile', 'neutral', 'friendly'].includes(npc.disposition as string) ? npc.disposition : 'neutral') as NPCMention['disposition'],
         newlyIntroduced: typeof npc.newlyIntroduced === 'boolean' ? npc.newlyIntroduced : true,
-        ...(status ? { status } : {})
+        ...(status ? { status } : {}),
+        ...(relation ? { relation } : {})
       }
     })
 

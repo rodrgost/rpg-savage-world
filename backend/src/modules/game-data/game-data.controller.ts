@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Post, Put, Query } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Put, Query } from '@nestjs/common'
 import { z } from 'zod'
 
 import { GameDataService } from './game-data.service.js'
@@ -193,6 +193,16 @@ const NpcDefinitionBody = z.object({
   }).optional(),
   tags: z.array(z.string()).optional()
 })
+
+// ─── Known NPCs (registro de NPCs conhecidos do personagem) ───
+
+const UpdateKnownNpcBody = z
+  .object({
+    relationalStatus: z.enum(['conhecido', 'aliado', 'amigavel', 'neutro', 'desconfiado', 'hostil', 'inimigo']).optional(),
+    notes: z.string().max(500).optional(),
+    resetToAuto: z.boolean().optional()
+  })
+  .strict()
 // ─── Controller ────────────────────────────────────────────────
 
 @Controller()
@@ -348,6 +358,24 @@ export class GameDataController {
   async suggestCharacterFromDescription(@CurrentUser('uid') userId: string, @Body() body: unknown) {
     const parsed = CharacterFromDescriptionBody.parse(body)
     return await this.gameData.suggestCharacterFromDescription({ userId, ...parsed })
+  }
+
+  // ── Known NPCs (NPCs conhecidos do personagem) ──
+
+  @Get('/characters/:characterId/known-npcs')
+  async listKnownNpcs(@CurrentUser('uid') userId: string, @Param('characterId') characterId: string) {
+    return await this.gameData.listKnownNpcs({ userId, characterId })
+  }
+
+  @Patch('/characters/:characterId/known-npcs/:npcId')
+  async updateKnownNpc(
+    @CurrentUser('uid') userId: string,
+    @Param('characterId') characterId: string,
+    @Param('npcId') npcId: string,
+    @Body() body: unknown
+  ) {
+    const parsed = UpdateKnownNpcBody.parse(body)
+    return await this.gameData.updateKnownNpc({ userId, characterId, npcId, ...parsed })
   }
 
   // ── NPC Catalog ────────────────────────────
