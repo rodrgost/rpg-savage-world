@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Res } from '@nestjs/common'
+import { Body, Controller, Delete, Get, HttpException, Inject, Param, Patch, Post, Res } from '@nestjs/common'
 import type { Response } from 'express'
 import { z } from 'zod'
 import { SessionService } from './session.service.js'
@@ -58,6 +58,24 @@ const defaultStreamErrorMessage = 'Erro interno no servidor'
 function logStreamError(route: string, sessionId: string, userId: string, err: unknown): void {
   const reason = err instanceof Error ? err.message : String(err)
   logError('session.controller.stream', { route, sessionId, userId, reason })
+}
+
+/**
+ * Erros esperados (validação de negócio: sessão não encontrada, opção
+ * inexistente, permissão etc.) usam as exceptions do Nest (NotFoundException e
+ * afins, todas HttpException) com uma mensagem já pensada pra ser lida pelo
+ * jogador. Erros inesperados (crash, falha de rede/LLM) continuam com a
+ * mensagem genérica, pra não vazar detalhe interno de stack/exception pro
+ * cliente.
+ */
+function resolveStreamErrorMessage(err: unknown): string {
+  if (err instanceof HttpException) return err.message
+  return defaultStreamErrorMessage
+}
+
+function resolveStreamErrorStatus(err: unknown): number {
+  if (err instanceof HttpException) return err.getStatus()
+  return 500
 }
 
 @Controller('/sessions')
@@ -153,9 +171,10 @@ export class SessionController {
       res.end()
     } catch (err) {
       logStreamError('actions/stream', sessionId, userId, err)
-      const message = defaultStreamErrorMessage
+      const message = resolveStreamErrorMessage(err)
+      const status = resolveStreamErrorStatus(err)
       if (!res.headersSent) {
-        res.status(500).json({ message })
+        res.status(status).json({ message })
       } else {
         res.write(JSON.stringify({ phase: 'error', message }) + '\n')
         res.end()
@@ -200,9 +219,10 @@ export class SessionController {
       res.end()
     } catch (err) {
       logStreamError('choose/stream', sessionId, userId, err)
-      const message = defaultStreamErrorMessage
+      const message = resolveStreamErrorMessage(err)
+      const status = resolveStreamErrorStatus(err)
       if (!res.headersSent) {
-        res.status(500).json({ message })
+        res.status(status).json({ message })
       } else {
         res.write(JSON.stringify({ phase: 'error', message }) + '\n')
         res.end()

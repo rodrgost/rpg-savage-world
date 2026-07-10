@@ -172,9 +172,6 @@ export type ActionOption = {
   playerSpeech?: string | null
   actionType: string
   actionPayload: Record<string, unknown>
-  requiredItems?: string[]
-  feasible: boolean
-  feasibilityReason?: string
   diceCheck?: DiceCheck | null
 }
 

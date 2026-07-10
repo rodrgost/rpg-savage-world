@@ -980,7 +980,6 @@ export type NarrationLogEntry = {
     text: string
     playerSpeech?: string | null
     actionType: string
-    feasible: boolean
     diceCheck?: { skill?: string; attribute?: string; tn?: number; required?: boolean } | null
   }>
   npcs: Array<{ id: string; name: string; action: string }>

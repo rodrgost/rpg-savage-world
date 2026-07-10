@@ -249,7 +249,6 @@ function normalizeOption(option: ActionOption): ActionOption {
     ...option,
     text: normalizeInlineText(option.text),
     actionPayload,
-    feasibilityReason: option.feasibilityReason ? normalizeInlineText(option.feasibilityReason) : option.feasibilityReason,
     diceCheck: option.diceCheck
       ? {
           ...option.diceCheck,

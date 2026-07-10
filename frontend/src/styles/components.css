@@ -1224,17 +1224,6 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.option-btn.infeasible {
-  opacity: 0.4;
-  border-style: dashed;
-  border-color: var(--border-subtle);
-}
-
-.option-btn.infeasible .option-text {
-  text-decoration: line-through;
-  text-decoration-color: rgba(255,255,255,0.3);
-}
-
 /* ─── System Summary Message ─── */
 .msg.system-summary {
   background: none;
@@ -3205,8 +3194,6 @@ button:disabled {
   border: 1px solid var(--border-subtle);
 }
 
-.nlog-option--infeasible { opacity: 0.5; border-style: dashed; }
-
 .nlog-option-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
 
 .nlog-option-num {
@@ -3232,8 +3219,6 @@ button:disabled {
   padding: 0 5px;
   border-radius: var(--radius-full);
 }
-
-.nlog-option-infeasible { font-size: 10px; color: var(--feedback-error); font-weight: 600; }
 
 .nlog-option-dice {
   font-size: 10px;

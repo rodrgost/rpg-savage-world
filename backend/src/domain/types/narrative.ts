@@ -169,13 +169,13 @@ export type ActionOption = {
   actionType: PlayerAction['type']
   /** Payload parcial para montar o PlayerAction */
   actionPayload: Record<string, unknown>
-  /** Itens necessários para esta opção (por itemId) */
-  requiredItems?: string[] | null
-  /** Se a opção é viável dado o estado atual */
-  feasible: boolean
-  /** Motivo caso não seja viável */
-  feasibilityReason?: string | null
-  /** Avaliação de necessidade de teste de dados para esta opção */
+  /**
+   * Avaliação de necessidade de teste de dados para esta opção.
+   * Não existe mais feasible/feasibilityReason/requiredItems aqui: pela regra de
+   * prompt "AGÊNCIA REAL", o narrador só deve oferecer opções já executáveis —
+   * uma opção inviável (sem alvo, sem item) deve ser substituída na origem, nunca
+   * oferecida e marcada como inviável.
+   */
   diceCheck?: DiceCheck | null
 }
 

@@ -29,10 +29,10 @@ import { segmentsToText } from '../domain/segments.js'
 import { randomUUID, createHash } from 'node:crypto'
 import { NARRATOR_RESPONSE_SCHEMA } from './schemas/narrator-response.schema.js'
 import { SUMMARY_RESPONSE_SCHEMA } from './schemas/summary-response.schema.js'
-import { DICE_ROLL_PRINCIPLE_PT } from './dice-rules.js'
+import { DICE_ROLL_PRINCIPLE_PT, DICE_TRACO_FIELD_EXPLANATION_PT } from './dice-rules.js'
 import type { StructuredSummary, SummaryLocationBlock, SummaryCurrentBlock } from './summary-format.js'
 import { emptyStructuredSummary } from './summary-format.js'
-import { findSkillDefinition, getCanonicalSkillLabel, inferSkillFromText } from '../domain/savage-worlds/constants.js'
+import { findSkillDefinition, getCanonicalSkillLabel, inferSkillFromText, ATTRIBUTES } from '../domain/savage-worlds/constants.js'
 import { logLlmRequest, logLlmResponse, logLlmError, log, warn, error as logErr } from '../utils/file-logger.js'
 import { classifyTrivialAction } from '../core/trivial-action.js'
 
@@ -103,12 +103,6 @@ type SanitizedNarratorResponseOptions = {
    * frases (2) — usado para o aviso de narração curta demais.
    */
   narrativeStyle?: 'concise' | 'balanced'
-  /**
-   * Nomes dos itens atualmente no inventário do jogador. Quando fornecido, opções
-   * cujos requiredItems não estejam disponíveis são marcadas feasible=false
-   * (guarda determinístico de continuidade). Comparação ignora acento/caixa/pontuação.
-   */
-  availableItemNames?: string[]
   /**
    * NPCs já presentes na cena (id estável + nome). Usado para preservar o id de
    * NPCs em continuidade (em vez de gerar um novo hash) quando o LLM os referencia
@@ -200,20 +194,38 @@ function sanitizeDifficulty(value: unknown): 'facil' | 'normal' | 'dificil' | 'e
   return 'normal'
 }
 
-function hydrateDiceCheckFromActionPayload(
-  diceCheck: DiceCheck | null,
-  actionPayload: Record<string, unknown>
-): DiceCheck | null {
-  if (!diceCheck) return null
+function normalizeForLookup(value: string): string {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
+}
 
-  const payloadSkill = sanitizeSkillName(actionPayload.skill)
-  const payloadAttribute = sanitizeNullableInlineText(actionPayload.attribute)
+/** Reconhece o nome de um atributo Savage Worlds (chave EN ou rótulo PT-BR). */
+function sanitizeAttributeName(value: unknown): string | null {
+  const raw = sanitizeNullableInlineText(value)
+  if (!raw) return null
+  const normalized = normalizeForLookup(raw)
+  const match = ATTRIBUTES.find(
+    (a) => a.key === normalized || normalizeForLookup(a.label) === normalized
+  )
+  return match?.key ?? null
+}
 
-  return {
-    ...diceCheck,
-    skill: diceCheck.skill ?? payloadSkill,
-    attribute: diceCheck.attribute ?? (diceCheck.skill ? diceCheck.attribute : payloadAttribute)
-  }
+/**
+ * Resolve o campo diceCheck.traco (nome de perícia OU atributo, em texto livre
+ * vindo da LLM, ou null) em skill/attribute/required — fonte única de verdade
+ * dessa classificação, usada tanto pelo narrador quanto por validateAction.
+ * Tenta perícia primeiro (mais específico); se não bater, tenta atributo.
+ * Se "traco" veio preenchido mas não bate com nada conhecido, required fica
+ * false (a chamada volta pra sanitizeNarratorResponse/sanitizeValidateActionResponse
+ * tentar inferir a partir do texto da opção antes de desistir do teste).
+ */
+function resolveTraco(traco: unknown): { skill: string | null; attribute: string | null; required: boolean } {
+  const raw = sanitizeNullableInlineText(traco)
+  if (!raw) return { skill: null, attribute: null, required: false }
+  const skill = sanitizeSkillName(raw)
+  if (skill) return { skill, attribute: null, required: true }
+  const attribute = sanitizeAttributeName(raw)
+  if (attribute) return { skill: null, attribute, required: true }
+  return { skill: null, attribute: null, required: false }
 }
 
 function buildOptionSignature(option: {
@@ -222,13 +234,11 @@ function buildOptionSignature(option: {
   actionPayload: Record<string, unknown>
   diceCheck?: DiceCheck | null
 }): string {
-  const payloadSkill = typeof option.actionPayload.skill === 'string' ? option.actionPayload.skill : ''
   const payloadInput = typeof option.actionPayload.input === 'string' ? option.actionPayload.input : ''
 
   return [
     option.actionType,
     option.text.toLowerCase(),
-    payloadSkill.toLowerCase(),
     payloadInput.toLowerCase(),
     option.diceCheck?.skill?.toLowerCase() ?? '',
     option.diceCheck?.attribute?.toLowerCase() ?? ''
@@ -253,25 +263,24 @@ function pickDiceFreeFallback(seed: string): (typeof DICE_FREE_FALLBACK_OPTIONS)
 }
 
 /**
+/**
  * Guarda determinístico de agência: garante que ao menos 1 das opções finais seja
- * executável sem depender de teste de dados (feasible !== false && diceCheck.required ===
- * false). Sem isso, uma cena legitimamente tensa (ex.: combate) poderia oferecer as 4
- * opções com required=true, deixando o jogador "refém da sorte" — sem nenhuma via de
- * progresso garantida. Não mexe no prompt do LLM: é 100% pós-processamento, sem custo de
- * tokens.
+ * executável sem depender de teste de dados (diceCheck.required === false). Sem
+ * isso, uma cena legitimamente tensa (ex.: combate) poderia oferecer as 4 opções
+ * com required=true, deixando o jogador "refém da sorte" — sem nenhuma via de
+ * progresso garantida. Não mexe no prompt do LLM: é 100% pós-processamento, sem
+ * custo de tokens.
  *
- * Preferência de substituição: uma opção já feasible=false primeiro (nada de valor
- * mecânico é perdido); senão, a última opção do array. NUNCA rebaixa uma opção de
+ * Preferência de substituição: a última opção do array. NUNCA rebaixa uma opção de
  * attack/heal existente para required=false, pois isso equivaleria a um acerto/cura
  * automático e quebraria o equilíbrio de Savage Worlds — a opção é substituída por inteiro.
  */
 function ensureGuaranteedDiceFreeOption(options: ActionOption[], seed: string): void {
   if (!options.length) return
-  const hasSafeOption = options.some((o) => o.feasible !== false && o.diceCheck?.required === false)
+  const hasSafeOption = options.some((o) => o.diceCheck?.required === false)
   if (hasSafeOption) return
 
-  const infeasibleIndex = options.findIndex((o) => o.feasible === false)
-  const index = infeasibleIndex !== -1 ? infeasibleIndex : options.length - 1
+  const index = options.length - 1
   const original = options[index]
   const fallback = pickDiceFreeFallback(seed)
 
@@ -286,9 +295,6 @@ function ensureGuaranteedDiceFreeOption(options: ActionOption[], seed: string): 
     playerSpeech: null,
     actionType: 'custom',
     actionPayload: { input: fallback.text },
-    requiredItems: null,
-    feasible: true,
-    feasibilityReason: null,
     diceCheck: { required: false, skill: null, attribute: null, modifier: 0, tn: 4, reason: fallback.reason }
   }
 }
@@ -550,35 +556,30 @@ function sanitizeValidateActionResponse(
     ? raw.actionPayload
     : { input: fallbackInput }
   const actionPayload = { ...(sanitizeJsonLikeValue(actionPayloadRaw) as Record<string, unknown>) }
+  // Perícia/atributo não vêm mais em actionPayload — só em diceCheck.traco.
+  delete actionPayload.skill
+  delete actionPayload.attribute
   const interpretation = sanitizeInlineText(raw.interpretation, fallbackInput)
   if (!interpretation) return null
-
-  const payloadSkill = sanitizeSkillName(actionPayload.skill)
-  if (payloadSkill) {
-    actionPayload.skill = payloadSkill
-  } else if (typeof actionPayload.skill === 'string') {
-    delete actionPayload.skill
-  }
 
   const diceCheckRaw = raw.diceCheck && typeof raw.diceCheck === 'object' && !Array.isArray(raw.diceCheck)
     ? raw.diceCheck as Record<string, unknown>
     : null
 
-  const diceCheck = hydrateDiceCheckFromActionPayload(
-    diceCheckRaw
-    ? {
-        required: Boolean(diceCheckRaw.required),
-        skill: sanitizeSkillName(diceCheckRaw.skill),
-        attribute: sanitizeNullableInlineText(diceCheckRaw.attribute),
-        difficulty: sanitizeDifficulty(diceCheckRaw.difficulty),
-        // modifier/tn são APP-COMPUTED a partir de difficulty.
-        modifier: 0,
-        tn: 4,
-        reason: sanitizeInlineText(diceCheckRaw.reason, '')
-      }
-    : null,
-    actionPayload
-  )
+  let diceCheck: DiceCheck | null = null
+  if (diceCheckRaw) {
+    const { skill, attribute, required } = resolveTraco(diceCheckRaw.traco)
+    diceCheck = {
+      required,
+      skill,
+      attribute,
+      difficulty: sanitizeDifficulty(diceCheckRaw.difficulty),
+      // modifier/tn são APP-COMPUTED a partir de difficulty.
+      modifier: 0,
+      tn: 4,
+      reason: sanitizeInlineText(diceCheckRaw.reason, '')
+    }
+  }
 
   if (actionType === 'custom' && !sanitizeInlineText(actionPayload.input, '')) {
     actionPayload.input = interpretation
@@ -593,15 +594,12 @@ function sanitizeValidateActionResponse(
   }
 
   if (actionType === 'travel' && !sanitizeInlineText(actionPayload.to, '')) return null
-  if (actionType === 'trait_test') {
-    const payloadAttribute = sanitizeInlineText(actionPayload.attribute, '')
-    if (!payloadSkill && !payloadAttribute && !diceCheck?.skill && !diceCheck?.attribute) {
-      // Mesma cascata determinística do narrador: tenta inferir a skill pelo texto
-      // (interpretação ou input cru) antes de descartar a ação como inválida.
-      const inferred = inferSkillFromText(interpretation) ?? inferSkillFromText(fallbackInput)
-      if (!inferred) return null
-      actionPayload.skill = inferred.label
-    }
+  if (actionType === 'trait_test' && diceCheck && !diceCheck.skill && !diceCheck.attribute) {
+    // Mesma cascata determinística do narrador: tenta inferir a perícia pelo texto
+    // (interpretação ou input cru) antes de descartar a ação como inválida.
+    const inferred = inferSkillFromText(interpretation) ?? inferSkillFromText(fallbackInput)
+    if (!inferred) return null
+    diceCheck = { ...diceCheck, skill: inferred.label, required: true }
   }
 
   return {
@@ -2002,19 +2000,13 @@ export class GeminiAdapter implements Narrator {
       '  ],',
       '  "options": [',
       '    {',
-      '      "id": "<uuid>",',
       '      "text": "<descrição narrativa da opção (rótulo da ação, 1 frase curta)>",',
       '      "actionType": "<tipo mecânico da ação: custom|trait_test|attack|travel|flag|heal>",',
-      '      "actionPayload": { <campos parciais para montar a ação mecânica> },',
-      '      "requiredItems": ["<nome do item do inventário, se exigido pela ação>"],',
-      '      "feasible": true,',
-      '      "feasibilityReason": "<motivo se feasible=false>",',
+      '      "actionPayload": { <campos parciais para montar a ação mecânica — NUNCA inclua skill/attribute aqui, use diceCheck.traco> },',
       '      "diceCheck": {',
-      '        "required": true,',
-      '        "skill": "<OPCIONAL: nome da perícia em português quando uma perícia específica claramente se aplica, ex.: Percepção, Furtividade, Eletrônica. Omita se não tiver certeza — o app infere a partir do texto da opção.>",',
-      '        "attribute": "<APENAS para rolagem de atributo bruto, ex.: vigor, spirit. Omita quando uma perícia se aplica.>",',
+      '        "traco": "<nome da perícia ou atributo testado, ex.: Percepção, Furtividade, Reparos, Vigor — ou null se a ação não exige teste>",',
       '        "difficulty": "facil|normal|dificil|extremo",',
-      '        "reason": "<justificativa narrativa para a rolagem>"',
+      '        "reason": "<justificativa narrativa para a rolagem (ou para a ausência dela)>"',
       '      }',
       '    }',
       '  ],',
@@ -2036,10 +2028,11 @@ export class GeminiAdapter implements Narrator {
       '',
       'REGRAS DO CAMPO diceCheck (OBRIGATÓRIO em TODA option):',
       DICE_ROLL_PRINCIPLE_PT,
-      '- Opções de mera intenção ("Tentar ajudar", "Procurar uma saída", "Observar o entorno") → required: false.',
-      '- REGRA DE actionType: diceCheck.required=true e actionType="custom" NUNCA podem coexistir.',
-      'Se required=true, você DEVE forçar actionType para "trait_test", "attack" ou "heal".',
-      'Se precisar usar "custom", required DEVE ser false.',
+      DICE_TRACO_FIELD_EXPLANATION_PT,
+      '- Opções de mera intenção ("Tentar ajudar", "Procurar uma saída", "Observar o entorno") → traco: null.',
+      '- REGRA DE actionType: diceCheck.traco preenchido e actionType="custom" NUNCA podem coexistir.',
+      'Se "traco" tiver um nome, você DEVE forçar actionType para "trait_test", "attack" ou "heal".',
+      'Se precisar usar "custom", "traco" DEVE ser null.',
       'Sempre AUTOVERIFIQUE essa exclusividade antes de emitir a resposta, para evitar erros de parsing.',
       '',
       'REGRAS GERAIS:',
@@ -2049,8 +2042,7 @@ export class GeminiAdapter implements Narrator {
       '- RITMO — evite estagnação: se as últimas mensagens do HISTÓRICO JOGADO já giraram em torno do MESMO objetivo informacional (perguntar mais detalhes ao mesmo NPC, voltar para avisar alguém, confirmar de novo o que já foi dito), NÃO ofereça 4 opções que sejam só mais uma via de coletar a mesma informação. Pelo menos 2 das 4 opções DEVEM forçar avanço concreto da cena: viagem (actionType "travel"), confronto, descoberta nova, ou uma decisão irreversível. Informação já obtida não precisa ser reconfirmada — avance a história.',
       '- RITMO EM EXPLORAÇÃO — o mundo age: turnos seguidos de exploração sem NENHUM NPC, confronto ou descoberta que mude a situação são estagnação. Se o HISTÓRICO JOGADO mostra 3+ turnos assim, NESTE turno algo do mundo DEVE entrar em cena de verdade: concretize o último gancho narrado (a patrulha chega, a pessoa que trancou a porta aparece, a ameaça distante alcança o jogador) e declare o NPC em npcs[] com newlyIntroduced=true. Ganchos anunciados são PROMESSAS — pague-os em cena, não os deixe apenas "ao longe" para sempre.',
       '- REPETIÇÃO DE IMAGEM: NUNCA reutilize a mesma imagem, pista ou frase-âncora de turnos anteriores do HISTÓRICO JOGADO (ex.: mencionar "marcas de arrasto" turno após turno). Cada narração deve trazer ao menos um elemento sensorial ou informativo NOVO.',
-      '- o campo "feasible" deve ser false se o jogador não tiver os itens/condições necessários.',
-      '- ITENS NECESSÁRIOS E VIABILIDADE: se uma opção usa um item específico, esse item DEVE estar listado em "requiredItems" E deve existir na lista atual de ── INVENTÁRIO ── (correspondência por nome). Se o item NÃO estiver no inventário atual, defina feasible=false com um feasibilityReason citando o item ausente. NUNCA ofereça uma opção viável que dependa de um item que o jogador não tem mais (ex.: um artefato largado, consumido ou confiscado em um turno anterior). Na dúvida sobre se um item ainda está em posse, trate-o como ausente.',
+      '- AGÊNCIA REAL: só ofereça as 4 opções que são de fato executáveis AGORA. Se um ataque não tem alvo hostil válido presente em cena, OU uma ação depende de um item que o jogador não tem, NÃO ofereça essa opção — substitua por uma alternativa que já é executável (ex.: procurar um alvo, buscar o item, uma ação totalmente diferente). Nunca ofereça uma opção sabendo de antemão que ela não pode ser executada.',
       '- Para actionType "attack", inclua APENAS "targetId" no actionPayload. NÃO envie damageFormula ou ap — o app resolve o dano da arma do jogador a partir da arma equipada.',
       '- Para actionType "heal": inclua actionPayload: {} (cura o jogador) ou actionPayload: { targetId: "<id do NPC aliado>" }.',
       '- ATAQUES DE NPC: ataques de NPC hostil neste turno → preencha "npcAttacks": [{ "npcId", "skillDie": 6|8|10|12 (6=comum, 8=treinado, 10=campeão, 12=elite), "damageFormula" (ex.: "str+d6", "2d6"), "ap": 0 }]. Sem ataque → [].',
@@ -2267,7 +2259,7 @@ export class GeminiAdapter implements Narrator {
     raw: Record<string, unknown>,
     opts: SanitizedNarratorResponseOptions = {}
   ): NarratorTurnResponse {
-    const { fillFallbackOptions = true, allowNarrativeFallback = true, availableItemNames, presentNpcs = [] } = opts
+    const { fillFallbackOptions = true, allowNarrativeFallback = true, presentNpcs = [] } = opts
     const narrativeFallback = typeof raw.narrative === 'string'
       ? sanitizeNarrativeOutput(raw.narrative) || (allowNarrativeFallback ? 'A história continua...' : '')
       : (allowNarrativeFallback ? 'A história continua...' : '')
@@ -2284,62 +2276,53 @@ export class GeminiAdapter implements Narrator {
       if (!text) return
 
       const actionPayload = { ...candidate.actionPayload }
-      const payloadSkill = sanitizeSkillName(actionPayload.skill)
-      if (payloadSkill) {
-        actionPayload.skill = payloadSkill
-      } else if (typeof actionPayload.skill === 'string') {
-        delete actionPayload.skill
-      }
+      // Perícia/atributo não vêm mais em actionPayload — só em diceCheck (via traco).
+      delete actionPayload.skill
+      delete actionPayload.attribute
 
-      let diceCheck = hydrateDiceCheckFromActionPayload(
-        candidate.diceCheck
-          ? {
-              ...candidate.diceCheck,
-              skill: sanitizeSkillName(candidate.diceCheck.skill),
-              attribute: sanitizeNullableInlineText(candidate.diceCheck.attribute),
-              reason: sanitizeInlineText(candidate.diceCheck.reason, '')
-            }
-          : null,
-        actionPayload
-      )
+      let diceCheck = candidate.diceCheck
+        ? { ...candidate.diceCheck, reason: sanitizeInlineText(candidate.diceCheck.reason, '') }
+        : null
 
       // Resolução determinística da TRAIT da rolagem.
-      // A LLM NÃO envia mais "skill" (decidido no código): a skill é inferida pelo
-      // verbo no texto da opção. Atributo puro continua vindo da LLM (não inferível).
-      // Toda opção trait_test PRECISA de skill ou atributo na validação estrutural —
-      // por isso, se nada for inferível, caímos num atributo genérico (spirit) em vez
-      // de descartar a rolagem: o desafio pretendido (required=true ou trait_test)
-      // não pode virar uma ação livre só porque o verbo não bateu no dicionário.
+      // diceCheck.skill/attribute já vêm resolvidos de diceCheck.traco (ver resolveTraco).
+      // Quando "traco" não bate com nada conhecido, tentamos inferir pelo verbo no texto
+      // da opção antes de desistir do teste.
+      //
+      // Fase 1: attack sempre rola pela perícia de combate da ficha (ver
+      // buildActionFromOption, que resolve skill = dc.skill ?? 'Luta'). diceCheck.required
+      // precisa refletir essa realidade mecânica — do contrário a UI/contagem de "opções
+      // com teste" subestima ataques (eles sempre rolam, mas apareciam como sem teste).
+      //
+      // Fase 5 (reverte o fallback genérico introduzido em 18d7981): quando nenhuma
+      // skill/atributo é inferível para um teste pretendido (trait_test/required=true)
+      // fora de attack, NÃO inventamos mais um atributo genérico (spirit) — a rolagem é
+      // descartada e a ação vira "custom" livre. Um atributo genérico produzia testes
+      // mecanicamente arbitrários, sem fundamento na ficção nem no texto da opção.
       {
-        const payloadAttribute = sanitizeNullableInlineText(actionPayload.attribute)
-        let hasTrait = Boolean(diceCheck?.skill || diceCheck?.attribute || payloadSkill || payloadAttribute)
+        let hasTrait = Boolean(diceCheck?.skill || diceCheck?.attribute)
         const needsTrait = Boolean(diceCheck?.required) || candidate.actionType === 'trait_test'
 
         if (!hasTrait && needsTrait && diceCheck) {
           const inferred = inferSkillFromText(text)
           if (inferred) {
-            diceCheck = { ...diceCheck, skill: inferred.label }
-            if (candidate.actionType === 'trait_test') actionPayload.skill = inferred.label
+            diceCheck = { ...diceCheck, skill: inferred.label, required: true }
             hasTrait = true
             warn('sanitizeNarratorResponse', `Skill inferida do texto da opção: "${text}" → ${inferred.label}`)
           }
         }
 
-        // Ataque sempre rola pela perícia de combate da ficha, independente deste campo
-        // (ver buildActionFromOption) — não há rolagem "genérica" a preservar aqui.
-        // Exige diceCheck já presente: sem ele não há "reason" para hidratar, e a
-        // ausência total do campo já é pega por isNarratorResponseStructurallyValid.
-        if (!hasTrait && needsTrait && diceCheck && candidate.actionType !== 'attack') {
+        if (candidate.actionType === 'attack') {
+          if (diceCheck) {
+            diceCheck = { ...diceCheck, required: true, skill: diceCheck.skill ?? 'Luta' }
+          }
+        } else if (!hasTrait && needsTrait && diceCheck) {
           const wasTraitTest = candidate.actionType === 'trait_test'
-          diceCheck = { ...diceCheck, required: true, attribute: 'spirit' }
-          if (wasTraitTest) actionPayload.attribute = 'spirit'
-          hasTrait = true
-          warn('sanitizeNarratorResponse', `Sem trait inferível para "${text}": rebaixado para atributo genérico (spirit) em vez de descartar a rolagem`)
-        } else if (!hasTrait && needsTrait && diceCheck?.required) {
+          if (wasTraitTest) candidate.actionType = 'custom'
           diceCheck = { ...diceCheck, required: false }
+          warn('sanitizeNarratorResponse', `Sem trait inferível para "${text}": rolagem descartada${wasTraitTest ? ' e ação convertida para custom' : ''}`)
         }
       }
-
       const signature = buildOptionSignature({
         text,
         actionType: candidate.actionType,
@@ -2368,10 +2351,11 @@ export class GeminiAdapter implements Narrator {
       let diceCheck: DiceCheck | null = null
       if (o.diceCheck && typeof o.diceCheck === 'object' && !Array.isArray(o.diceCheck)) {
         const dc = o.diceCheck as Record<string, unknown>
+        const { skill, attribute, required } = resolveTraco(dc.traco)
         diceCheck = {
-          required: typeof dc.required === 'boolean' ? dc.required : false,
-          skill: sanitizeSkillName(dc.skill),
-          attribute: sanitizeNullableInlineText(dc.attribute),
+          required,
+          skill,
+          attribute,
           difficulty: sanitizeDifficulty(dc.difficulty),
           // modifier/tn são APP-COMPUTED (preenchidos no session.service a partir de difficulty).
           modifier: 0,
@@ -2385,6 +2369,10 @@ export class GeminiAdapter implements Narrator {
       const actionPayload = (o.actionPayload && typeof o.actionPayload === 'object'
         ? sanitizeJsonLikeValue(o.actionPayload)
         : sanitizeJsonLikeValue({ input: fallbackInput })) as Record<string, unknown>
+      // Defensivo: providers fora do Gemini (OpenAI/DeepSeek) não têm responseSchema
+      // aplicado e podem ignorar a remoção de skill/attribute de actionPayload.
+      delete actionPayload.skill
+      delete actionPayload.attribute
 
       // Normalizar aliases de ataque: "target" → "targetId"
       if (actionType === 'attack') {
@@ -2404,9 +2392,6 @@ export class GeminiAdapter implements Narrator {
         playerSpeech: sanitizeNullableInlineText(o.playerSpeech),
         actionType,
         actionPayload,
-        requiredItems: sanitizeStringList(o.requiredItems),
-        feasible: typeof o.feasible === 'boolean' ? o.feasible : true,
-        feasibilityReason: sanitizeNullableInlineText(o.feasibilityReason),
         diceCheck
       })
     }
@@ -2414,8 +2399,8 @@ export class GeminiAdapter implements Narrator {
     if (fillFallbackOptions) {
       // Completa até 4 opções caso parte da saída do LLM tenha sido descartada no saneamento.
       const fallbackOptions = [
-        { text: 'Observar os arredores com atenção', actionType: 'trait_test' as const, actionPayload: { skill: 'Percepção' }, diceCheck: { required: true, skill: 'Percepção', reason: 'Perceber detalhes ocultos' } },
-        { text: 'Investigar a área em busca de pistas', actionType: 'trait_test' as const, actionPayload: { skill: 'Pesquisa' }, diceCheck: { required: true, skill: 'Pesquisa', reason: 'Investigar requer análise cuidadosa' } },
+        { text: 'Observar os arredores com atenção', actionType: 'trait_test' as const, actionPayload: {}, diceCheck: { required: true, skill: 'Percepção', reason: 'Perceber detalhes ocultos' } },
+        { text: 'Investigar a área em busca de pistas', actionType: 'trait_test' as const, actionPayload: {}, diceCheck: { required: true, skill: 'Pesquisa', reason: 'Investigar requer análise cuidadosa' } },
         { text: 'Tentar conversar com alguém próximo', actionType: 'custom' as const, actionPayload: { input: 'Abordar alguém para conversar' }, diceCheck: { required: false, reason: 'Interação social simples' } },
         { text: 'Seguir adiante com cautela', actionType: 'custom' as const, actionPayload: { input: 'Seguir adiante com cautela' }, diceCheck: { required: false, reason: 'Movimento cauteloso sem ameaça imediata' } }
       ]
@@ -2427,7 +2412,6 @@ export class GeminiAdapter implements Narrator {
           text: fb.text,
           actionType: fb.actionType,
           actionPayload: fb.actionPayload,
-          feasible: true,
           diceCheck: fb.diceCheck
         })
       }
@@ -2733,29 +2717,6 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
-    // Guarda determinístico de continuidade: uma opção que exige um item ausente
-    // do inventário não pode ser viável. Evita que a IA ofereça (e o engine resolva)
-    // ações com itens que o jogador não possui mais. Comparação ignora acento/caixa/pontuação.
-    if (availableItemNames) {
-      const availableKeys = new Set(
-        availableItemNames.map((name) => normalizeLookupKey(name)).filter((key) => key.length > 0)
-      )
-      for (const option of options) {
-        if (!option.feasible) continue
-        const required = option.requiredItems ?? []
-        if (!required.length) continue
-        const missing = required.filter((item) => {
-          const key = normalizeLookupKey(item)
-          return key.length > 0 && !availableKeys.has(key)
-        })
-        if (missing.length) {
-          option.feasible = false
-          option.feasibilityReason = `Item indisponível no inventário: ${missing.join(', ')}`
-          if (option.diceCheck) option.diceCheck = { ...option.diceCheck, required: false }
-          warn('sanitizeNarratorResponse', `Opção marcada inviável por item ausente: "${option.text}" (faltando: ${missing.join(', ')})`)
-        }
-      }
-    }
 
     // Guarda determinístico de agência: garantir que o jogador nunca fique "refém da
     // sorte" — sempre deve sobrar ao menos 1 opção executável sem exigir teste de dados.
@@ -2838,14 +2799,13 @@ export class GeminiAdapter implements Narrator {
       if (!option.diceCheck.reason.trim()) return { valid: false, reason: `option[${i}] diceCheck.reason empty` }
 
       const payload = option.actionPayload ?? {}
-      const payloadSkill = sanitizeSkillName(payload.skill)
-      const payloadAttribute = sanitizeNullableInlineText(payload.attribute)
       const diceSkill = sanitizeSkillName(option.diceCheck.skill)
       const diceAttribute = sanitizeNullableInlineText(option.diceCheck.attribute)
 
-      if (option.diceCheck.required && !diceSkill && !diceAttribute && !payloadSkill && !payloadAttribute) {
+      if (option.diceCheck.required && !diceSkill && !diceAttribute) {
         return { valid: false, reason: `option[${i}] diceCheck.required=true but no skill/attribute` }
       }
+
 
       switch (option.actionType) {
         case 'attack':
@@ -2855,7 +2815,7 @@ export class GeminiAdapter implements Narrator {
           if (!sanitizeInlineText(payload.to, '').length) return { valid: false, reason: `option[${i}] travel missing to` }
           break
         case 'trait_test':
-          if (!payloadSkill && !payloadAttribute && !diceSkill && !diceAttribute) return { valid: false, reason: `option[${i}] trait_test missing skill/attribute` }
+          if (!diceSkill && !diceAttribute) return { valid: false, reason: `option[${i}] trait_test missing skill/attribute` }
           break
         case 'custom':
           if (!sanitizeInlineText(payload.input, option.text)) return { valid: false, reason: `option[${i}] custom missing input` }
@@ -2903,7 +2863,7 @@ export class GeminiAdapter implements Narrator {
       simpleVocabulary?: boolean
     } = {},
     /** Contexto de runtime usado apenas na sanitização (não afeta o system prompt nem seu cache). */
-    sanitizeContext: { availableItemNames?: string[]; presentNpcs?: { id: string; name: string }[] } = {}
+    sanitizeContext: { presentNpcs?: { id: string; name: string }[] } = {}
   ): Promise<NarratorTurnResponse> {
     const narratorMode = systemPromptOpts.mode ?? 'turn'
     const systemPrompt = this.getCachedNarratorSystemPrompt(systemPromptOpts)
@@ -2967,7 +2927,6 @@ export class GeminiAdapter implements Narrator {
           fillFallbackOptions: false,
           allowNarrativeFallback: false,
           narrativeStyle: systemPromptOpts.narrativeStyle,
-          availableItemNames: sanitizeContext.availableItemNames,
           presentNpcs: sanitizeContext.presentNpcs
         })
 
@@ -3018,11 +2977,9 @@ export class GeminiAdapter implements Narrator {
       '  "feasible": true|false,',
       '  "feasibilityReason": "<motivo se não for possível, ou vazio>",',
       '  "actionType": "<tipo inferido: custom|trait_test|attack|travel>",',
-      '  "actionPayload": { <campos para montar a ação mecânica> },',
+      '  "actionPayload": { <campos para montar a ação mecânica — NUNCA inclua skill/attribute aqui, use diceCheck.traco> },',
       '  "diceCheck": {',
-      '    "required": true|false,',
-      '    "skill": "<perícia exigida ou null>",',
-      '    "attribute": "<atributo exigido ou null>",',
+      '    "traco": "<nome da perícia ou atributo exigido, ou null se a ação não exige teste>",',
       '    "difficulty": "facil|normal|dificil|extremo",',
       '    "reason": "<justificativa narrativa>"',
       '  },',
@@ -3034,6 +2991,7 @@ export class GeminiAdapter implements Narrator {
       '',
       '- PRINCÍPIO FUNDAMENTAL da rolagem de dados:',
       DICE_ROLL_PRINCIPLE_PT,
+      DICE_TRACO_FIELD_EXPLANATION_PT,
       '',
       '- Ações que NUNCA exigem rolagem (automáticas para qualquer personagem):',
       '  • Atender o telefone/celular/chamada',
@@ -3053,16 +3011,16 @@ export class GeminiAdapter implements Narrator {
       '  NOTA: "procurar", "buscar", "consultar" só exigem rolagem quando a informação/objeto está OCULTA, protegida, ou a fonte não está disposta — use a perícia "Pesquisa" somente nesses casos.',
       '',
       '- Ações que EXIGEM rolagem:',
-      '  • Perceber algo oculto → skill: "Percepção"',
-      '  • Mover-se furtivamente → skill: "Furtividade"',
-      '  • Escalar, saltar um abismo, correr sob pressão → skill: "Atletismo"',
-      '  • Convencer, enganar, negociar → skill: "Persuasão"',
-      '  • Intimidar → skill: "Intimidação"',
+      '  • Perceber algo oculto → traco: "Percepção"',
+      '  • Mover-se furtivamente → traco: "Furtividade"',
+      '  • Escalar, saltar um abismo, correr sob pressão → traco: "Atletismo"',
+      '  • Convencer, enganar, negociar → traco: "Persuasão"',
+      '  • Intimidar → traco: "Intimidação"',
       '  • Curar ferimentos → actionType: "heal", actionPayload: {} (não use trait_test para cura)',
-      '  • Arrombar uma fechadura, desarmar uma armadilha → skill: "Ladinagem"',
-      '  • Investigar pistas ocultas, pesquisar informação oculta ou protegida → skill: "Pesquisa"',
-      '  • Resistir a veneno/doença → attribute: "vigor"',
-      '  • Resistir ao medo → attribute: "spirit"',
+      '  • Arrombar uma fechadura, desarmar uma armadilha → traco: "Ladinagem"',
+      '  • Investigar pistas ocultas, pesquisar informação oculta ou protegida → traco: "Pesquisa"',
+      '  • Resistir a veneno/doença → traco: "Vigor"',
+      '  • Resistir ao medo → traco: "Espírito"',
       '  • Combate → actionType "attack"',
       '',
       '  Nota contextual: "abrir a porta" pode exigir Ladinagem se o contexto indica que está trancada;',
@@ -3070,7 +3028,7 @@ export class GeminiAdapter implements Narrator {
       '  "procurar/buscar" exige Pesquisa apenas quando a informação está deliberadamente oculta ou protegida.',
       '',
       '- Para combate → actionType: "attack", inclua APENAS targetId em actionPayload. O app resolve dano/AP da arma a partir da arma equipada — nunca produza damageFormula.',
-      '- Para testes de perícia → actionType: "trait_test", inclua skill ou attribute em actionPayload.',
+      '- Para testes de perícia → actionType: "trait_test", preencha diceCheck.traco com a perícia ou atributo.',
       '- Para movimento a um local DIFERENTE do atual → actionType: "travel", inclua "to" em actionPayload com o nome do local de destino.',
       '  NOTA: mover-se em direção a um NPC já presente na cena (ex.: "ir até o homem", "se aproximar do estranho") NÃO é "travel" — use actionType: "custom".',
       '- Para marcar um estado/evento persistente → actionType: "flag", inclua "key" em actionPayload (identificador em snake_case). O campo OBRIGATÓRIO é "key" — nunca "flag" ou "flagName".',
@@ -3246,10 +3204,10 @@ export class GeminiAdapter implements Narrator {
         isFallback: true,
         segments: [{ type: 'narrator', text: `Você chega a um novo lugar. O ar carrega o peso de histórias não contadas. Ao seu redor, a paisagem de ${req.campaign.name ?? 'este mundo'} se estende até onde a vista alcança. Um caminho se abre à sua frente, e você sente que a aventura está prestes a começar.` }],
         options: [
-          { id: randomUUID(), text: 'Explorar o caminho principal', actionType: 'custom', actionPayload: { input: 'Explorar o caminho principal' }, feasible: true, diceCheck: { required: false, reason: 'Caminho seguro e acessível' } },
-          { id: randomUUID(), text: 'Observar os arredores com cuidado', actionType: 'trait_test', actionPayload: { skill: 'Percepção' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detectar detalhes ocultos no ambiente' } },
-          { id: randomUUID(), text: 'Procurar alguém para conversar', actionType: 'custom', actionPayload: { input: 'Procurar alguém para conversar' }, feasible: true, diceCheck: { required: false, reason: 'Ação social simples' } },
-          { id: randomUUID(), text: 'Checar seus pertences e seguir em frente', actionType: 'custom', actionPayload: { input: 'Checar pertences e seguir em frente' }, feasible: true, diceCheck: { required: false, reason: 'Ação trivial sem risco' } }
+          { id: randomUUID(), text: 'Explorar o caminho principal', actionType: 'custom', actionPayload: { input: 'Explorar o caminho principal' }, diceCheck: { required: false, reason: 'Caminho seguro e acessível' } },
+          { id: randomUUID(), text: 'Observar os arredores com cuidado', actionType: 'trait_test', actionPayload: {}, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detectar detalhes ocultos no ambiente' } },
+          { id: randomUUID(), text: 'Procurar alguém para conversar', actionType: 'custom', actionPayload: { input: 'Procurar alguém para conversar' }, diceCheck: { required: false, reason: 'Ação social simples' } },
+          { id: randomUUID(), text: 'Checar seus pertences e seguir em frente', actionType: 'custom', actionPayload: { input: 'Checar pertences e seguir em frente' }, diceCheck: { required: false, reason: 'Ação trivial sem risco' } }
         ],
         npcs: [],
         itemChanges: [],
@@ -3381,7 +3339,6 @@ export class GeminiAdapter implements Narrator {
           simpleVocabulary: req.simpleVocabulary
         },
         {
-          availableItemNames: req.context.inventory.map((i) => i.name),
           presentNpcs: req.context.npcsPresent.map((n) => ({ id: n.id, name: n.name }))
         }
       )
@@ -3392,10 +3349,10 @@ export class GeminiAdapter implements Narrator {
         isFallback: true,
         segments: [{ type: 'narrator', text: `Sua ação ecoa pelo ambiente. As consequências ainda não estão claras, mas o mundo ao seu redor reage de formas sutis. O que você fará agora?` }],
         options: [
-          { id: randomUUID(), text: 'Investigar o resultado da ação', actionType: 'trait_test', actionPayload: { skill: 'Percepção' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Investigação exige atenção aos detalhes' } },
-          { id: randomUUID(), text: 'Avançar com cautela', actionType: 'custom', actionPayload: { input: 'Avançar com cautela' }, feasible: true, diceCheck: { required: false, reason: 'Movimento cauteloso sem ameaça imediata' } },
-          { id: randomUUID(), text: 'Observar os arredores', actionType: 'trait_test', actionPayload: { skill: 'Percepção' }, feasible: true, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detectar ameaças e oportunidades' } },
-          { id: randomUUID(), text: 'Descansar por um momento', actionType: 'custom', actionPayload: { input: 'Descansar e recuperar forças' }, feasible: true, diceCheck: { required: false, reason: 'Descanso simples sem perigo' } }
+          { id: randomUUID(), text: 'Investigar o resultado da ação', actionType: 'trait_test', actionPayload: {}, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Investigação exige atenção aos detalhes' } },
+          { id: randomUUID(), text: 'Avançar com cautela', actionType: 'custom', actionPayload: { input: 'Avançar com cautela' }, diceCheck: { required: false, reason: 'Movimento cauteloso sem ameaça imediata' } },
+          { id: randomUUID(), text: 'Observar os arredores', actionType: 'trait_test', actionPayload: {}, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detectar ameaças e oportunidades' } },
+          { id: randomUUID(), text: 'Descansar por um momento', actionType: 'custom', actionPayload: { input: 'Descansar e recuperar forças' }, diceCheck: { required: false, reason: 'Descanso simples sem perigo' } }
         ],
         npcs: [],
         itemChanges: [],

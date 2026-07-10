@@ -31,7 +31,7 @@ O que o LLM ainda decide hoje (e que este plano quer remover dele):
 | `actionPayload.damageFormula` | options[] | Fixo (vem da arma/`WEAPONS`) |
 | `actionPayload.ap` | options[] | Fixo (vem da arma) |
 | `actionPayload.targetId` | options[] | Identificação de alvo (fica no LLM) |
-| `feasible` / `requiredItems` | options[] | Misto: itens (fixo) + ficção |
+| ~~`feasible` / `requiredItems`~~ | options[] | Removido — ver nota abaixo |
 | `npcAttacks[].skillDie` / `damageFormula` / `ap` | resposta | Fixo (vem do NPC/arma) |
 | Bloco de regras SW no prompt | `gemini.adapter.ts` (~1947–2011 e outros) | Fixo |
 
@@ -86,8 +86,14 @@ Camada nova (sugestão: `core/action-resolver.ts`) entre a opção escolhida e o
 5. **Ataques de NPC**: `skillDie`, `damageFormula`, `ap` vêm de `NpcDefinition` /
    `NPCCombatant` (já têm `attackSkillDie`, `damageFormula`, `ap`) e do catálogo, não do
    LLM.
-6. **Viabilidade**: `requiredItems` checado contra o inventário pelo app; a inviabilidade
-   por ficção (ex.: "a ponte já desabou") continua sendo sinalizada pelo LLM na narrativa.
+6. **Viabilidade**: `feasible`/`feasibilityReason`/`requiredItems` foram **removidos** de
+   `ActionOption` (mantidos só em `ValidateActionResponse`, usado pela ação livre em texto
+   via `validateAction`). Para as 4 opções do narrador, a regra passou a ser preventiva no
+   prompt ("AGÊNCIA REAL"): o LLM não deve oferecer uma opção que sabe de antemão ser
+   inexecutável (sem alvo, sem item) — deve substituí-la por uma alternativa executável.
+   `validateNarratorOption` (`session.service.ts`) ainda descarta no app opções de ataque
+   sem alvo válido em cena e `trait_test` sem perícia/atributo reconhecível, como rede de
+   segurança determinística.
 
 ## 5. Dados/tabelas necessárias — em grande parte já existem
 
@@ -142,8 +148,9 @@ Camada nova (sugestão: `core/action-resolver.ts`) entre a opção escolhida e o
 - **Vínculo arma→dano do jogador**: preciso confirmar no código se o item equipado já
   carrega a fórmula/AP de `WEAPONS` ou se isso hoje só existe porque o LLM preenchia
   `damageFormula`. Se for o segundo caso, é a maior lacuna de dados a fechar.
-- **`feasible` por ficção**: nem toda inviabilidade é checável por regra; o LLM ainda
-  precisa poder vetar por narrativa. Definir a fronteira.
+- **`feasible` por ficção (decidido)**: removido de `ActionOption` — o LLM agora evita
+  oferecer a opção inviável desde a origem (regra "AGÊNCIA REAL" no prompt), em vez de
+  oferecê-la marcada como inviável.
 - **Compatibilidade de sessões salvas**: opções já persistidas no chat usam o schema
   antigo. `buildActionFromOption` precisa continuar lendo o formato legado durante a
   transição.

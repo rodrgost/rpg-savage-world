@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { createInitialState } from '../../domain/defaults/initialState.js'
 import type { AttributeName, DieType, GameState, Hindrance, NarrativeStyle, PlayerAction, SWAttributes } from '../../domain/types/gameState.js'
-import type { NarratorTurnResponse, ValidateActionResponse, NpcAttackEntry } from '../../domain/types/narrative.js'
+import type { NarratorTurnResponse, ValidateActionResponse, NpcAttackEntry, InventoryItem } from '../../domain/types/narrative.js'
 import { applyAction, applyNpcAttack } from '../../core/rule-engine.js'
 import { SnapshotService } from '../../services/snapshot.service.js'
 import { SummaryService } from '../../services/summary.service.js'
@@ -326,9 +326,6 @@ export class SessionService {
           text,
           actionType: 'custom',
           actionPayload: { input: text },
-          requiredItems: [],
-          feasible: true,
-          feasibilityReason: '',
           diceCheck: { required: false, reason: 'Ação simples sem risco imediato' }
         })
       }
@@ -341,7 +338,6 @@ export class SessionService {
     option: NarratorTurnResponse['options'][number],
     state: GameState,
     mode: 'start' | 'turn',
-    pendingItemRefs: Set<string>,
     canonicalAnchors?: CanonicalAnchors
   ): NarratorTurnResponse['options'][number] | null {
     // NPCs derrotados/mortos/incapacitados (ou em defeatedNpcIds) não são alvos
@@ -363,9 +359,6 @@ export class SessionService {
     )
 
     const actionPayload = { ...(option.actionPayload ?? {}) }
-    const requiredItems = (option.requiredItems ?? []).filter(Boolean)
-    let feasible = option.feasible
-    let feasibilityReason = option.feasibilityReason ?? null
     const diceCheck = option.diceCheck
       ? {
           ...option.diceCheck,
@@ -377,37 +370,12 @@ export class SessionService {
         }
       : null
 
-    if (typeof actionPayload.skill === 'string') {
-      const normalizedSkill = normalizeSkillName(actionPayload.skill)
-      if (!normalizedSkill) {
-        warn('validateNarratorOption', `Descartando opção com perícia inválida: "${actionPayload.skill}"`)
-        return null
-      }
-      actionPayload.skill = normalizedSkill
-    }
-
-    if (typeof actionPayload.attribute === 'string') {
-      const normalizedAttribute = normalizeAttributeName(actionPayload.attribute)
-      if (!normalizedAttribute) {
-        warn('validateNarratorOption', `Descartando opção com atributo inválido: "${actionPayload.attribute}"`)
-        return null
-      }
-      actionPayload.attribute = normalizedAttribute
-    }
-
-    const missingRequiredItems = requiredItems.filter((itemRef) => {
-      const lookupKey = normalizeLookupValue(itemRef)
-      return !this.inventory.hasItem(state, itemRef) && !pendingItemRefs.has(lookupKey)
-    })
-    if (missingRequiredItems.length) {
-      feasible = false
-      const missingRef = missingRequiredItems[0]
-      const resolvedName =
-        state.player.inventory?.find(
-          (i) => i.id === missingRef || i.name.toLowerCase() === missingRef.toLowerCase()
-        )?.name ?? missingRef
-      feasibilityReason = feasibilityReason ?? `Item necessário ausente: ${resolvedName}.`
-    }
+    // Perícia/atributo não vêm mais em actionPayload — só em diceCheck (traco já
+    // resolvido pelo adapter). Sem checagem redundante de string aqui.
+    //
+    // Não há mais checagem de itens necessários aqui: pela regra de prompt
+    // "AGÊNCIA REAL", o narrador só deve oferecer opções já executáveis — uma opção
+    // que dependa de item ausente deve ser substituída na origem, nunca oferecida.
 
     switch (option.actionType) {
       case 'attack': {
@@ -428,10 +396,7 @@ export class SessionService {
           }
         }
 
-        const attackSkill = normalizeSkillName(
-          (typeof actionPayload.skill === 'string' ? actionPayload.skill : undefined) ?? diceCheck?.skill
-        ) ?? 'Luta'
-        actionPayload.skill = attackSkill
+        const attackSkill = normalizeSkillName(diceCheck?.skill) ?? 'Luta'
         if (diceCheck) {
           diceCheck.skill = attackSkill
           diceCheck.attribute = null
@@ -439,34 +404,19 @@ export class SessionService {
         break
       }
       case 'trait_test': {
-        const skill = normalizeSkillName(
-          (typeof actionPayload.skill === 'string' ? actionPayload.skill : undefined) ?? diceCheck?.skill
-        )
-        const attribute = normalizeAttributeName(
-          (typeof actionPayload.attribute === 'string' ? actionPayload.attribute : undefined) ?? diceCheck?.attribute
-        )
+        const skill = normalizeSkillName(diceCheck?.skill)
+        const attribute = normalizeAttributeName(diceCheck?.attribute)
 
         if (!skill && !attribute) {
           warn('validateNarratorOption', `Descartando trait_test sem perícia ou atributo válido: "${option.text}"`)
           return null
         }
 
-        if (skill) {
-          actionPayload.skill = skill
-        } else {
-          delete actionPayload.skill
-        }
-
-        if (attribute) {
-          actionPayload.attribute = attribute
-        } else {
-          delete actionPayload.attribute
-        }
-
         if (diceCheck) {
           diceCheck.skill = skill ?? null
           diceCheck.attribute = attribute ?? null
         }
+
         break
       }
       case 'travel': {
@@ -520,9 +470,6 @@ export class SessionService {
     return {
       ...option,
       actionPayload,
-      requiredItems,
-      feasible,
-      feasibilityReason,
       diceCheck
     }
   }
@@ -703,12 +650,9 @@ export class SessionService {
       currentNarrative: segmentsToText(response.segments)
     })
     const itemChanges = this.validateNarratorItemChanges(response.itemChanges, state, mode, action)
-    const pendingItemRefs = new Set(
-      itemChanges.flatMap((change) => [change.itemId, change.name]).map((value) => normalizeLookupValue(value))
-    )
     const options = this.completeValidatedOptions(
       response.options
-        .map((option) => this.validateNarratorOption(option, canonicalNarrativeState, mode, pendingItemRefs, canonicalAnchors))
+        .map((option) => this.validateNarratorOption(option, canonicalNarrativeState, mode, canonicalAnchors))
         .filter((option): option is NarratorTurnResponse['options'][number] => option !== null)
     )
     const sceneNpcIds = new Set(
@@ -1546,7 +1490,6 @@ export class SessionService {
         text: o.text,
         playerSpeech: o.playerSpeech ?? undefined,
         actionType: o.actionType,
-        feasible: o.feasible,
         diceCheck: o.diceCheck ? {
           skill: o.diceCheck.skill ?? undefined,
           attribute: o.diceCheck.attribute ?? undefined,
@@ -1648,10 +1591,6 @@ export class SessionService {
       throw new NotFoundException('Opção não encontrada')
     }
 
-    if (!option.feasible) {
-      throw new NotFoundException(option.feasibilityReason ?? 'Esta opção não é viável no momento')
-    }
-
     // Montar o PlayerAction a partir da opção
     const action = this.buildActionFromOption(option)
     return { action, displayText: option.text }
@@ -1673,9 +1612,14 @@ export class SessionService {
       option.actionType !== 'trait_test' &&
       option.actionType !== 'attack'
     ) {
-      // Fallback para 'spirit' se LLM não especificou skill/attribute
       const skill = dc.skill ?? undefined
-      const attribute = dc.attribute ?? (skill ? undefined : 'spirit')
+      const attribute = dc.attribute ?? undefined
+      // Fase 5: sem skill NEM attribute, não inventamos mais 'spirit' genérico —
+      // mantém como ação narrativa livre em vez de rolar um teste sem fundamento.
+      if (!skill && !attribute) {
+        warn('buildActionFromOption', `"${option.actionType}" com required=true mas sem skill/attribute: mantido como custom (sem teste inventado)`)
+        return { type: 'custom', input: typeof payload.input === 'string' ? payload.input : option.text }
+      }
       log('buildActionFromOption', `Promoting "${option.actionType}" → trait_test via diceCheck (skill=${skill}, attr=${attribute}, difficulty=${dc.difficulty ?? 'normal'}, mod=${appModifier}, reason=${dc.reason})`)
       return {
         type: 'trait_test',
@@ -1688,14 +1632,16 @@ export class SessionService {
 
     switch (option.actionType) {
       case 'trait_test':
-        // Defesa em profundidade: se o LLM ou sanitizer marcou required=false, tratar como ação narrativa
+        // Defesa em profundidade: se o LLM ou sanitizer marcou required=false, tratar como ação narrativa.
+        // Fase 0 (instrumentação): logado para medir a frequência real desse caminho.
         if (dc?.required === false) {
+          warn('buildActionFromOption', `trait_test com required=false convertido para custom: "${option.text}"`)
           return { type: 'custom', input: option.text }
         }
         return {
           type: 'trait_test',
-          skill: normalizeSkillName(dc?.skill ?? (typeof payload.skill === 'string' ? payload.skill : undefined)),
-          attribute: dc?.attribute ?? (typeof payload.attribute === 'string' ? payload.attribute : undefined),
+          skill: normalizeSkillName(dc?.skill),
+          attribute: dc?.attribute ?? undefined,
           modifier: appModifier,
           description: option.text
         }
@@ -1703,7 +1649,7 @@ export class SessionService {
         // damageFormula/ap NÃO vêm mais do LLM — o rule-engine resolve a arma equipada.
         return {
           type: 'attack',
-          skill: normalizeSkillName(dc?.skill ?? (typeof payload.skill === 'string' ? payload.skill : 'Luta')) ?? 'Luta',
+          skill: normalizeSkillName(dc?.skill) ?? 'Luta',
           targetId: typeof payload.targetId === 'string' ? payload.targetId : 'unknown',
           modifier: appModifier
         }

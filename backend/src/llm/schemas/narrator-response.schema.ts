@@ -40,43 +40,35 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
     },
     options: {
       type: 'ARRAY',
-      description: 'Exatamente 4 opções de ação para o jogador.',
+      description: 'Exatamente 4 opções de ação para o jogador — todas devem ser realmente executáveis agora.',
       items: {
         type: 'OBJECT',
         properties: {
-          id: { type: 'STRING' },
           text: { type: 'STRING' },
           actionType: { type: 'STRING', enum: ['custom', 'trait_test', 'attack', 'travel', 'flag', 'heal'] },
           actionPayload: {
             type: 'OBJECT',
-            description: 'Campos parciais para montar a ação mecânica (todos opcionais). Dano/AP NÃO são informados aqui — o app os resolve pela arma equipada.',
+            description: 'Campos parciais para montar a ação mecânica (todos opcionais). Dano/AP NÃO são informados aqui — o app os resolve pela arma equipada. Perícia/atributo NÃO vão aqui — use diceCheck.traco.',
             properties: {
-              skill: { type: 'STRING', nullable: true },
-              attribute: { type: 'STRING', nullable: true },
               targetId: { type: 'STRING', nullable: true },
               to: { type: 'STRING', nullable: true },
               input: { type: 'STRING', nullable: true }
             },
-            propertyOrdering: ['skill', 'attribute', 'targetId', 'to', 'input']
+            propertyOrdering: ['targetId', 'to', 'input']
           },
-          requiredItems: { type: 'ARRAY', items: { type: 'STRING' } },
-          feasible: { type: 'BOOLEAN' },
-          feasibilityReason: { type: 'STRING', nullable: true },
           diceCheck: {
             type: 'OBJECT',
             properties: {
-              required: { type: 'BOOLEAN' },
-              skill: { type: 'STRING', nullable: true },
-              attribute: { type: 'STRING', nullable: true },
+              traco: { type: 'STRING', nullable: true, description: 'Nome da perícia ou atributo testado; null se a ação não exige teste.' },
               difficulty: { type: 'STRING', enum: ['facil', 'normal', 'dificil', 'extremo'], nullable: true },
               reason: { type: 'STRING' }
             },
-            required: ['required', 'reason'],
-            propertyOrdering: ['required', 'skill', 'attribute', 'difficulty', 'reason']
+            required: ['reason'],
+            propertyOrdering: ['traco', 'difficulty', 'reason']
           }
         },
-        required: ['text', 'actionType', 'feasible', 'diceCheck'],
-        propertyOrdering: ['id', 'text', 'actionType', 'actionPayload', 'requiredItems', 'feasible', 'feasibilityReason', 'diceCheck']
+        required: ['text', 'actionType', 'diceCheck'],
+        propertyOrdering: ['text', 'actionType', 'actionPayload', 'diceCheck']
       }
     },
     npcs: {

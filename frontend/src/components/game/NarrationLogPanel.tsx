@@ -189,11 +189,10 @@ function NarrationEntry({ entry }: { entry: NarrationLogEntry }) {
             {showOptions && (
               <div className="nlog-options">
                 {entry.options.map((opt, i) => (
-                  <div key={opt.id} className={`nlog-option ${!opt.feasible ? 'nlog-option--infeasible' : ''}`}>
+                  <div key={opt.id} className="nlog-option">
                     <div className="nlog-option-header">
                       <span className="nlog-option-num">{i + 1}</span>
                       <span className="nlog-option-type">{actionTypeLabel(opt.actionType)}</span>
-                      {!opt.feasible && <span className="nlog-option-infeasible">inviável</span>}
                       {opt.diceCheck?.required && (
                         <span className="nlog-option-dice">
                           🎲 {opt.diceCheck.skill ?? opt.diceCheck.attribute} TN{opt.diceCheck.tn ?? 4}

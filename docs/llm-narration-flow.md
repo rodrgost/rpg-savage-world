@@ -311,19 +311,12 @@ História da aventura: <storyDescription>.
   "narrative": "Texto narrativo imersivo em 2-3 parágrafos curtos.",
   "options": [
     {
-      "id": "<uuid>",
       "text": "Descrição curta da opção",
-      "actionType": "custom|trait_test|attack|travel|flag",
+      "actionType": "custom|trait_test|attack|travel|flag|heal",
       "actionPayload": { "input": "…" },
-      "requiredItems": [],
-      "feasible": true,
-      "feasibilityReason": "",
       "diceCheck": {
-        "required": true,
-        "skill": "Percepção",
-        "attribute": null,
-        "modifier": 0,
-        "tn": 4,
+        "traco": "Percepção",
+        "difficulty": "normal",
         "reason": "Justificativa narrativa"
       }
     }
