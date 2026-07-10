@@ -1,5 +1,5 @@
 import { getAuthenticatedIdToken } from './firebase'
-import type { Campaign, Character, ChatMessage, GameState, Hindrance, NarratorTurnResponse, OwnerProfile, SessionEvent, StoryCharacter, SummaryDoc, Visibility, World } from '../types'
+import type { Campaign, Character, ChatMessage, GameState, Hindrance, KnownNpc, NarratorTurnResponse, OwnerProfile, RelationalStatus, SessionEvent, StoryCharacter, SummaryDoc, Visibility, World } from '../types'
 
 type StoredImage = {
   mimeType: string
@@ -13,6 +13,7 @@ type SessionPayload = {
   events: Array<{ id: string; turn: number; type: string; payload: Record<string, unknown> }>
   messages: ChatMessage[]
   narratorResponse?: NarratorTurnResponse
+  knownNpcs?: KnownNpc[]
 }
 
 class ApiStreamError extends Error {}
@@ -683,11 +684,35 @@ export async function updateCharacter(
 export async function startSession(params: {
   characterId: string
   campaignId: string
-}): Promise<{ sessionId: string; state: GameState; messages: ChatMessage[]; narratorResponse?: NarratorTurnResponse }> {
-  return await apiRequest<{ sessionId: string; state: GameState; messages: ChatMessage[]; narratorResponse?: NarratorTurnResponse }>('/sessions/start', {
+}): Promise<{ sessionId: string; state: GameState; messages: ChatMessage[]; narratorResponse?: NarratorTurnResponse; knownNpcs?: KnownNpc[] }> {
+  return await apiRequest<{ sessionId: string; state: GameState; messages: ChatMessage[]; narratorResponse?: NarratorTurnResponse; knownNpcs?: KnownNpc[] }>('/sessions/start', {
     method: 'POST',
     body: JSON.stringify(params)
   })
+}
+
+// ── Known NPCs (NPCs conhecidos do personagem) ──
+
+export async function listKnownNpcs(characterId: string): Promise<KnownNpc[]> {
+  const response = await apiRequest<{ knownNpcs: KnownNpc[] }>(
+    `/characters/${encodeURIComponent(characterId)}/known-npcs`
+  )
+  return response.knownNpcs
+}
+
+export async function updateKnownNpc(
+  characterId: string,
+  npcId: string,
+  patch: { relationalStatus?: Exclude<RelationalStatus, 'desconhecido'>; notes?: string; resetToAuto?: boolean }
+): Promise<KnownNpc> {
+  const response = await apiRequest<{ ok: true; knownNpc: KnownNpc }>(
+    `/characters/${encodeURIComponent(characterId)}/known-npcs/${encodeURIComponent(npcId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(patch)
+    }
+  )
+  return response.knownNpc
 }
 
 export type ActivePlaythrough = {

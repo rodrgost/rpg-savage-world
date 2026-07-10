@@ -62,6 +62,8 @@ export type NPCMention = {
   newlyIntroduced: boolean
   /** Status do NPC se houver mudança narrativa (ex: incapacitado, derrotado) */
   status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
+  /** Mudança na relação do NPC com o personagem do jogador (omitir se inalterada) */
+  relation?: 'conhecido' | 'aliado' | 'amigavel' | 'neutro' | 'desconfiado' | 'hostil' | 'inimigo'
 }
 
 export type NarrativeSegment =

@@ -8,6 +8,8 @@ import { SummaryService } from '../../services/summary.service.js'
 import { InventoryService } from '../../services/inventory.service.js'
 import { StatusEffectService } from '../../services/statusEffect.service.js'
 import { NpcService } from '../../services/npc.service.js'
+import { NpcRelationsService } from '../../services/npcRelations.service.js'
+import { KnownNpcsRepo } from '../../repositories/knownNpcs.repo.js'
 import {
   buildCanonicalAnchors,
   buildCanonicalPromptSection,
@@ -134,6 +136,8 @@ export class SessionService {
   private readonly inventory = new InventoryService()
   private readonly statusEffects = new StatusEffectService()
   private readonly npcService = new NpcService()
+  private readonly npcRelations = new NpcRelationsService()
+  private readonly knownNpcs = new KnownNpcsRepo()
   private readonly narrator: Narrator = new GeminiAdapter()
 
   private async requireOwnedSession(sessionId: string, ownerId: string): Promise<Record<string, unknown>> {
@@ -158,15 +162,19 @@ export class SessionService {
       ? { ...state, meta: { ...state.meta, narrativeStyle: 'balanced' as const } }
       : state
 
-    const [summary, recentMessages, messages, events] = await Promise.all([
+    const [summary, recentMessages, messages, events, knownNpcs] = await Promise.all([
       this.summaryRepo.getSummary(sessionId),
       this.summaries.getRecentWindow(sessionId),
       this.chatMessages.listBySession(sessionId),
-      this.events.listSince({ sessionId, afterTurn: -1 })
+      this.events.listSince({ sessionId, afterTurn: -1 }),
+      this.knownNpcs.listByCharacter(normalizedState.player.characterId).catch((error) => {
+        warn('buildSessionPayload', `Falha ao carregar NPCs conhecidos: ${String(error)}`)
+        return []
+      })
     ])
     const context = buildLlmContext({ state: normalizedState, summary, recentMessages })
 
-    return { state: normalizedState, summary, events, context, messages }
+    return { state: normalizedState, summary, events, context, messages, knownNpcs }
   }
 
   private buildStrictRulesDigest(baseRulesDigest: string | undefined, anchors: CanonicalAnchors, factsSection?: string | null): string {
@@ -955,6 +963,13 @@ export class SessionService {
 
     await this.snapshots.saveTurnState(state)
 
+    await this.npcRelations.syncFromTurn({
+      characterId: params.characterId,
+      sessionId,
+      state,
+      mentions: narratorResponse.npcs
+    })
+
     await this.summaryRepo.upsertSummary({
       sessionId,
       lastTurnIncluded: 0,
@@ -1125,6 +1140,13 @@ export class SessionService {
     })
 
     await this.snapshots.saveTurnState(state)
+
+    await this.npcRelations.syncFromTurn({
+      characterId,
+      sessionId: params.sessionId,
+      state,
+      mentions: narratorResponse.npcs
+    })
 
     await this.summaryRepo.upsertSummary({
       sessionId: params.sessionId,
@@ -1516,6 +1538,13 @@ export class SessionService {
 
     // 6. Salvar estado final e mensagem do narrador
     await this.snapshots.saveTurnState(finalState)
+
+    await this.npcRelations.syncFromTurn({
+      characterId: finalState.player.characterId,
+      sessionId: params.sessionId,
+      state: finalState,
+      mentions: narratorResponse.npcs
+    })
 
     await this.chatMessages.append({
       sessionId: params.sessionId,

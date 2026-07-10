@@ -82,10 +82,16 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
           displayName: { type: 'STRING' },
           disposition: { type: 'STRING', enum: ['hostile', 'neutral', 'friendly'] },
           newlyIntroduced: { type: 'BOOLEAN' },
-          status: { type: 'STRING', enum: ['active', 'incapacitated', 'defeated', 'dead'], nullable: true }
+          status: { type: 'STRING', enum: ['active', 'incapacitated', 'defeated', 'dead'], nullable: true },
+          relation: {
+            type: 'STRING',
+            enum: ['conhecido', 'aliado', 'amigavel', 'neutro', 'desconfiado', 'hostil', 'inimigo'],
+            nullable: true,
+            description: 'Relação do NPC com o personagem do jogador — preencher SOMENTE quando ela muda de forma significativa neste turno (traição, aliança, confiança/desconfiança conquistada). Caso contrário, omitir.'
+          }
         },
         required: ['displayName', 'disposition', 'newlyIntroduced'],
-        propertyOrdering: ['id', 'displayName', 'disposition', 'newlyIntroduced', 'status']
+        propertyOrdering: ['id', 'displayName', 'disposition', 'newlyIntroduced', 'status', 'relation']
       }
     },
     itemChanges: {

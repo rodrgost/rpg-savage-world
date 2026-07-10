@@ -16,10 +16,12 @@ import {
   updateSessionSettings,
   getWorld,
   getCampaign,
-  getCharacter
+  getCharacter,
+  updateKnownNpc
 } from '../lib/api'
 import type { EnginePhaseData } from '../lib/api'
-import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, NarratorTurnResponse, NarrativeSegment, NarrativeStyle, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
+import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, KnownNpc, NarratorTurnResponse, NarrativeSegment, NarrativeStyle, RelationalStatus, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
+import { getNpcStatusLabel, RELATION_LABELS, RELATION_OPTIONS, relationClass, relationFromDisposition } from '../lib/npcLabels'
 import { ATTRIBUTES, SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
 import { YouTubeAmbient } from '../components/YouTubeAmbient'
 import { NarrationLogPanel } from '../components/game/NarrationLogPanel'
@@ -429,13 +431,14 @@ function formatState(state: GameState): string {
 
 // ─── Components ───
 
-const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerImage, npcs = [] }: {
+const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerImage, npcs = [], knownNpcs = [] }: {
   message: ChatMessage
   isNew?: boolean
   charsPerTick?: number
   playerName?: string
   playerImage?: { mimeType: string; base64: string } | null
   npcs?: NonNullable<GameState['npcs']>
+  knownNpcs?: KnownNpc[]
 }) {
   const segments = getNarrativeSegments(message)
   const fullText = joinNarrativeSegments(segments)
@@ -570,16 +573,6 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
 
         if (visibleNpcs.length === 0) return null
 
-        const getStatusLabel = (s?: string) => {
-          switch (s) {
-            case 'incapacitated': return 'Incapacitado'
-            case 'defeated': return 'Derrotado'
-            case 'dead': return 'Morto'
-            case 'active': return 'Ativo'
-            default: return 'Ativo'
-          }
-        }
-
         return (
           <div className="npcs-in-scene-compact">
             {visibleNpcs.map((npcMention) => {
@@ -594,11 +587,17 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
               const wounds = npcState?.wounds ?? null
               const maxWounds = npcState?.maxWounds ?? null
 
+              // Relação com o personagem: registro durável → menção do turno → derivada da disposition
+              const relation = knownNpcs.find((k) => k.npcId === npcMention.id)?.relationalStatus
+                ?? npcMention.relation
+                ?? relationFromDisposition(npcMention.disposition)
+
               return (
                 <div key={npcMention.id} className={`npc-compact ${npcMention.disposition} ${statusClass}`}>
                   <div className="npc-compact-header">
                     <span className="npc-compact-name">{npcMention.displayName ?? npcMention.name}</span>
-                    <span className="npc-compact-status">{getStatusLabel(status)}</span>
+                    <span className={`npc-relation-badge ${relationClass(relation)}`}>{RELATION_LABELS[relation]}</span>
+                    <span className="npc-compact-status">{getNpcStatusLabel(status) || 'Ativo'}</span>
                   </div>
                   <div className="npc-compact-stats">
                     {isEnemy && wounds !== null && maxWounds !== null && (
@@ -775,23 +774,13 @@ function NpcStatusEffectsPanel({ npcs }: { npcs: NonNullable<GameState['npcs']> 
   const affectedNpcs = npcs.filter((npc) => (npc.statusEffects ?? []).length > 0)
   if (!affectedNpcs.length) return null
 
-  const getStatusLabel = (status?: string) => {
-    switch (status) {
-      case 'incapacitated': return 'Incapacitado'
-      case 'defeated': return 'Derrotado'
-      case 'dead': return 'Morto'
-      case 'active': return 'Ativo'
-      default: return ''
-    }
-  }
-
   return (
     <div className="status-effects-panel">
       <h4>Inimigos afetados</h4>
       <div className="effects-list">
         {affectedNpcs.flatMap((npc) => (npc.statusEffects ?? []).map((effect) => (
-          <span key={`${npc.id}-${effect.id}`} className="effect-tag" title={`${npc.name}${npc.status ? ` - ${getStatusLabel(npc.status)}` : ''}`}>
-            {npc.status ? `[${getStatusLabel(npc.status)}] ` : ''}{npc.name}: {effect.name}
+          <span key={`${npc.id}-${effect.id}`} className="effect-tag" title={`${npc.name}${npc.status ? ` - ${getNpcStatusLabel(npc.status)}` : ''}`}>
+            {npc.status ? `[${getNpcStatusLabel(npc.status)}] ` : ''}{npc.name}: {effect.name}
             {effect.turnsRemaining !== undefined && ` (${effect.turnsRemaining}t)`}
           </span>
         )))}
@@ -1437,7 +1426,7 @@ function DiceResultCard({ event }: { event: SessionEvent }) {
 
 // ─── Character Sidebar ───
 
-type SidebarTab = 'status' | 'attributes' | 'skills' | 'inventory' | 'edges' | 'effects' | 'narration'
+type SidebarTab = 'status' | 'attributes' | 'skills' | 'inventory' | 'edges' | 'effects' | 'known' | 'narration'
 
 const SIDEBAR_TABS: { key: SidebarTab; label: string; icon: string }[] = [
   { key: 'status', label: 'Status', icon: '❤️' },
@@ -1446,6 +1435,7 @@ const SIDEBAR_TABS: { key: SidebarTab; label: string; icon: string }[] = [
   { key: 'inventory', label: 'Mochila', icon: '🎒' },
   { key: 'edges', label: 'Vantagens', icon: '⭐' },
   { key: 'effects', label: 'Efeitos', icon: '✨' },
+  { key: 'known', label: 'Conhecidos', icon: '👥' },
   { key: 'narration', label: 'Narração', icon: '🎭' },
 ]
 
@@ -1461,6 +1451,8 @@ function CharacterSidebar({
   onNarrativeStyleChange,
   onSimpleVocabularyChange,
   savingNarration,
+  knownNpcs = [],
+  onUpdateKnownNpc,
 }: {
   state: GameState | null
   open: boolean
@@ -1473,6 +1465,8 @@ function CharacterSidebar({
   onNarrativeStyleChange: (style: NarrativeStyle) => void
   onSimpleVocabularyChange: (simple: boolean) => void
   savingNarration: boolean
+  knownNpcs?: KnownNpc[]
+  onUpdateKnownNpc?: (npcId: string, patch: { relationalStatus?: Exclude<RelationalStatus, 'desconhecido'>; notes?: string; resetToAuto?: boolean }) => Promise<void>
 }) {
   const [tab, setTab] = useState<SidebarTab>('status')
   const [confirmReset, setConfirmReset] = useState(false)
@@ -1525,6 +1519,14 @@ function CharacterSidebar({
               {tab === 'inventory' && <SidebarInventory items={p.inventory} onRemove={onRemoveItem} />}
               {tab === 'edges' && <SidebarEdges edges={p.edges} hindrances={p.hindrances} />}
               {tab === 'effects' && <SidebarEffects effects={p.statusEffects} />}
+              {tab === 'known' && (
+                <SidebarKnownNpcs
+                  knownNpcs={knownNpcs}
+                  activeLocation={state?.worldState.activeLocation}
+                  sceneNpcIds={new Set((state?.npcs ?? []).map((npc) => npc.id))}
+                  onUpdate={onUpdateKnownNpc}
+                />
+              )}
             </>
           )}
         </div>
@@ -1814,6 +1816,108 @@ function SidebarEffects({ effects }: { effects: Array<{ id: string; name: string
   )
 }
 
+function SidebarKnownNpcs({ knownNpcs, activeLocation, sceneNpcIds, onUpdate }: {
+  knownNpcs: KnownNpc[]
+  activeLocation?: string
+  sceneNpcIds: Set<string>
+  onUpdate?: (npcId: string, patch: { relationalStatus?: Exclude<RelationalStatus, 'desconhecido'>; notes?: string; resetToAuto?: boolean }) => Promise<void>
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [notesDraft, setNotesDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  if (!knownNpcs.length) {
+    return <p className="muted">Seu personagem ainda não conhece nenhum NPC.</p>
+  }
+
+  const toggleExpanded = (npc: KnownNpc) => {
+    if (expandedId === npc.npcId) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(npc.npcId)
+    setNotesDraft(npc.notes ?? '')
+  }
+
+  const applyUpdate = async (npcId: string, patch: { relationalStatus?: Exclude<RelationalStatus, 'desconhecido'>; notes?: string; resetToAuto?: boolean }) => {
+    if (!onUpdate || saving) return
+    setSaving(true)
+    try {
+      await onUpdate(npcId, patch)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="known-npcs-panel">
+      {knownNpcs.map((npc) => {
+        const isDown = npc.conditionStatus === 'defeated' || npc.conditionStatus === 'dead' || npc.conditionStatus === 'incapacitated'
+        const inScene = sceneNpcIds.has(npc.npcId) && (!npc.lastKnownLocation || npc.lastKnownLocation === activeLocation)
+        const expanded = expandedId === npc.npcId
+
+        return (
+          <div key={npc.npcId} className={`known-npc-row${isDown ? ' known-npc-down' : ''}`}>
+            <button type="button" className="known-npc-summary" onClick={() => toggleExpanded(npc)}>
+              <span className="known-npc-name">{npc.name}</span>
+              <span className={`npc-relation-badge ${relationClass(npc.relationalStatus)}`}>
+                {RELATION_LABELS[npc.relationalStatus]}
+              </span>
+              {inScene && <span className="known-npc-in-scene">na cena</span>}
+            </button>
+            <div className="known-npc-meta">
+              {npc.conditionStatus && npc.conditionStatus !== 'active' && (
+                <span className="known-npc-condition">{getNpcStatusLabel(npc.conditionStatus)}</span>
+              )}
+              {npc.lastKnownLocation && <span className="known-npc-location">📍 {npc.lastKnownLocation}</span>}
+            </div>
+            {expanded && (
+              <div className="known-npc-edit">
+                <label className="known-npc-edit-label">
+                  Relação
+                  <select
+                    value={npc.relationalStatus === 'desconhecido' ? 'conhecido' : npc.relationalStatus}
+                    disabled={saving || !onUpdate}
+                    onChange={(e) => void applyUpdate(npc.npcId, { relationalStatus: e.target.value as Exclude<RelationalStatus, 'desconhecido'> })}
+                  >
+                    {RELATION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="known-npc-edit-label">
+                  Notas
+                  <textarea
+                    value={notesDraft}
+                    maxLength={500}
+                    rows={2}
+                    placeholder="Anotações sobre este NPC..."
+                    disabled={saving || !onUpdate}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    onBlur={() => {
+                      if (notesDraft !== (npc.notes ?? '')) void applyUpdate(npc.npcId, { notes: notesDraft })
+                    }}
+                  />
+                </label>
+                {npc.relationSource === 'manual' && (
+                  <button
+                    type="button"
+                    className="known-npc-reset-auto"
+                    disabled={saving || !onUpdate}
+                    onClick={() => void applyUpdate(npc.npcId, { resetToAuto: true })}
+                  >
+                    ↺ Voltar para automático
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Main Page ───
 
 export function GamePage() {
@@ -1849,6 +1953,7 @@ export function GamePage() {
   const [narrativeStyle, setNarrativeStyle] = useState<NarrativeStyle | undefined>(undefined)
   const [simpleVocabulary, setSimpleVocabulary] = useState<boolean | undefined>(undefined)
   const [savingNarration, setSavingNarration] = useState(false)
+  const [knownNpcs, setKnownNpcs] = useState<KnownNpc[]>([])
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -2003,6 +2108,7 @@ export function GamePage() {
       .then((payload) => {
         setState(payload.state)
         setSummary(payload.summary ?? null)
+        setKnownNpcs(payload.knownNpcs ?? [])
         setNarrativeStyle(payload.state?.meta?.narrativeStyle)
         setSimpleVocabulary(payload.state?.meta?.simpleVocabulary)
         pendingEngineMessagesRef.current.clear()
@@ -2055,9 +2161,11 @@ export function GamePage() {
     messages?: ChatMessage[]
     narratorResponse?: NarratorTurnResponse
     events?: Array<{ id: string; turn: number; type: string; payload: Record<string, unknown> }>
+    knownNpcs?: KnownNpc[]
   }, options?: { replaceMessages?: boolean }) {
     setState(result.state)
     setSummary(result.summary ?? null)
+    if (result.knownNpcs) setKnownNpcs(result.knownNpcs)
 
     let msgs = result.messages ?? []
     const normalizedNarratorOptions = normalizeOptions(result.narratorResponse?.options)
@@ -2408,6 +2516,20 @@ export function GamePage() {
     }
   }
 
+  async function handleUpdateKnownNpc(
+    npcId: string,
+    patch: { relationalStatus?: Exclude<RelationalStatus, 'desconhecido'>; notes?: string; resetToAuto?: boolean }
+  ) {
+    const characterId = state?.player.characterId
+    if (!characterId) return
+    try {
+      const updated = await updateKnownNpc(characterId, npcId, patch)
+      setKnownNpcs((prev) => prev.map((npc) => (npc.npcId === npcId ? updated : npc)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao atualizar NPC conhecido')
+    }
+  }
+
   async function handleNarrativeStyleChange(style: NarrativeStyle) {
     if (!sessionId || savingNarration) return
     setNarrativeStyle(style)
@@ -2540,6 +2662,8 @@ export function GamePage() {
         onNarrativeStyleChange={handleNarrativeStyleChange}
         onSimpleVocabularyChange={handleSimpleVocabularyChange}
         savingNarration={savingNarration}
+        knownNpcs={knownNpcs}
+        onUpdateKnownNpc={handleUpdateKnownNpc}
       />
 
       {/* ── Chat Narrativo ── */}
@@ -2567,7 +2691,7 @@ export function GamePage() {
                     <span className="turn-separator-label">Turno {msg.turn} · Cap. {state?.meta.chapter ?? 1}</span>
                   </div>
                 )}
-                <NarrativeBubble message={msg} isNew={msg.messageId === latestNarratorId} charsPerTick={typewriterSpeed} playerName={playerName ?? state?.player.name} playerImage={playerImage} npcs={state?.npcs ?? []} />
+                <NarrativeBubble message={msg} isNew={msg.messageId === latestNarratorId} charsPerTick={typewriterSpeed} playerName={playerName ?? state?.player.name} playerImage={playerImage} npcs={state?.npcs ?? []} knownNpcs={knownNpcs} />
               </div>
             )
           })}
