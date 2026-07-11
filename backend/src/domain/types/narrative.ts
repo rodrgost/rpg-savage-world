@@ -156,7 +156,7 @@ export type ValidateActionRequest = {
     playerSkills?: Record<string, string>
     rulesDigest?: string
   }
-  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; storyHook?: string | null; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
 }
 
 // ─── Opções de ação ───
@@ -315,7 +315,7 @@ export type NarrateTurnRequest = {
     /** Catálogo de NPCs nomeados do mundo — permite referenciar NPCs canônicos por ID */
     npcCatalog?: Array<{ id: string; name: string; description?: string; dispositionDefault: string }>
   }
-  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; storyHook?: string | null; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
   narrativeStyle?: NarrativeStyle
   simpleVocabulary?: boolean
 }
