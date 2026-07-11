@@ -139,7 +139,9 @@ export type NPCMention = {
   disposition: 'hostile' | 'neutral' | 'friendly'
   newlyIntroduced: boolean
   /** Status do NPC se houver mudança narrativa (ex: incapacitado, derrotado) */
-  status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
+  status?: 'active' | 'incapacitated' | 'defeated' | 'dead' | 'left'
+  /** Indica se o NPC acompanha o jogador em viagens. */
+  followsPlayer?: boolean
   /** Mudança na relação do NPC com o personagem do jogador (omitir se inalterada) */
   relation?: Exclude<RelationalStatus, 'desconhecido'>
 }
@@ -169,7 +171,8 @@ export type KnownNpc = {
   relationSource: 'auto' | 'manual'
   notes?: string
   disposition?: 'hostile' | 'neutral' | 'friendly'
-  conditionStatus?: 'active' | 'incapacitated' | 'defeated' | 'dead'
+  conditionStatus?: 'active' | 'incapacitated' | 'defeated' | 'dead' | 'left'
+  followsPlayer?: boolean
   lastKnownLocation?: string
   isCatalogNpc?: boolean
   lastSessionId?: string
@@ -279,6 +282,9 @@ export type GameState = {
     armor: number
     statusEffects: StatusEffect[]
     inventory: InventoryItem[]
+    equippedAttackItemId?: string
+    equippedArmorItemId?: string
+    equippedShieldItemId?: string
   }
   worldState: {
     activeLocation: string
@@ -307,7 +313,8 @@ export type NPCCombatant = {
   disposition?: 'hostile' | 'neutral' | 'friendly'
   location?: string
   /** Condição atual do NPC */
-  status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
+  status?: 'active' | 'incapacitated' | 'defeated' | 'dead' | 'left'
+  followsPlayer?: boolean
 }
 
 export type DiceRollDetail = {

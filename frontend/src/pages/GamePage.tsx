@@ -12,7 +12,13 @@ import {
   getSessionView,
   chooseOption,
   resetSession,
+  equipArmorItem,
+  equipAttackItem,
+  equipShieldItem,
   removeInventoryItem,
+  unequipArmorItem,
+  unequipAttackItem,
+  unequipShieldItem,
   updateSessionSettings,
   getWorld,
   getCampaign,
@@ -580,7 +586,7 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
               const status = npcMention.status ?? npcState?.status
               const isEnemy = npcMention.disposition === 'hostile'
 
-              const statusClass = status === 'incapacitated' || status === 'defeated' || status === 'dead'
+              const statusClass = status === 'incapacitated' || status === 'defeated' || status === 'dead' || status === 'left'
                 ? 'npc-compact-inactive'
                 : ''
 
@@ -597,6 +603,7 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
                   <div className="npc-compact-header">
                     <span className="npc-compact-name">{npcMention.displayName ?? npcMention.name}</span>
                     <span className={`npc-relation-badge ${relationClass(relation)}`}>{RELATION_LABELS[relation]}</span>
+                    {(npcState?.followsPlayer || npcMention.followsPlayer) && <span className="known-npc-in-scene">acompanha</span>}
                     <span className="npc-compact-status">{getNpcStatusLabel(status) || 'Ativo'}</span>
                   </div>
                   <div className="npc-compact-stats">
@@ -1426,12 +1433,13 @@ function DiceResultCard({ event }: { event: SessionEvent }) {
 
 // ─── Character Sidebar ───
 
-type SidebarTab = 'status' | 'attributes' | 'skills' | 'inventory' | 'edges' | 'effects' | 'known' | 'narration'
+type SidebarTab = 'status' | 'attributes' | 'skills' | 'equipment' | 'inventory' | 'edges' | 'effects' | 'known' | 'narration'
 
 const SIDEBAR_TABS: { key: SidebarTab; label: string; icon: string }[] = [
   { key: 'status', label: 'Status', icon: '❤️' },
   { key: 'attributes', label: 'Atributos', icon: '🎯' },
   { key: 'skills', label: 'Perícias', icon: '📖' },
+  { key: 'equipment', label: 'Equipamento', icon: '🛡️' },
   { key: 'inventory', label: 'Mochila', icon: '🎒' },
   { key: 'edges', label: 'Vantagens', icon: '⭐' },
   { key: 'effects', label: 'Efeitos', icon: '✨' },
@@ -1446,6 +1454,12 @@ function CharacterSidebar({
   onReset,
   resetting,
   onRemoveItem,
+  onEquipAttack,
+  onUnequipAttack,
+  onEquipArmor,
+  onUnequipArmor,
+  onEquipShield,
+  onUnequipShield,
   narrativeStyle,
   simpleVocabulary,
   onNarrativeStyleChange,
@@ -1460,6 +1474,12 @@ function CharacterSidebar({
   onReset: () => void
   resetting: boolean
   onRemoveItem?: (itemId: string) => void
+  onEquipAttack?: (itemId: string) => Promise<void>
+  onUnequipAttack?: () => Promise<void>
+  onEquipArmor?: (itemId: string) => Promise<void>
+  onUnequipArmor?: () => Promise<void>
+  onEquipShield?: (itemId: string) => Promise<void>
+  onUnequipShield?: () => Promise<void>
   narrativeStyle?: NarrativeStyle
   simpleVocabulary?: boolean
   onNarrativeStyleChange: (style: NarrativeStyle) => void
@@ -1516,6 +1536,20 @@ function CharacterSidebar({
               {tab === 'status' && <SidebarStatus player={p} location={state?.worldState.activeLocation ?? '?'} turn={state?.meta.turn ?? 0} chapter={state?.meta.chapter ?? 0} />}
               {tab === 'attributes' && <SidebarAttributes player={p} />}
               {tab === 'skills' && <SidebarSkills player={p} />}
+              {tab === 'equipment' && (
+                <SidebarEquipment
+                  items={p.inventory}
+                  equippedAttackItemId={p.equippedAttackItemId}
+                  equippedArmorItemId={p.equippedArmorItemId}
+                  equippedShieldItemId={p.equippedShieldItemId}
+                  onEquipAttack={onEquipAttack}
+                  onUnequipAttack={onUnequipAttack}
+                  onEquipArmor={onEquipArmor}
+                  onUnequipArmor={onUnequipArmor}
+                  onEquipShield={onEquipShield}
+                  onUnequipShield={onUnequipShield}
+                />
+              )}
               {tab === 'inventory' && <SidebarInventory items={p.inventory} onRemove={onRemoveItem} />}
               {tab === 'edges' && <SidebarEdges edges={p.edges} hindrances={p.hindrances} />}
               {tab === 'effects' && <SidebarEffects effects={p.statusEffects} />}
@@ -1523,7 +1557,7 @@ function CharacterSidebar({
                 <SidebarKnownNpcs
                   knownNpcs={knownNpcs}
                   activeLocation={state?.worldState.activeLocation}
-                  sceneNpcIds={new Set((state?.npcs ?? []).map((npc) => npc.id))}
+                  sceneNpcIds={new Set((state?.npcs ?? []).filter((npc) => npc.status !== 'left').map((npc) => npc.id))}
                   onUpdate={onUpdateKnownNpc}
                 />
               )}
@@ -1759,6 +1793,112 @@ function SidebarInventory({ items, onRemove }: { items: InventoryItem[]; onRemov
   )
 }
 
+function SidebarEquipment({
+  items,
+  equippedAttackItemId,
+  equippedArmorItemId,
+  equippedShieldItemId,
+  onEquipAttack,
+  onUnequipAttack,
+  onEquipArmor,
+  onUnequipArmor,
+  onEquipShield,
+  onUnequipShield,
+}: {
+  items: InventoryItem[]
+  equippedAttackItemId?: string
+  equippedArmorItemId?: string
+  equippedShieldItemId?: string
+  onEquipAttack?: (itemId: string) => Promise<void>
+  onUnequipAttack?: () => Promise<void>
+  onEquipArmor?: (itemId: string) => Promise<void>
+  onUnequipArmor?: () => Promise<void>
+  onEquipShield?: (itemId: string) => Promise<void>
+  onUnequipShield?: () => Promise<void>
+}) {
+  const attackItem = items.find((item) => item.id === equippedAttackItemId)
+  const armorItem = items.find((item) => item.id === equippedArmorItemId)
+  const shieldItem = items.find((item) => item.id === equippedShieldItemId)
+
+  const armorCandidates = items.filter((item) => item.category === 'armor' && !/escudo/i.test(item.name))
+  const shieldCandidates = items.filter((item) => item.category === 'armor' && /escudo/i.test(item.name))
+
+  return (
+    <div className="sidebar-inventory">
+      <div className="sidebar-inv-item">
+        <div className="inv-item-header">
+          <span className="inv-item-name">Ataque</span>
+          {attackItem && onUnequipAttack && (
+            <button type="button" className="inv-item-remove" onClick={() => void onUnequipAttack()} title="Desequipar ataque">✕</button>
+          )}
+        </div>
+        <p className="inv-item-desc">Equipado: {attackItem?.name ?? 'nenhum'}</p>
+        <div className="inv-item-tags">
+          {items.map((item) => (
+            <button
+              key={`atk-${item.id}`}
+              type="button"
+              className="inv-tag"
+              onClick={() => onEquipAttack && void onEquipAttack(item.id)}
+              disabled={item.id === equippedAttackItemId || !onEquipAttack}
+            >
+              {item.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="sidebar-inv-item">
+        <div className="inv-item-header">
+          <span className="inv-item-name">Armadura</span>
+          {armorItem && onUnequipArmor && (
+            <button type="button" className="inv-item-remove" onClick={() => void onUnequipArmor()} title="Desequipar armadura">✕</button>
+          )}
+        </div>
+        <p className="inv-item-desc">Equipado: {armorItem?.name ?? 'nenhuma'}</p>
+        <div className="inv-item-tags">
+          {armorCandidates.length === 0 && <span className="inv-tag">Sem armadura</span>}
+          {armorCandidates.map((item) => (
+            <button
+              key={`arm-${item.id}`}
+              type="button"
+              className="inv-tag"
+              onClick={() => onEquipArmor && void onEquipArmor(item.id)}
+              disabled={item.id === equippedArmorItemId || !onEquipArmor}
+            >
+              {item.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="sidebar-inv-item">
+        <div className="inv-item-header">
+          <span className="inv-item-name">Escudo</span>
+          {shieldItem && onUnequipShield && (
+            <button type="button" className="inv-item-remove" onClick={() => void onUnequipShield()} title="Desequipar escudo">✕</button>
+          )}
+        </div>
+        <p className="inv-item-desc">Equipado: {shieldItem?.name ?? 'nenhum'}</p>
+        <div className="inv-item-tags">
+          {shieldCandidates.length === 0 && <span className="inv-tag">Sem escudo</span>}
+          {shieldCandidates.map((item) => (
+            <button
+              key={`shd-${item.id}`}
+              type="button"
+              className="inv-tag"
+              onClick={() => onEquipShield && void onEquipShield(item.id)}
+              disabled={item.id === equippedShieldItemId || !onEquipShield}
+            >
+              {item.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SidebarEdges({ edges, hindrances }: { edges: string[]; hindrances: Hindrance[] }) {
   const hasEdges = edges.length > 0
   const hasHindrances = hindrances.length > 0
@@ -1852,7 +1992,7 @@ function SidebarKnownNpcs({ knownNpcs, activeLocation, sceneNpcIds, onUpdate }: 
   return (
     <div className="known-npcs-panel">
       {knownNpcs.map((npc) => {
-        const isDown = npc.conditionStatus === 'defeated' || npc.conditionStatus === 'dead' || npc.conditionStatus === 'incapacitated'
+        const isDown = npc.conditionStatus === 'defeated' || npc.conditionStatus === 'dead' || npc.conditionStatus === 'incapacitated' || npc.conditionStatus === 'left'
         const inScene = sceneNpcIds.has(npc.npcId) && (!npc.lastKnownLocation || npc.lastKnownLocation === activeLocation)
         const expanded = expandedId === npc.npcId
 
@@ -1869,6 +2009,7 @@ function SidebarKnownNpcs({ knownNpcs, activeLocation, sceneNpcIds, onUpdate }: 
               {npc.conditionStatus && npc.conditionStatus !== 'active' && (
                 <span className="known-npc-condition">{getNpcStatusLabel(npc.conditionStatus)}</span>
               )}
+              {npc.followsPlayer && <span className="known-npc-in-scene">acompanha jogador</span>}
               {npc.lastKnownLocation && <span className="known-npc-location">📍 {npc.lastKnownLocation}</span>}
             </div>
             {expanded && (
@@ -1988,9 +2129,12 @@ export function GamePage() {
 
   const mentionMatches = useMemo<MentionNpc[]>(() => {
     if (!mention) return []
-    const list = (state?.npcs ?? []).filter((n) => !n.location || n.location === state?.worldState.activeLocation)
+    const list = (state?.npcs ?? []).filter((n) => (!n.location || n.location === state?.worldState.activeLocation) && n.status !== 'left')
     const q = mention.query.trim().toLowerCase()
-    const visible = list.filter((n) => (n.status ?? 'active') !== 'dead')
+    const visible = list.filter((n) => {
+      const status = n.status ?? 'active'
+      return status !== 'dead' && status !== 'left'
+    })
     if (!q) return visible
     return visible.filter((n) => (n.displayName ?? n.name).toLowerCase().includes(q))
   }, [mention, state?.npcs])
@@ -2503,14 +2647,71 @@ export function GamePage() {
     }
   }
 
+  async function handleEquipAttack(itemId: string) {
+    if (!sessionId) return
+    try {
+      const result = await equipAttackItem(sessionId, itemId)
+      setState(result.state)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao equipar ataque')
+    }
+  }
+
+  async function handleUnequipAttack() {
+    if (!sessionId) return
+    try {
+      const result = await unequipAttackItem(sessionId)
+      setState(result.state)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao desequipar ataque')
+    }
+  }
+
+  async function handleEquipArmor(itemId: string) {
+    if (!sessionId) return
+    try {
+      const result = await equipArmorItem(sessionId, itemId)
+      setState(result.state)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao equipar armadura')
+    }
+  }
+
+  async function handleUnequipArmor() {
+    if (!sessionId) return
+    try {
+      const result = await unequipArmorItem(sessionId)
+      setState(result.state)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao desequipar armadura')
+    }
+  }
+
+  async function handleEquipShield(itemId: string) {
+    if (!sessionId) return
+    try {
+      const result = await equipShieldItem(sessionId, itemId)
+      setState(result.state)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao equipar escudo')
+    }
+  }
+
+  async function handleUnequipShield() {
+    if (!sessionId) return
+    try {
+      const result = await unequipShieldItem(sessionId)
+      setState(result.state)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao desequipar escudo')
+    }
+  }
+
   async function handleRemoveItem(itemId: string) {
     if (!sessionId) return
     try {
       const result = await removeInventoryItem(sessionId, itemId)
-      setState((prev) => prev ? {
-        ...prev,
-        player: { ...prev.player, inventory: result.inventory }
-      } : prev)
+      setState(result.state)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao remover item')
     }
@@ -2561,7 +2762,7 @@ export function GamePage() {
   const isShaken = state?.player.isShaken ?? false
   const inventory = state?.player.inventory ?? []
   const statusEffects = state?.player.statusEffects ?? []
-  const npcEffects = (state?.npcs ?? []).filter((n) => !n.location || n.location === state?.worldState.activeLocation)
+  const npcEffects = (state?.npcs ?? []).filter((n) => (!n.location || n.location === state?.worldState.activeLocation) && n.status !== 'left')
 
   return (
     <section className="page-game">
@@ -2657,6 +2858,12 @@ export function GamePage() {
         onReset={handleReset}
         resetting={resetting}
         onRemoveItem={handleRemoveItem}
+        onEquipAttack={handleEquipAttack}
+        onUnequipAttack={handleUnequipAttack}
+        onEquipArmor={handleEquipArmor}
+        onUnequipArmor={handleUnequipArmor}
+        onEquipShield={handleEquipShield}
+        onUnequipShield={handleUnequipShield}
         narrativeStyle={narrativeStyle}
         simpleVocabulary={simpleVocabulary}
         onNarrativeStyleChange={handleNarrativeStyleChange}
@@ -2923,6 +3130,8 @@ export function GamePage() {
                           ? 'Derrotado'
                           : npc.status === 'dead'
                             ? 'Morto'
+                            : npc.status === 'left'
+                              ? 'Foi embora'
                             : ''}
                     </span>
                   )}

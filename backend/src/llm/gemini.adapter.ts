@@ -2011,7 +2011,7 @@ export class GeminiAdapter implements Narrator {
       '    }',
       '  ],',
       '  "npcs": [',
-      '    { "displayName": "<nome amigável exibido ao jogador>", "id": "<copie o hash de NPCS PRESENTES se já estiver presente; omita para NPCs novos>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false, "status": "active|incapacitated|defeated|dead", "relation": "conhecido|aliado|amigavel|neutro|desconfiado|hostil|inimigo" }',
+      '    { "displayName": "<nome amigável exibido ao jogador>", "id": "<copie o hash de NPCS PRESENTES se já estiver presente; omita para NPCs novos>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false, "status": "active|incapacitated|defeated|dead|left", "followsPlayer": true|false, "relation": "conhecido|aliado|amigavel|neutro|desconfiado|hostil|inimigo" }',
       '  ],',
       '  "itemChanges": [',
       '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|money|vehicle|property|quest|misc" }',
@@ -2052,13 +2052,13 @@ export class GeminiAdapter implements Narrator {
       '  • changeType "gained": SOMENTE quando o RESULTADO MECÂNICO contém evidência explícita ([item_gained]). Nunca invente itens ganhos só pela narrativa.',
       '  • changeType "lost" ou "used": registre quando (a) o RESULTADO MECÂNICO tem evidência explícita ([item_lost], [item_used], [ammunition_consumed]), OU (b) sua narrativa NESTE turno descreve explicitamente o item sendo largado, destruído, confiscado, consumido, ou de alguma forma saindo da posse do jogador. Exemplo: se a narrativa diz "forçando você a soltá-lo" sobre um item, registre esse item com changeType "lost".',
       '  ⚠️ NÃO REGISTRAR UMA PERDA DE ITEM NARRADA É UM BUG: se sua narrativa diz que um item foi perdido mas você omite a entrada em itemChanges, o item permanece no inventário e turnos futuros vão contradizer a história.',
-      '  • CONSUMÍVEL vs DURÁVEL — distinção OBRIGATÓRIA: apenas itens de categoria "consumable" (poções, rações, etc.) e "ammunition" são GASTOS ao serem usados e devem sair do inventário com changeType "used"/"lost". Itens DURÁVEIS — categorias "weapon", "armor", "vehicle", "property", "quest", "misc" — NÃO se gastam com o uso. Usar uma espada, vestir uma armadura, dirigir um veículo ou empunhar um artefato NÃO os remove do inventário.',
+      '  • CONSUMÍVEL vs DURÁVEL — distinção OBRIGATÓRIA: apenas itens de categoria "consumable" (itens de uso limitado) e "ammunition" são GASTOS ao serem usados e devem sair do inventário com changeType "used"/"lost". Itens DURÁVEIS — categorias "weapon", "armor", "vehicle", "property", "quest", "misc" — NÃO se gastam com o uso. Usar uma espada, vestir uma armadura, dirigir um veículo ou empunhar um artefato NÃO os remove do inventário.',
       '  • Um item durável só sai do inventário (changeType "lost") se a narrativa DESTE turno descreve explicitamente que ele foi QUEBRADO/destruído, perdido, largado, roubado ou confiscado. Na dúvida, NÃO registre a perda: o jogador mantém o item. Nunca marque uma arma ou equipamento como "used" apenas porque o jogador o utilizou na ação.',
       '- Itens já presentes no inventário NÃO devem aparecer em itemChanges com changeType "gained". Cada item aparece NO MÁXIMO UMA VEZ por resposta.',
       '- Armas à distância (arco, besta, pistola, rifle, espingarda, etc.) devem SEMPRE ter sua munição correspondente como item de inventário separado (flechas, virotes, balas, cartuchos, etc.).',
       '- Munição (categoria "ammunition") deve aparecer em itemChanges com changeType "used" SOMENTE quando a AÇÃO DO JOGADOR neste turno é do tipo "attack" (disparo de fato realizado). NUNCA registre consumo de munição em trait_test, custom, travel, ou qualquer outro tipo que não seja attack.',
       '- MUNIÇÃO ENCONTRADA/RECEBIDA: ao narrar e registrar munição achada, sempre descreva em UNIDADES INDIVIDUAIS (ex.: "12 balas", "8 cartuchos", "20 flechas"). NUNCA use objetos de agrupamento como caixa, pente, carregador, clipe, maço, pacote, fardo ou similares — nem na narrativa nem no nome do item. O campo "quantity" deve ser o número total de unidades individuais (ex.: uma "caixa de munição" deve virar "30 balas" com quantity=30, não "1 caixa").',
-      '- Todo item DEVE ter o campo "category". Use: weapon (armas), armor (armaduras), consumable (consumíveis como poções/rações), ammunition (munição), money (dinheiro/moedas/recursos monetários — o campo "quantity" representa a quantidade exata de moedas/créditos/ouro), vehicle (veículos: carro, moto, avião, barco, navio, etc.), property (propriedades: casa, apartamento, fazenda, escritório, etc.), quest (item narrativo/de missão), misc (outros itens).',
+      '- Todo item DEVE ter o campo "category". Use: weapon (armas), armor (armaduras), consumable (consumíveis de uso limitado), ammunition (munição), money (dinheiro/moedas/recursos monetários — o campo "quantity" representa a quantidade exata de moedas/créditos/ouro), vehicle (veículos: carro, moto, avião, barco, navio, etc.), property (propriedades: casa, apartamento, fazenda, escritório, etc.), quest (item narrativo/de missão), misc (outros itens).',
       '- Não repita a mesma narrativa. Avance a história a cada turno.',
       '- Os textos das opções devem ter no máximo 1 frase curta cada.',
       '- Não adicione campos extras além dos especificados acima.'
@@ -2463,9 +2463,10 @@ export class GeminiAdapter implements Narrator {
     const rawNpcs = Array.isArray(raw.npcs) ? raw.npcs : []
     const npcs: NPCMention[] = rawNpcs.map((n: unknown) => {
       const npc = (n && typeof n === 'object' ? n : {}) as Record<string, unknown>
-      const status = ['active', 'incapacitated', 'defeated', 'dead'].includes(npc.status as string)
+      const status = ['active', 'incapacitated', 'defeated', 'dead', 'left'].includes(npc.status as string)
         ? (npc.status as NPCMention['status'])
         : undefined
+      const followsPlayer = typeof npc.followsPlayer === 'boolean' ? npc.followsPlayer : undefined
       const relation = ['conhecido', 'aliado', 'amigavel', 'neutro', 'desconfiado', 'hostil', 'inimigo'].includes(npc.relation as string)
         ? (npc.relation as NPCMention['relation'])
         : undefined
@@ -2497,6 +2498,7 @@ export class GeminiAdapter implements Narrator {
         disposition: (['hostile', 'neutral', 'friendly'].includes(npc.disposition as string) ? npc.disposition : 'neutral') as NPCMention['disposition'],
         newlyIntroduced: typeof npc.newlyIntroduced === 'boolean' ? npc.newlyIntroduced : true,
         ...(status ? { status } : {}),
+        ...(followsPlayer !== undefined ? { followsPlayer } : {}),
         ...(relation ? { relation } : {})
       }
     })
@@ -3032,6 +3034,7 @@ export class GeminiAdapter implements Narrator {
         npcsPresent: ctx.npcsPresent,
         defeatedNpcIds: ctx.defeatedNpcIds ?? [],
         inventory: ctx.inventory,
+        equippedItems: ctx.equippedItems ?? null,
         activeStatusEffects: ctx.activeStatusEffects,
         playerSkills: ctx.playerSkills ?? null,
         rulesDigest: ctx.rulesDigest ?? null,
@@ -3159,7 +3162,7 @@ export class GeminiAdapter implements Narrator {
       '- Arma principal apropriada à profissão (espada, arco, cajado, adaga, pistola, rifle, etc.)',
       '- Se a arma for à distância (arco, besta, pistola, rifle, espingarda, etc.), inclua OBRIGATORIAMENTE a munição correspondente como item separado (flechas, virotes, balas, cartuchos, etc.) com quantidade apropriada ao contexto',
       '- Armadura ou roupa de proteção, se aplicável',
-      '- Suprimentos básicos de viagem (rações, cantil, bolsa)',
+      '- Suprimentos básicos de viagem (bolsa, corda, ferramentas úteis, etc.)',
       '- 1 a 2 itens temáticos/narrativos que conectam o personagem ao mundo (amuleto de família, carta misteriosa, mapa antigo, diário, etc.)',
       '- Dinheiro inicial OBRIGATÓRIO: inclua 1 item com categoria "money" e o nome apropriado ao cenário (ex.: "Moedas de Ouro", "Créditos", "Dólares", "Gil", etc.) e "quantity" com a quantia numérica exata coerente com o cenário e o contexto do personagem.',
       '- Para cenários modernos/futuristas: se o personagem tem profissão ou contexto que justifique, inclua um veículo (categoria "vehicle": carro, moto, nave, etc.) ou propriedade (categoria "property": apartamento, base, etc.) como item inicial.',
@@ -3251,6 +3254,7 @@ export class GeminiAdapter implements Narrator {
           isShaken: req.context.isShaken,
           bennies: req.context.bennies,
           inventory: req.context.inventory,
+          equippedItems: req.context.equippedItems ?? null,
           activeStatusEffects: req.context.activeStatusEffects,
           npcsPresent: req.context.npcsPresent,
           defeatedNpcIds: req.context.defeatedNpcIds ?? [],

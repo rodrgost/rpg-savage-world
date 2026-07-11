@@ -483,6 +483,37 @@ export const ARMORS: readonly ArmorDefinition[] = [
   { key: 'tactical_vest', label: 'Colete Tático', armorValue: 4, minStrength: 6, notes: 'Cobre apenas torso' }
 ] as const
 
+const ARMOR_DEFINITION_BY_LOOKUP = new Map<string, ArmorDefinition>()
+for (const armor of ARMORS) {
+  ARMOR_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(armor.key), armor)
+  ARMOR_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(armor.label), armor)
+}
+
+export function findArmorDefinition(nameOrKey: string | null | undefined): ArmorDefinition | undefined {
+  if (typeof nameOrKey !== 'string') return undefined
+  const normalized = normalizeSkillLookupValue(nameOrKey)
+  if (!normalized) return undefined
+
+  const direct = ARMOR_DEFINITION_BY_LOOKUP.get(normalized)
+  if (direct) return direct
+
+  let best: { armor: ArmorDefinition; length: number } | undefined
+  for (const armor of ARMORS) {
+    const label = normalizeSkillLookupValue(armor.label)
+    if (label && normalized.includes(label)) {
+      if (!best || label.length > best.length) best = { armor, length: label.length }
+    }
+  }
+  return best?.armor
+}
+
+export function getShieldParryBonus(armor: ArmorDefinition | undefined): number {
+  if (!armor?.notes) return 0
+  const match = armor.notes.match(/\+(\d+)\s*Aparar/i)
+  if (!match) return 0
+  return Number(match[1] ?? 0)
+}
+
 // ─── Ranks de Progressão ───
 
 export type RankName = 'novato' | 'experiente' | 'veterano' | 'heroico' | 'lendario'

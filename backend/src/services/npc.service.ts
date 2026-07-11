@@ -67,6 +67,7 @@ export class NpcService {
       disposition: disposition ?? def.dispositionDefault,
       location,
       status: 'active',
+      followsPlayer: Boolean(def.followsPlayer),
       personality: def.personality,
       motivation: def.motivation,
       speechPattern: def.speechPattern,
@@ -77,7 +78,7 @@ export class NpcService {
    * Cria um stub genérico para NPCs não catalogados (comportamento legado).
    */
   buildNpcStub(
-    mention: Pick<NPCMention, 'id' | 'name' | 'displayName' | 'disposition'>,
+    mention: Pick<NPCMention, 'id' | 'name' | 'displayName' | 'disposition' | 'followsPlayer'>,
     location: string
   ): NPCCombatant {
     const display = mention.displayName ?? mention.name
@@ -100,7 +101,8 @@ export class NpcService {
       tags: ['narrative'],
       disposition: mention.disposition,
       location,
-      status: 'active'
+      status: 'active',
+      followsPlayer: Boolean(mention.followsPlayer)
     }
   }
 }

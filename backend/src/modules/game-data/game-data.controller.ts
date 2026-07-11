@@ -191,7 +191,8 @@ const NpcDefinitionBody = z.object({
     strength: z.number().int().optional(),
     vigor: z.number().int().optional()
   }).optional(),
-  tags: z.array(z.string()).optional()
+  tags: z.array(z.string()).optional(),
+  followsPlayer: z.boolean().optional()
 })
 
 // ─── Known NPCs (registro de NPCs conhecidos do personagem) ───

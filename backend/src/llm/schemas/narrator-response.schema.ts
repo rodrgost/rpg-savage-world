@@ -82,7 +82,8 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
           displayName: { type: 'STRING' },
           disposition: { type: 'STRING', enum: ['hostile', 'neutral', 'friendly'] },
           newlyIntroduced: { type: 'BOOLEAN' },
-          status: { type: 'STRING', enum: ['active', 'incapacitated', 'defeated', 'dead'], nullable: true },
+          status: { type: 'STRING', enum: ['active', 'incapacitated', 'defeated', 'dead', 'left'], nullable: true },
+          followsPlayer: { type: 'BOOLEAN', nullable: true },
           relation: {
             type: 'STRING',
             enum: ['conhecido', 'aliado', 'amigavel', 'neutro', 'desconfiado', 'hostil', 'inimigo'],
@@ -91,7 +92,7 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
           }
         },
         required: ['displayName', 'disposition', 'newlyIntroduced'],
-        propertyOrdering: ['id', 'displayName', 'disposition', 'newlyIntroduced', 'status', 'relation']
+        propertyOrdering: ['id', 'displayName', 'disposition', 'newlyIntroduced', 'status', 'followsPlayer', 'relation']
       }
     },
     itemChanges: {

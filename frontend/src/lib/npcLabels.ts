@@ -6,6 +6,7 @@ export function getNpcStatusLabel(status?: string): string {
     case 'incapacitated': return 'Incapacitado'
     case 'defeated': return 'Derrotado'
     case 'dead': return 'Morto'
+    case 'left': return 'Foi embora'
     case 'active': return 'Ativo'
     default: return ''
   }

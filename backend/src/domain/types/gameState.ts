@@ -51,6 +51,8 @@ export type NpcDefinition = {
   skills?: Record<string, DieType>
   attributes?: Partial<SWAttributes>
   tags?: string[]
+  /** Quando true, acompanha o jogador em ações de viagem por padrão. */
+  followsPlayer?: boolean
 }
 
 /**
@@ -100,7 +102,9 @@ export type NPCCombatant = {
   disposition?: 'hostile' | 'neutral' | 'friendly'
   location?: string
   /** Condição atual do NPC */
-  status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
+  status?: 'active' | 'incapacitated' | 'defeated' | 'dead' | 'left'
+  /** Marca NPCs que acompanham o jogador quando ele viaja. */
+  followsPlayer?: boolean
   /** Dado de ataque do NPC (ex: 6 = d6). Preenchido pelo LLM ao introduzir NPCs hostis. */
   attackSkillDie?: DieType
   /** Fórmula de dano do NPC (ex: "str+d6", "2d6"). Preenchido pelo LLM. */
@@ -160,6 +164,12 @@ export interface GameState {
      * combina com o tipo de ataque) ou cai em "desarmado" (dano de Força).
      */
     equippedWeaponKey?: string
+    /** Item de inventário equipado como ataque (pode ser arma catalogada ou improvisada). */
+    equippedAttackItemId?: string
+    /** Item de inventário equipado como armadura defensiva. */
+    equippedArmorItemId?: string
+    /** Item de inventário equipado como escudo defensivo. */
+    equippedShieldItemId?: string
   }
 
   worldState: {

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpException, Inject, Param, Patch, Post, Res } from '@nestjs/common'
+import { Body, Controller, Delete, Get, HttpException, Inject, Param, Patch, Post, Put, Res } from '@nestjs/common'
 import type { Response } from 'express'
 import { z } from 'zod'
 import { SessionService } from './session.service.js'
@@ -44,6 +44,10 @@ const ApplyTurnBody = z.object({
 
 const ChooseOptionBody = z.object({
   optionId: z.string().min(1)
+})
+
+const EquipItemBody = z.object({
+  itemId: z.string().min(1)
 })
 
 function flushIfSupported(res: Response): void {
@@ -252,7 +256,67 @@ export class SessionController {
     @Param('itemId') itemId: string
   ) {
     const state = await this.sessions.removeInventoryItem({ ownerId: userId, sessionId, itemId })
-    return { ok: true, inventory: state.player.inventory }
+    return { ok: true, state, inventory: state.player.inventory }
+  }
+
+  @Put('/:sessionId/equipment/attack')
+  async equipAttackItem(
+    @CurrentUser('uid') userId: string,
+    @Param('sessionId') sessionId: string,
+    @Body() body: unknown
+  ) {
+    const parsed = EquipItemBody.parse(body)
+    const state = await this.sessions.equipAttackItem({ ownerId: userId, sessionId, itemId: parsed.itemId })
+    return { ok: true, state, inventory: state.player.inventory }
+  }
+
+  @Delete('/:sessionId/equipment/attack')
+  async unequipAttackItem(
+    @CurrentUser('uid') userId: string,
+    @Param('sessionId') sessionId: string
+  ) {
+    const state = await this.sessions.unequipAttackItem({ ownerId: userId, sessionId })
+    return { ok: true, state, inventory: state.player.inventory }
+  }
+
+  @Put('/:sessionId/equipment/armor')
+  async equipArmorItem(
+    @CurrentUser('uid') userId: string,
+    @Param('sessionId') sessionId: string,
+    @Body() body: unknown
+  ) {
+    const parsed = EquipItemBody.parse(body)
+    const state = await this.sessions.equipArmorItem({ ownerId: userId, sessionId, itemId: parsed.itemId })
+    return { ok: true, state, inventory: state.player.inventory }
+  }
+
+  @Delete('/:sessionId/equipment/armor')
+  async unequipArmorItem(
+    @CurrentUser('uid') userId: string,
+    @Param('sessionId') sessionId: string
+  ) {
+    const state = await this.sessions.unequipArmorItem({ ownerId: userId, sessionId })
+    return { ok: true, state, inventory: state.player.inventory }
+  }
+
+  @Put('/:sessionId/equipment/shield')
+  async equipShieldItem(
+    @CurrentUser('uid') userId: string,
+    @Param('sessionId') sessionId: string,
+    @Body() body: unknown
+  ) {
+    const parsed = EquipItemBody.parse(body)
+    const state = await this.sessions.equipShieldItem({ ownerId: userId, sessionId, itemId: parsed.itemId })
+    return { ok: true, state, inventory: state.player.inventory }
+  }
+
+  @Delete('/:sessionId/equipment/shield')
+  async unequipShieldItem(
+    @CurrentUser('uid') userId: string,
+    @Param('sessionId') sessionId: string
+  ) {
+    const state = await this.sessions.unequipShieldItem({ ownerId: userId, sessionId })
+    return { ok: true, state, inventory: state.player.inventory }
   }
 
   @Post('/:sessionId/reset')

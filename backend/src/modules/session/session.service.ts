@@ -27,7 +27,17 @@ import { randomUUID } from 'node:crypto'
 import { WorldsRepo } from '../../repositories/worlds.repo.js'
 import { CampaignsRepo } from '../../repositories/campaigns.repo.js'
 import { CharactersRepo } from '../../repositories/characters.repo.js'
-import { difficultyToModifier, findSkillDefinition, isDieType } from '../../domain/savage-worlds/constants.js'
+import {
+  calcParry,
+  calcToughness,
+  difficultyToModifier,
+  findArmorDefinition,
+  findSkillDefinition,
+  findWeaponDefinition,
+  getShieldParryBonus,
+  isDieType,
+  resolveSkillDie
+} from '../../domain/savage-worlds/constants.js'
 import type { Narrator } from '../../llm/narrator.js'
 import { GeminiAdapter } from '../../llm/gemini.adapter.js'
 import { log, warn } from '../../utils/file-logger.js'
@@ -153,14 +163,212 @@ export class SessionService {
     await this.requireOwnedSession(sessionId, ownerId)
   }
 
+  private getInventoryItemById(state: GameState, itemId: string): InventoryItem | undefined {
+    return (state.player.inventory ?? []).find((item) => item.id === itemId)
+  }
+
+  private recomputePlayerCombatStatsFromEquipment(state: GameState): GameState {
+    const armorItem = state.player.equippedArmorItemId
+      ? this.getInventoryItemById(state, state.player.equippedArmorItemId)
+      : undefined
+    const shieldItem = state.player.equippedShieldItemId
+      ? this.getInventoryItemById(state, state.player.equippedShieldItemId)
+      : undefined
+
+    const armorDef = findArmorDefinition(armorItem?.name)
+    const shieldDef = findArmorDefinition(shieldItem?.name)
+
+    const armorValue = armorDef?.armorValue ?? 0
+    const parryBonusFromShield = getShieldParryBonus(shieldDef)
+    const fightingDie = resolveSkillDie(state.player.skills, 'Luta') ?? 0
+    const baseParry = calcParry(fightingDie as DieType | 0, state.player.edges)
+    const parry = baseParry + parryBonusFromShield
+    const toughness = calcToughness(state.player.attributes.vigor, armorValue, state.player.edges, state.player.hindrances)
+
+    return {
+      ...state,
+      player: {
+        ...state.player,
+        armor: armorValue,
+        parry,
+        toughness
+      }
+    }
+  }
+
+  private sanitizeEquippedItemSlots(state: GameState): GameState {
+    const inventoryIds = new Set((state.player.inventory ?? []).map((item) => item.id))
+    const equippedArmorItem = state.player.equippedArmorItemId
+      ? this.getInventoryItemById(state, state.player.equippedArmorItemId)
+      : undefined
+    const equippedShieldItem = state.player.equippedShieldItemId
+      ? this.getInventoryItemById(state, state.player.equippedShieldItemId)
+      : undefined
+
+    const armorDef = findArmorDefinition(equippedArmorItem?.name)
+    const shieldDef = findArmorDefinition(equippedShieldItem?.name)
+
+    const equippedAttackItemId = state.player.equippedAttackItemId && inventoryIds.has(state.player.equippedAttackItemId)
+      ? state.player.equippedAttackItemId
+      : undefined
+    const equippedArmorItemId = state.player.equippedArmorItemId
+      && inventoryIds.has(state.player.equippedArmorItemId)
+      && armorDef
+      && getShieldParryBonus(armorDef) <= 0
+      ? state.player.equippedArmorItemId
+      : undefined
+    const equippedShieldItemId = state.player.equippedShieldItemId
+      && inventoryIds.has(state.player.equippedShieldItemId)
+      && shieldDef
+      && getShieldParryBonus(shieldDef) > 0
+      ? state.player.equippedShieldItemId
+      : undefined
+
+    if (
+      equippedAttackItemId === state.player.equippedAttackItemId
+      && equippedArmorItemId === state.player.equippedArmorItemId
+      && equippedShieldItemId === state.player.equippedShieldItemId
+    ) {
+      return state
+    }
+
+    return {
+      ...state,
+      player: {
+        ...state.player,
+        equippedAttackItemId,
+        equippedArmorItemId,
+        equippedShieldItemId
+      }
+    }
+  }
+
+  private persistAndReturn(state: GameState): Promise<GameState> {
+    return this.snapshots.saveTurnState(state).then(() => state)
+  }
+
+  async equipAttackItem(params: { ownerId: string; sessionId: string; itemId: string }): Promise<GameState> {
+    await this.requireOwnedSession(params.sessionId, params.ownerId)
+    const state = await this.snapshots.getLatestState(params.sessionId)
+    if (!state) throw new NotFoundException('Sessão não encontrada')
+
+    const item = this.getInventoryItemById(state, params.itemId)
+    if (!item) throw new NotFoundException('Item não encontrado no inventário')
+
+    const nextState = {
+      ...state,
+      player: {
+        ...state.player,
+        equippedAttackItemId: item.id
+      }
+    }
+
+    return await this.persistAndReturn(nextState)
+  }
+
+  async equipArmorItem(params: { ownerId: string; sessionId: string; itemId: string }): Promise<GameState> {
+    await this.requireOwnedSession(params.sessionId, params.ownerId)
+    const state = await this.snapshots.getLatestState(params.sessionId)
+    if (!state) throw new NotFoundException('Sessão não encontrada')
+
+    const item = this.getInventoryItemById(state, params.itemId)
+    if (!item) throw new NotFoundException('Item não encontrado no inventário')
+    const armorDef = findArmorDefinition(item.name)
+    if (!armorDef || getShieldParryBonus(armorDef) > 0) throw new NotFoundException('Item não pode ser equipado como armadura')
+
+    const nextState = this.recomputePlayerCombatStatsFromEquipment({
+      ...state,
+      player: {
+        ...state.player,
+        equippedArmorItemId: item.id
+      }
+    })
+
+    return await this.persistAndReturn(nextState)
+  }
+
+  async equipShieldItem(params: { ownerId: string; sessionId: string; itemId: string }): Promise<GameState> {
+    await this.requireOwnedSession(params.sessionId, params.ownerId)
+    const state = await this.snapshots.getLatestState(params.sessionId)
+    if (!state) throw new NotFoundException('Sessão não encontrada')
+
+    const item = this.getInventoryItemById(state, params.itemId)
+    if (!item) throw new NotFoundException('Item não encontrado no inventário')
+    const shieldDef = findArmorDefinition(item.name)
+    if (!shieldDef || getShieldParryBonus(shieldDef) <= 0) {
+      throw new NotFoundException('Item não pode ser equipado como escudo')
+    }
+
+    const nextState = this.recomputePlayerCombatStatsFromEquipment({
+      ...state,
+      player: {
+        ...state.player,
+        equippedShieldItemId: item.id
+      }
+    })
+
+    return await this.persistAndReturn(nextState)
+  }
+
+  async unequipAttackItem(params: { ownerId: string; sessionId: string }): Promise<GameState> {
+    await this.requireOwnedSession(params.sessionId, params.ownerId)
+    const state = await this.snapshots.getLatestState(params.sessionId)
+    if (!state) throw new NotFoundException('Sessão não encontrada')
+
+    const nextState = {
+      ...state,
+      player: {
+        ...state.player,
+        equippedAttackItemId: undefined
+      }
+    }
+
+    return await this.persistAndReturn(nextState)
+  }
+
+  async unequipArmorItem(params: { ownerId: string; sessionId: string }): Promise<GameState> {
+    await this.requireOwnedSession(params.sessionId, params.ownerId)
+    const state = await this.snapshots.getLatestState(params.sessionId)
+    if (!state) throw new NotFoundException('Sessão não encontrada')
+
+    const nextState = this.recomputePlayerCombatStatsFromEquipment({
+      ...state,
+      player: {
+        ...state.player,
+        equippedArmorItemId: undefined
+      }
+    })
+
+    return await this.persistAndReturn(nextState)
+  }
+
+  async unequipShieldItem(params: { ownerId: string; sessionId: string }): Promise<GameState> {
+    await this.requireOwnedSession(params.sessionId, params.ownerId)
+    const state = await this.snapshots.getLatestState(params.sessionId)
+    if (!state) throw new NotFoundException('Sessão não encontrada')
+
+    const nextState = this.recomputePlayerCombatStatsFromEquipment({
+      ...state,
+      player: {
+        ...state.player,
+        equippedShieldItemId: undefined
+      }
+    })
+
+    return await this.persistAndReturn(nextState)
+  }
+
   private async buildSessionPayload(sessionId: string) {
     const state = await this.snapshots.getLatestState(sessionId)
     if (!state) throw new NotFoundException('Sessão não encontrada')
 
     const rawStateNarrativeStyle = (state.meta as Record<string, unknown>).narrativeStyle
-    const normalizedState = rawStateNarrativeStyle === 'theatrical'
+    const normalizedNarrativeState = rawStateNarrativeStyle === 'theatrical'
       ? { ...state, meta: { ...state.meta, narrativeStyle: 'balanced' as const } }
       : state
+    const normalizedState = this.recomputePlayerCombatStatsFromEquipment(
+      this.sanitizeEquippedItemSlots(normalizedNarrativeState)
+    )
 
     const [summary, recentMessages, messages, events, knownNpcs] = await Promise.all([
       this.summaryRepo.getSummary(sessionId),
@@ -203,6 +411,8 @@ export class SessionService {
     const { state, npcs, sceneLocation, allowCreate, npcCatalog } = params
     if (!npcs.length) return state
 
+    const DOWN_STATUSES = new Set<NonNullable<GameState['npcs'][number]['status']>>(['dead', 'defeated', 'incapacitated'])
+
     const mentionById = new Map(npcs.map((npc) => [npc.id, npc]))
     const knownNpcIds = new Set(state.npcs.map((npc) => npc.id))
     let changed = false
@@ -217,13 +427,34 @@ export class SessionService {
       }
 
       const mentionDisplay = mention.displayName ?? mention.name
+      const currentStatus = existingNpc.status ?? 'active'
+      const requestedStatus = mention.status
+      const defeatedByEngine = (state.defeatedNpcIds ?? []).includes(existingNpc.id)
 
-      // Verifica se há mudanças em name/displayName, disposition ou status
+      let nextStatus = currentStatus
+      if (requestedStatus) {
+        const isResurrectionAttempt =
+          (currentStatus === 'dead' && requestedStatus !== 'dead')
+          || (defeatedByEngine && !DOWN_STATUSES.has(requestedStatus))
+
+        if (isResurrectionAttempt) {
+          warn('syncNarratorNpcs', `Transição de status bloqueada para ${existingNpc.id}: ${currentStatus} -> ${requestedStatus}`)
+        } else {
+          nextStatus = requestedStatus
+        }
+      }
+
+      const nextFollowsPlayer = typeof mention.followsPlayer === 'boolean'
+        ? mention.followsPlayer
+        : existingNpc.followsPlayer
+
+      // Verifica se há mudanças em name/displayName, disposition, status ou followsPlayer
       const hasChanges =
         existingNpc.name !== mentionDisplay ||
         existingNpc.displayName !== mentionDisplay ||
         existingNpc.disposition !== mention.disposition ||
-        (mention.status && existingNpc.status !== mention.status)
+        existingNpc.status !== nextStatus ||
+        existingNpc.followsPlayer !== nextFollowsPlayer
 
       if (!hasChanges) {
         return existingNpc
@@ -235,16 +466,25 @@ export class SessionService {
         name: mentionDisplay,
         displayName: mentionDisplay,
         disposition: mention.disposition,
-        // Aplica o status se vier da IA (mudanças narrativas)
-        ...(mention.status ? { status: mention.status } : {})
+        status: nextStatus,
+        followsPlayer: nextFollowsPlayer
       }
     })
 
     if (allowCreate) {
       for (const npc of npcs) {
         if (knownNpcIds.has(npc.id)) continue
-        if ((state.defeatedNpcIds ?? []).includes(npc.id)) continue
-        mergedNpcs.push(this.createNarrativeNpcStub(npc, sceneLocation, npcCatalog))
+        if ((state.defeatedNpcIds ?? []).includes(npc.id)) {
+          warn('syncNarratorNpcs', `Criação bloqueada para NPC derrotado: ${npc.id}`)
+          continue
+        }
+        if (npc.status === 'left') continue
+
+        const created = this.createNarrativeNpcStub(npc, sceneLocation, npcCatalog)
+        if (npc.status) created.status = npc.status
+        if (typeof npc.followsPlayer === 'boolean') created.followsPlayer = npc.followsPlayer
+
+        mergedNpcs.push(created)
         changed = true
       }
     }
@@ -348,11 +588,11 @@ export class SessionService {
     mode: 'start' | 'turn',
     canonicalAnchors?: CanonicalAnchors
   ): NarratorTurnResponse['options'][number] | null {
-    // NPCs derrotados/mortos/incapacitados (ou em defeatedNpcIds) não são alvos
+    // NPCs derrotados/mortos/incapacitados/fora de cena (left) não são alvos
     // válidos, mesmo que ainda constem na cena neste turno. Excluí-los aqui impede
     // que uma opção de ataque do LLM contra um inimigo já abatido passe na validação
     // (e que o redirecionamento de alvo hostil abaixo escolha um caído).
-    const NPC_DOWN_STATUSES = new Set(['dead', 'defeated', 'incapacitated'])
+    const NPC_DOWN_STATUSES = new Set(['dead', 'defeated', 'incapacitated', 'left'])
     const isNpcDown = (npc: GameState['npcs'][number]): boolean =>
       (state.defeatedNpcIds ?? []).includes(npc.id) ||
       (npc.status != null && NPC_DOWN_STATUSES.has(npc.status))
@@ -670,6 +910,7 @@ export class SessionService {
     const sceneNpcIds = new Set(
       canonicalNarrativeState.npcs
         .filter((npc) => !npc.location || npc.location === canonicalNarrativeState.worldState.activeLocation)
+        .filter((npc) => npc.status !== 'left')
         .map((npc) => npc.id)
     )
     const npcs = response.npcs.filter((npc) => sceneNpcIds.has(npc.id))
@@ -954,7 +1195,9 @@ export class SessionService {
     })
 
     // Aplicar itens e status narrativos ao estado
-    state = this.inventory.applyItemChanges(state, narratorResponse.itemChanges)
+    state = this.recomputePlayerCombatStatsFromEquipment(
+      this.sanitizeEquippedItemSlots(this.inventory.applyItemChanges(state, narratorResponse.itemChanges))
+    )
     state = this.statusEffects.applyStatusChanges(state, narratorResponse.statusChanges)
 
     state = this.syncNarratorNpcs({
@@ -1133,7 +1376,9 @@ export class SessionService {
       mode: 'start'
     })
 
-    state = this.inventory.applyItemChanges(state, narratorResponse.itemChanges)
+    state = this.recomputePlayerCombatStatsFromEquipment(
+      this.sanitizeEquippedItemSlots(this.inventory.applyItemChanges(state, narratorResponse.itemChanges))
+    )
     state = this.statusEffects.applyStatusChanges(state, narratorResponse.statusChanges)
 
     state = this.syncNarratorNpcs({
@@ -1220,6 +1465,7 @@ export class SessionService {
         npcsPresent: context.stateBrief.npcsPresent,
         defeatedNpcIds: context.stateBrief.defeatedNpcIds,
         inventory: context.stateBrief.inventory,
+        equippedItems: context.stateBrief.equippedItems,
         activeStatusEffects: context.stateBrief.activeStatusEffects,
         playerSkills: context.stateBrief.playerSkills,
         rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors, buildCanonicalFactsPromptSection(canonicalFacts))
@@ -1367,6 +1613,7 @@ export class SessionService {
           npcsPresent: context.stateBrief.npcsPresent,
           defeatedNpcIds: context.stateBrief.defeatedNpcIds,
           inventory: context.stateBrief.inventory,
+          equippedItems: context.stateBrief.equippedItems,
           activeStatusEffects: context.stateBrief.activeStatusEffects,
           playerSkills: context.stateBrief.playerSkills,
           rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors, buildCanonicalFactsPromptSection(canonicalFacts)),
@@ -1393,12 +1640,21 @@ export class SessionService {
       recentMessages
     )
     narratorResponse = { ...narratorResponse, itemChanges: dedupedItemChanges }
-    finalState = this.inventory.applyItemChanges(finalState, dedupedItemChanges)
+    finalState = this.recomputePlayerCombatStatsFromEquipment(
+      this.sanitizeEquippedItemSlots(this.inventory.applyItemChanges(finalState, dedupedItemChanges))
+    )
     finalState = this.statusEffects.applyStatusChanges(finalState, narratorResponse.statusChanges, { action: normalizedAction })
     finalState = this.statusEffects.tickEffects(finalState)
     finalState = this.statusEffects.applyNarrativeRecovery(finalState, {
       actionText: actionDescription,
       narrative: segmentsToText(narratorResponse.segments)
+    })
+    finalState = this.syncNarratorNpcs({
+      state: finalState,
+      npcs: narratorResponse.npcs,
+      sceneLocation: finalState.worldState.activeLocation,
+      allowCreate: true,
+      npcCatalog: worldDoc?.npcCatalog
     })
 
     // 5.4. Persistir derrotas declaradas pela narrativa.
@@ -1455,7 +1711,10 @@ export class SessionService {
     for (const entry of pendingNpcAttacks) {
       // Validar: NPC deve estar na cena, ser diferente do jogador, e skillDie deve ser DieType válido
       const sceneNpc = finalState.npcs.find(
-        (n) => n.id === entry.npcId && (!n.location || n.location === finalState.worldState.activeLocation)
+        (n) =>
+          n.id === entry.npcId
+          && (!n.location || n.location === finalState.worldState.activeLocation)
+          && n.status !== 'left'
       )
       if (!sceneNpc) {
         warn('applyNpcAttack', `NPC "${entry.npcId}" não encontrado na cena — ataque ignorado`)
@@ -1467,7 +1726,8 @@ export class SessionService {
         (finalState.defeatedNpcIds ?? []).includes(entry.npcId) ||
         sceneNpc.status === 'incapacitated' ||
         sceneNpc.status === 'defeated' ||
-        sceneNpc.status === 'dead'
+        sceneNpc.status === 'dead' ||
+        sceneNpc.status === 'left'
       ) {
         warn('applyNpcAttack', `NPC "${entry.npcId}" derrotado/incapacitado — ataque ignorado`)
         continue
@@ -1795,9 +2055,9 @@ export class SessionService {
     if (!item) throw new NotFoundException('Item não encontrado no inventário')
 
     const qty = params.quantity ?? item.quantity // remove tudo por padrão
-    const updated = this.inventory.applyItemChanges(state, [
+    const updated = this.recomputePlayerCombatStatsFromEquipment(this.sanitizeEquippedItemSlots(this.inventory.applyItemChanges(state, [
       { itemId: params.itemId, name: item.name, quantity: qty, changeType: 'lost' }
-    ])
+    ])))
 
     await this.snapshots.saveTurnState(updated)
     return updated

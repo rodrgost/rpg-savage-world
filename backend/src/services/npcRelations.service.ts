@@ -40,6 +40,7 @@ export class NpcRelationsService {
         const disposition = npc?.disposition ?? mention.disposition
         // NPC derrotado narrativamente já saiu de state.npcs — a menção é a fonte da condição
         const conditionStatus = mention.status ?? npc?.status
+        const followsPlayer = npc?.followsPlayer ?? mention.followsPlayer ?? existing?.followsPlayer
         const lastKnownLocation = npc?.location ?? state.worldState.activeLocation
         const name = mention.displayName ?? mention.name
         const isCatalogNpc = npc?.tags?.includes('catalog') ?? existing?.isCatalogNpc
@@ -58,6 +59,7 @@ export class NpcRelationsService {
           relationSource: existing?.relationSource ?? 'auto',
           ...(disposition !== undefined ? { disposition } : {}),
           ...(conditionStatus !== undefined ? { conditionStatus } : {}),
+          ...(followsPlayer !== undefined ? { followsPlayer } : {}),
           ...(lastKnownLocation !== undefined ? { lastKnownLocation } : {}),
           ...(isCatalogNpc !== undefined ? { isCatalogNpc } : {}),
           lastSessionId: sessionId
@@ -85,6 +87,7 @@ export class NpcRelationsService {
       'relationalStatus',
       'disposition',
       'conditionStatus',
+      'followsPlayer',
       'lastKnownLocation',
       'isCatalogNpc',
       'lastSessionId'

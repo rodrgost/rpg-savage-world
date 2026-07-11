@@ -28,6 +28,12 @@ export type InventoryItem = {
   tags?: string[]
 }
 
+export type EquippedItemsBrief = {
+  attack?: { itemId: string; name: string; isCatalogWeapon: boolean; damageFormula: string; ap: number }
+  armor?: { itemId: string; name: string; armorValue: number }
+  shield?: { itemId: string; name: string; parryBonus: number }
+}
+
 export type ItemChange = {
   itemId: string
   name: string
@@ -61,7 +67,9 @@ export type NPCMention = {
   disposition: 'hostile' | 'neutral' | 'friendly'
   newlyIntroduced: boolean
   /** Status do NPC se houver mudança narrativa (ex: incapacitado, derrotado) */
-  status?: 'active' | 'incapacitated' | 'defeated' | 'dead'
+  status?: 'active' | 'incapacitated' | 'defeated' | 'dead' | 'left'
+  /** Indica se o NPC deve acompanhar o jogador em viagens. */
+  followsPlayer?: boolean
   /** Mudança na relação do NPC com o personagem do jogador (omitir se inalterada) */
   relation?: 'conhecido' | 'aliado' | 'amigavel' | 'neutro' | 'desconfiado' | 'hostil' | 'inimigo'
 }
@@ -152,6 +160,7 @@ export type ValidateActionRequest = {
     /** IDs de NPCs já derrotados nesta sessão */
     defeatedNpcIds?: string[]
     inventory: InventoryItem[]
+    equippedItems?: EquippedItemsBrief
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
     playerSkills?: Record<string, string>
     rulesDigest?: string
@@ -305,6 +314,7 @@ export type NarrateTurnRequest = {
     /** IDs de NPCs já derrotados nesta sessão */
     defeatedNpcIds?: string[]
     inventory: InventoryItem[]
+    equippedItems?: EquippedItemsBrief
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
     /** Perícias do personagem com seus dados atuais (ex: { "Percepção": "d6", "Luta": "d8" }) */
     playerSkills?: Record<string, string>

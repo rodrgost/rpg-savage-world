@@ -978,8 +978,49 @@ export async function resetSession(sessionId: string): Promise<SessionPayload> {
 export async function removeInventoryItem(
   sessionId: string,
   itemId: string
-): Promise<{ ok: boolean; inventory: import('../types').InventoryItem[] }> {
+): Promise<{ ok: boolean; state: GameState; inventory: import('../types').InventoryItem[] }> {
   return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/inventory/' + encodeURIComponent(itemId), {
+    method: 'DELETE'
+  })
+}
+
+type EquipmentUpdateResponse = { ok: boolean; state: GameState; inventory: import('../types').InventoryItem[] }
+
+export async function equipAttackItem(sessionId: string, itemId: string): Promise<EquipmentUpdateResponse> {
+  return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/equipment/attack', {
+    method: 'PUT',
+    body: JSON.stringify({ itemId })
+  })
+}
+
+export async function unequipAttackItem(sessionId: string): Promise<EquipmentUpdateResponse> {
+  return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/equipment/attack', {
+    method: 'DELETE'
+  })
+}
+
+export async function equipArmorItem(sessionId: string, itemId: string): Promise<EquipmentUpdateResponse> {
+  return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/equipment/armor', {
+    method: 'PUT',
+    body: JSON.stringify({ itemId })
+  })
+}
+
+export async function unequipArmorItem(sessionId: string): Promise<EquipmentUpdateResponse> {
+  return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/equipment/armor', {
+    method: 'DELETE'
+  })
+}
+
+export async function equipShieldItem(sessionId: string, itemId: string): Promise<EquipmentUpdateResponse> {
+  return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/equipment/shield', {
+    method: 'PUT',
+    body: JSON.stringify({ itemId })
+  })
+}
+
+export async function unequipShieldItem(sessionId: string): Promise<EquipmentUpdateResponse> {
+  return await apiRequest('/sessions/' + encodeURIComponent(sessionId) + '/equipment/shield', {
     method: 'DELETE'
   })
 }

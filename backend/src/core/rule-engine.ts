@@ -16,6 +16,21 @@ import { rollTrait, rollDamage, countRaises } from './dice-engine.js'
  *   3. fallback "desarmado" (dano de Força).
  */
 function resolvePlayerWeapon(state: GameState, isRanged: boolean): { damageFormula: string; ap: number } {
+  const equippedAttackItem = state.player.equippedAttackItemId
+    ? (state.player.inventory ?? []).find((item) => item.id === state.player.equippedAttackItemId)
+    : undefined
+  const equippedAttackDef = equippedAttackItem ? findWeaponDefinition(equippedAttackItem.name) : undefined
+  if (equippedAttackItem) {
+    // Item improvisado equipado também é válido como ataque: quando não há arma
+    // catalogada, o dano permanece desarmado (str), por decisão de produto.
+    if (!equippedAttackDef) {
+      return { damageFormula: 'str', ap: 0 }
+    }
+    if (equippedAttackDef.isRanged === isRanged) {
+      return { damageFormula: equippedAttackDef.damage, ap: equippedAttackDef.ap ?? 0 }
+    }
+  }
+
   const equipped = state.player.equippedWeaponKey
     ? findWeaponDefinition(state.player.equippedWeaponKey)
     : undefined
@@ -54,6 +69,7 @@ function findNPC(state: GameState, targetId: string): NPCCombatant | undefined {
  * - 'incapacitated': NPC está incapacitado (wounds > maxWounds)
  * - 'defeated': NPC foi derrotado (mesmo que incapacitated, mas marcado como tal)
  * - 'dead': NPC está morto (normalmente não usado em Savage Worlds, mas disponível)
+ * - 'left': NPC saiu de cena e não pode ser alvo nem agir até reentrar
  */
 function determineNpcStatus(npc: NPCCombatant): NPCCombatant['status'] {
   if (npc.wounds > npc.maxWounds) {
@@ -497,15 +513,21 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
     case 'travel': {
       const from = nextState.worldState.activeLocation
       nextState.worldState.activeLocation = action.to
-      // Move NPCs friendly/neutral da cena de partida com o jogador; remove hostis que ficam para trás
-      nextState.npcs = nextState.npcs
-        .map((npc) => {
-          if (npc.location === from && npc.disposition !== 'hostile') {
-            return { ...npc, location: action.to }
-          }
-          return npc
-        })
-        .filter((npc) => !(npc.disposition === 'hostile' && (!npc.location || npc.location === from)))
+      // Só acompanha o jogador quem estiver com followsPlayer=true.
+      // Quem ficar para trás é marcado como "left" na cena anterior.
+      nextState.npcs = nextState.npcs.map((npc) => {
+        if (npc.location && npc.location !== from) return npc
+
+        const status = determineNpcStatus(npc)
+        const isUnavailable = status === 'incapacitated' || status === 'defeated' || status === 'dead'
+        if (isUnavailable) return npc
+
+        if (npc.followsPlayer) {
+          return { ...npc, location: action.to, status: status === 'left' ? 'active' : status }
+        }
+
+        return { ...npc, location: from, status: 'left' }
+      })
       emittedEvents.push({ type: 'location_change', payload: { from, to: action.to } })
       break
     }
@@ -626,8 +648,14 @@ export function applyNpcAttack(
     return { nextState, emittedEvents }
   }
 
-  // NPCs incapacitados não atacam
-  if (npc.wounds > npc.maxWounds) {
+  // NPCs fora de combate/cena não atacam.
+  if (
+    npc.wounds > npc.maxWounds
+    || npc.status === 'incapacitated'
+    || npc.status === 'defeated'
+    || npc.status === 'dead'
+    || npc.status === 'left'
+  ) {
     return { nextState, emittedEvents }
   }
 

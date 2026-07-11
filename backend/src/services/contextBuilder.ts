@@ -1,14 +1,63 @@
 import type { GameState, DieType, Hindrance, NpcDefinition } from '../domain/types/gameState.js'
 import type { SessionSummaryRow } from '../repositories/sessionSummary.repo.js'
-import type { InventoryItem, NarrativeSegment } from '../domain/types/narrative.js'
+import type { EquippedItemsBrief, InventoryItem, NarrativeSegment } from '../domain/types/narrative.js'
 import type { ChatMessageRow } from '../repositories/chatMessage.repo.js'
 import {
   SKILLS,
   EDGES,
   HINDRANCES,
   ATTRIBUTES,
-  getCanonicalSkillLabel
+  findArmorDefinition,
+  findWeaponDefinition,
+  getCanonicalSkillLabel,
+  getShieldParryBonus
 } from '../domain/savage-worlds/constants.js'
+
+function resolveEquippedItemsBrief(state: GameState): EquippedItemsBrief {
+  const inventory = state.player.inventory ?? []
+  const findById = (itemId: string | undefined) =>
+    itemId ? inventory.find((item) => item.id === itemId) : undefined
+
+  const attackItem = findById(state.player.equippedAttackItemId)
+  const armorItem = findById(state.player.equippedArmorItemId)
+  const shieldItem = findById(state.player.equippedShieldItemId)
+
+  const attackWeapon = findWeaponDefinition(attackItem?.name)
+  const armorDef = findArmorDefinition(armorItem?.name)
+  const shieldDef = findArmorDefinition(shieldItem?.name)
+
+  return {
+    ...(attackItem
+      ? {
+          attack: {
+            itemId: attackItem.id,
+            name: attackItem.name,
+            isCatalogWeapon: Boolean(attackWeapon),
+            damageFormula: attackWeapon?.damage ?? 'str',
+            ap: attackWeapon?.ap ?? 0
+          }
+        }
+      : {}),
+    ...(armorItem && armorDef
+      ? {
+          armor: {
+            itemId: armorItem.id,
+            name: armorItem.name,
+            armorValue: armorDef.armorValue
+          }
+        }
+      : {}),
+    ...(shieldItem && shieldDef
+      ? {
+          shield: {
+            itemId: shieldItem.id,
+            name: shieldItem.name,
+            parryBonus: getShieldParryBonus(shieldDef)
+          }
+        }
+      : {})
+  }
+}
 
 function formatDie(die: DieType): string {
   return `d${die}`
@@ -53,6 +102,7 @@ function normalizeLlmText(text: string): string {
 
 function buildRulesDigest(state: GameState): string {
   const sections: string[] = []
+  const equippedItems = resolveEquippedItemsBrief(state)
 
   // NOTA: o resumo mecânico das regras de Savage Worlds (rolagens, dano vs.
   // Resistência, Ferimentos, Soak, Bennies, Fadiga) foi REMOVIDO do prompt.
@@ -111,6 +161,23 @@ function buildRulesDigest(state: GameState): string {
     `Parry: ${state.player.parry} | Toughness: ${state.player.toughness} | Armor: ${state.player.armor} | Pace: ${state.player.pace}`
   ].join('\n'))
 
+  const equippedLines: string[] = []
+  if (equippedItems.attack) {
+    equippedLines.push(`Attack: ${equippedItems.attack.name} (damage: ${equippedItems.attack.damageFormula}, AP: ${equippedItems.attack.ap})`)
+  }
+  if (equippedItems.armor) {
+    equippedLines.push(`Armor: ${equippedItems.armor.name} (+${equippedItems.armor.armorValue} Armor)`)
+  }
+  if (equippedItems.shield) {
+    equippedLines.push(`Shield: ${equippedItems.shield.name} (+${equippedItems.shield.parryBonus} Parry)`)
+  }
+  if (equippedLines.length > 0) {
+    sections.push([
+      '=== EQUIPPED ITEMS ===',
+      ...equippedLines
+    ].join('\n'))
+  }
+
   return sections.join('\n\n')
 }
 
@@ -132,6 +199,7 @@ export type LlmContext = {
       maxWounds: number
       toughness: number
       parry: number
+      followsPlayer?: boolean
       statusEffects?: Array<{ id: string; name: string; turnsRemaining?: number }>
       personality?: string
       motivation?: string
@@ -146,6 +214,7 @@ export type LlmContext = {
      */
     npcCatalog: Array<{ id: string; name: string; description?: string; dispositionDefault: string }>
     inventory: InventoryItem[]
+    equippedItems: EquippedItemsBrief
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
     /** Perícias do jogador com seus dados atuais (label PT-BR → "dN") */
     playerSkills: Record<string, string>
@@ -174,6 +243,7 @@ export function buildLlmContext(params: {
   npcCatalog?: NpcDefinition[]
 }): LlmContext {
   const { state, summary, recentMessages, npcCatalog } = params
+  const equippedItems = resolveEquippedItemsBrief(state)
 
   const situation: LlmContext['stateBrief']['situation'] = state.combat ? 'combat' : 'exploracao'
 
@@ -186,7 +256,7 @@ export function buildLlmContext(params: {
       isShaken: state.player.isShaken,
       bennies: state.player.bennies,
       npcsPresent: state.npcs
-        .filter((n) => !n.location || n.location === state.worldState.activeLocation)
+        .filter((n) => (!n.location || n.location === state.worldState.activeLocation) && n.status !== 'left')
         .map((n) => ({
           id: n.id,
           name: n.name,
@@ -197,6 +267,7 @@ export function buildLlmContext(params: {
           maxWounds: n.maxWounds,
           toughness: n.toughness,
           parry: n.parry,
+          followsPlayer: n.followsPlayer,
           statusEffects: (n.statusEffects ?? []).map((effect) => ({
             id: effect.id,
             name: effect.name,
@@ -215,6 +286,7 @@ export function buildLlmContext(params: {
         dispositionDefault: def.dispositionDefault
       })),
       inventory: state.player.inventory ?? [],
+      equippedItems,
       activeStatusEffects: state.player.statusEffects.map((e) => ({
         id: e.id,
         name: e.name,

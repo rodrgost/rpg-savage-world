@@ -14,7 +14,8 @@ export type KnownNpcDoc = {
   relationSource: 'auto' | 'manual'
   notes?: string
   disposition?: 'hostile' | 'neutral' | 'friendly'
-  conditionStatus?: 'active' | 'incapacitated' | 'defeated' | 'dead'
+  conditionStatus?: 'active' | 'incapacitated' | 'defeated' | 'dead' | 'left'
+  followsPlayer?: boolean
   lastKnownLocation?: string
   isCatalogNpc?: boolean
   lastSessionId?: string
@@ -78,6 +79,7 @@ export class KnownNpcsRepo {
       if (fields.notes !== undefined) payload.notes = fields.notes
       if (fields.disposition !== undefined) payload.disposition = fields.disposition
       if (fields.conditionStatus !== undefined) payload.conditionStatus = fields.conditionStatus
+      if (fields.followsPlayer !== undefined) payload.followsPlayer = fields.followsPlayer
       if (fields.lastKnownLocation !== undefined) payload.lastKnownLocation = fields.lastKnownLocation
       if (fields.isCatalogNpc !== undefined) payload.isCatalogNpc = fields.isCatalogNpc
       if (fields.lastSessionId !== undefined) payload.lastSessionId = fields.lastSessionId
