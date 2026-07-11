@@ -152,7 +152,7 @@ export type LlmContext = {
   }
   /** Digest compacto das regras SW + traços do personagem + equipamento */
   rulesDigest: string
-  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; storyHook?: string | null; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
 }
 
 function buildRecentSegments(m: ChatMessageRow): NarrativeSegment[] | undefined {
@@ -227,6 +227,7 @@ export function buildLlmContext(params: {
       role: m.role,
       segments: buildRecentSegments(m),
       playerInput: typeof m.playerInput === 'string' ? normalizeLlmText(m.playerInput) : m.playerInput,
+      storyHook: typeof m.storyHook === 'string' && m.storyHook.trim() ? normalizeLlmText(m.storyHook) : undefined,
       engineEvents: m.engineEvents?.map((event) => ({
         type: event.type,
         payload: event.payload

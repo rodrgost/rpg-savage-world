@@ -380,6 +380,9 @@ function collectHistoricalText(recentMessages: ChatMessageRow[], summaryText?: s
   for (const message of recentMessages) {
     const mt = messageText(message)
     if (mt.trim()) lines.push(mt)
+    // O storyHook fica fora dos segments (não é exibido na UI), mas entidades
+    // citadas nele continuam ancoradas: o gancho é parte do histórico da LLM.
+    if (message.storyHook?.trim()) lines.push(message.storyHook)
     if (message.playerInput?.trim()) lines.push(message.playerInput)
     if (Array.isArray(message.npcs)) {
       lines.push(...message.npcs.map((npc) => npc.name))

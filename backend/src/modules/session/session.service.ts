@@ -651,11 +651,15 @@ export class SessionService {
       sceneLocation: state.worldState.activeLocation,
       allowCreate: true
     })
+    // O storyHook não é exibido (fica fora dos segments), mas conta como
+    // narrativa do turno para ancoragem: opções podem referenciar o gancho.
     const canonicalAnchors = buildCanonicalAnchors({
       state: canonicalNarrativeState,
       recentMessages,
       summaryText,
-      currentNarrative: segmentsToText(response.segments)
+      currentNarrative: [segmentsToText(response.segments), response.storyHook?.trim() ?? '']
+        .filter(Boolean)
+        .join('\n\n')
     })
     const itemChanges = this.validateNarratorItemChanges(response.itemChanges, state, mode, action)
     const options = this.completeValidatedOptions(
@@ -983,6 +987,7 @@ export class SessionService {
       turn: 0,
       role: 'narrator',
       segments: narratorResponse.segments,
+      storyHook: narratorResponse.storyHook ?? null,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
@@ -1160,6 +1165,7 @@ export class SessionService {
       turn: 0,
       role: 'narrator',
       segments: narratorResponse.segments,
+      storyHook: narratorResponse.storyHook ?? null,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
@@ -1551,6 +1557,7 @@ export class SessionService {
       turn: finalState.meta.turn,
       role: 'narrator',
       segments: narratorResponse.segments,
+      storyHook: narratorResponse.storyHook ?? null,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,

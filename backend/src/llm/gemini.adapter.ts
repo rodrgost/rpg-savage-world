@@ -2769,18 +2769,10 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
-    // O storyHook vira o parágrafo final da narração: sem isso ele não é exibido
-    // ao jogador, não é persistido e não entra no histórico do próximo turno —
-    // os ganchos nunca se concretizariam em cena.
-    if (storyHook) {
-      const last = segments[segments.length - 1]
-      if (last?.type === 'narrator') {
-        if (!last.text.includes(storyHook)) last.text = `${last.text}\n\n${storyHook}`
-      } else {
-        segments.push({ type: 'narrator', text: storyHook })
-      }
-    }
-
+    // O storyHook NÃO entra nos segments (a UI não o exibe): ele é retornado
+    // como campo próprio, persistido na mensagem do narrador e realimentado
+    // apenas no histórico enviado à LLM (ver narrateTurn), para que os ganchos
+    // ainda possam se concretizar em cena nos próximos turnos.
     return {
       segments,
       options,
@@ -3227,8 +3219,14 @@ export class GeminiAdapter implements Narrator {
     const contents: ContentEntry[] = []
 
     for (const msg of req.recentMessages) {
-      const narratorText = msg.role === 'narrator' ? segmentsToText(msg.segments) : ''
+      let narratorText = msg.role === 'narrator' ? segmentsToText(msg.segments) : ''
       if (msg.role === 'narrator' && narratorText) {
+        // O storyHook não é exibido ao jogador (fica fora dos segments), mas
+        // precisa voltar ao histórico da LLM para que o gancho anunciado possa
+        // ser concretizado em cena. O guard de includes cobre mensagens antigas
+        // que ainda têm o hook embutido no texto.
+        const hook = typeof msg.storyHook === 'string' ? msg.storyHook.trim() : ''
+        if (hook && !narratorText.includes(hook)) narratorText += `\n\n${hook}`
         contents.push({ role: 'model', text: narratorText })
       } else if (msg.role === 'player' && msg.playerInput) {
         contents.push({ role: 'user', text: msg.playerInput })
