@@ -34,6 +34,8 @@ import type { StructuredSummary, SummaryLocationBlock, SummaryCurrentBlock } fro
 import { emptyStructuredSummary } from './summary-format.js'
 import { findSkillDefinition, getCanonicalSkillLabel, inferSkillFromText, ATTRIBUTES } from '../domain/savage-worlds/constants.js'
 import { logLlmRequest, logLlmResponse, logLlmError, log, warn, error as logErr } from '../utils/file-logger.js'
+import { buildOpenAiJsonSchemaResponseFormat } from './schemas/openai-strict-schema.js'
+import { recordSkillInferenceOutcome } from './skill-inference-metrics.js'
 import { classifyTrivialAction } from '../core/trivial-action.js'
 
 type GeminiGenerateContentResponse = {
@@ -1177,9 +1179,21 @@ export class GeminiAdapter implements Narrator {
       : withMin(requestedMaxOutputTokens, 1)
     const timeoutMs = options.timeoutMs ?? this.timeoutMs
     const responseMimeType = options.responseMimeType
+    const responseSchema = options.responseSchema
     const temperature = options.temperature ?? this.temperature
     const systemInstruction = options.systemInstruction
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+    // Structured Outputs (response_format: json_schema, strict) só é suportado pela
+    // API OpenAI de fato; para outros providers OpenAI-compatíveis (ex.: DeepSeek)
+    // cai para o JSON mode genérico. responseSchema só chega aqui quando o chamador
+    // já pediu (narrator/summary) e o provider não é 'deepseek' (ver generateNarratorResponse).
+    const responseFormat =
+      this.provider === 'openai' && responseSchema
+        ? buildOpenAiJsonSchemaResponseFormat('structured_response', responseSchema)
+        : responseMimeType === 'application/json'
+          ? { type: 'json_object' as const }
+          : undefined
 
     if (this.provider === 'deepseek' && maxOutputTokens !== requestedMaxOutputTokens) {
       warn(
@@ -1214,9 +1228,7 @@ export class GeminiAdapter implements Narrator {
             ? { max_completion_tokens: maxOutputTokens }
             : { max_tokens: maxOutputTokens }),
           stream: false,
-          ...(responseMimeType === 'application/json'
-            ? { response_format: { type: 'json_object' } }
-            : {})
+          ...(responseFormat ? { response_format: responseFormat } : {})
         }),
         signal: controller.signal
       })
@@ -2284,11 +2296,23 @@ export class GeminiAdapter implements Narrator {
         const needsTrait = Boolean(diceCheck?.required) || candidate.actionType === 'trait_test'
 
         if (!hasTrait && needsTrait && diceCheck) {
-          const inferred = inferSkillFromText(text)
+          // Tenta primeiro pelo texto da opção; se não bater, tenta pela justificativa
+          // (diceCheck.reason) que o próprio LLM já escreveu — ainda é fundamentado na
+          // ficção (não é um default arbitrário), só olha em mais um lugar antes de
+          // desistir. Ex.: text="Exigir que liberem espaço", reason="...convencer um
+          // bloqueador hostil..." → "convencer" bate com Persuasão mesmo quando o texto
+          // da opção sozinho não bate com nenhum alias.
+          const inferredFromText = inferSkillFromText(text)
+          const inferred = inferredFromText ?? inferSkillFromText(diceCheck.reason)
           if (inferred) {
             diceCheck = { ...diceCheck, skill: inferred.label, required: true }
             hasTrait = true
-            warn('sanitizeNarratorResponse', `Skill inferida do texto da opção: "${text}" → ${inferred.label}`)
+            const outcome = inferredFromText ? 'inferredFromText' : 'inferredFromReason'
+            const total = recordSkillInferenceOutcome(outcome)
+            warn(
+              'sanitizeNarratorResponse',
+              `Skill inferida do texto/justificativa da opção: "${text}" → ${inferred.label} (${outcome}, total=${total})`
+            )
           }
         }
 
@@ -2300,7 +2324,11 @@ export class GeminiAdapter implements Narrator {
           const wasTraitTest = candidate.actionType === 'trait_test'
           if (wasTraitTest) candidate.actionType = 'custom'
           diceCheck = { ...diceCheck, required: false }
-          warn('sanitizeNarratorResponse', `Sem trait inferível para "${text}": rolagem descartada${wasTraitTest ? ' e ação convertida para custom' : ''}`)
+          const totalDiscarded = recordSkillInferenceOutcome('discarded')
+          warn(
+            'sanitizeNarratorResponse',
+            `Sem trait inferível para "${text}": rolagem descartada${wasTraitTest ? ' e ação convertida para custom' : ''} (total descartes=${totalDiscarded})`
+          )
         }
       }
       const signature = buildOptionSignature({
@@ -2430,6 +2458,26 @@ export class GeminiAdapter implements Narrator {
       ) {
         warn('sanitizeNarratorResponse', `Opção custom com required=true sem skill/attribute corrigida: "${option.text}"`)
         option.diceCheck = { ...option.diceCheck, required: false }
+      }
+
+      // Guarda simétrica à de cima: custom com required=true e skill/attribute PRESENTE viola a
+      // regra do prompt ("diceCheck.traco preenchido e actionType='custom' NUNCA podem coexistir
+      // — force actionType para trait_test/attack/heal"). Antes da Fase 1/2 (enum no schema), esse
+      // estado praticamente não aparecia: um traco inválido já derrubava required para false antes
+      // de chegar aqui. Com o traco agora sempre válido, o LLM ainda mistura actionType="custom"
+      // com um traco válido (ex.: verificado em teste real, script scripts/test-openai-structured-
+      // output.ts) — sem essa correção, a opção ficava mecanicamente contraditória: pedia rolagem
+      // (required=true) mas o app trataria como ação livre por causa do actionType errado.
+      if (
+        option.actionType === 'custom' &&
+        option.diceCheck.required &&
+        (option.diceCheck.skill || option.diceCheck.attribute)
+      ) {
+        warn(
+          'sanitizeNarratorResponse',
+          `Opção custom com traco válido ("${option.diceCheck.skill ?? option.diceCheck.attribute}") corrigida para actionType=trait_test: "${option.text}"`
+        )
+        option.actionType = 'trait_test'
       }
     }
 

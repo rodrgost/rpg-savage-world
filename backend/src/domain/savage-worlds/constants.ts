@@ -62,8 +62,8 @@ export const SKILLS: readonly SkillDefinition[] = [
 
 export const CORE_SKILL_KEYS = SKILLS.map((s) => s.key)
 
-// Formas verbais/coloquiais que a LLM por vezes confunde com o label can\u00f4nico
-// (ex.: narra "Intimidar o guarda" e devolve "skill": "Intimidar" em vez de "Intimida\u00e7\u00e3o").
+// Formas verbais/coloquiais que a LLM por vezes confunde com o label canônico
+// (ex.: narra "Intimidar o guarda" e devolve "skill": "Intimidar" em vez de "Intimidação").
 // Levantamento amplo de verbos (infinitivo) e substantivos que a LLM costuma
 // usar no lugar do label canônico. Alimenta TANTO o match exato do campo
 // (findSkillDefinition) QUANTO a inferência por texto (inferSkillFromText).
@@ -92,7 +92,7 @@ const SKILL_VERB_ALIASES: Record<string, readonly string[]> = {
   science: ['Ciência'],
   battle: ['Tática', 'Comandar', 'Estratégia'],
   gambling: ['Apostar', 'Jogatina'],
-  intimidation: ['Intimidar', 'Ameaçar', 'Coagir', 'Amedrontar'],
+  intimidation: ['Intimidar', 'Ameaçar', 'Coagir', 'Amedrontar', 'Exigir', 'Forçar', 'Pressionar'],
   performance: ['Atuar', 'Cantar', 'Dançar', 'Entreter', 'Encenar'],
   persuasion: ['Persuadir', 'Convencer', 'Negociar', 'Barganhar', 'Seduzir', 'Argumentar'],
   taunt: ['Provocar', 'Zombar', 'Insultar', 'Debochar'],

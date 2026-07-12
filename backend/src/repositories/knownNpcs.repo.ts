@@ -92,6 +92,15 @@ export class KnownNpcsRepo {
     await batch.commit()
   }
 
+  async deleteAllByCharacter(characterId: string): Promise<void> {
+    const colRef = this.collection(characterId)
+    const docs = await colRef.listDocuments()
+    if (!docs.length) return
+    const batch = firestore.batch()
+    for (const doc of docs) batch.delete(doc)
+    await batch.commit()
+  }
+
   /**
    * Edição manual pelo jogador. relationalStatus/notes marcam relationSource='manual';
    * resetToAuto devolve o controle ao narrador.

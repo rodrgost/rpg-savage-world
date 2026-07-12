@@ -27,7 +27,7 @@ import {
 } from '../lib/api'
 import type { EnginePhaseData } from '../lib/api'
 import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, KnownNpc, NarratorTurnResponse, NarrativeSegment, NarrativeStyle, RelationalStatus, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
-import { getNpcStatusLabel, RELATION_LABELS, RELATION_OPTIONS, relationClass, relationFromDisposition } from '../lib/npcLabels'
+import { RELATION_LABELS, RELATION_OPTIONS, relationClass, relationFromDisposition } from '../lib/npcLabels'
 import { ATTRIBUTES, SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
 import { YouTubeAmbient } from '../components/YouTubeAmbient'
 import { NarrationLogPanel } from '../components/game/NarrationLogPanel'
@@ -604,7 +604,6 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
                     <span className="npc-compact-name">{npcMention.displayName ?? npcMention.name}</span>
                     <span className={`npc-relation-badge ${relationClass(relation)}`}>{RELATION_LABELS[relation]}</span>
                     {(npcState?.followsPlayer || npcMention.followsPlayer) && <span className="known-npc-in-scene">acompanha</span>}
-                    <span className="npc-compact-status">{getNpcStatusLabel(status) || 'Ativo'}</span>
                   </div>
                   <div className="npc-compact-stats">
                     {isEnemy && wounds !== null && maxWounds !== null && (
@@ -786,8 +785,8 @@ function NpcStatusEffectsPanel({ npcs }: { npcs: NonNullable<GameState['npcs']> 
       <h4>Inimigos afetados</h4>
       <div className="effects-list">
         {affectedNpcs.flatMap((npc) => (npc.statusEffects ?? []).map((effect) => (
-          <span key={`${npc.id}-${effect.id}`} className="effect-tag" title={`${npc.name}${npc.status ? ` - ${getNpcStatusLabel(npc.status)}` : ''}`}>
-            {npc.status ? `[${getNpcStatusLabel(npc.status)}] ` : ''}{npc.name}: {effect.name}
+          <span key={`${npc.id}-${effect.id}`} className="effect-tag" title={npc.name}>
+            {npc.name}: {effect.name}
             {effect.turnsRemaining !== undefined && ` (${effect.turnsRemaining}t)`}
           </span>
         )))}
@@ -2006,9 +2005,6 @@ function SidebarKnownNpcs({ knownNpcs, activeLocation, sceneNpcIds, onUpdate }: 
               {inScene && <span className="known-npc-in-scene">na cena</span>}
             </button>
             <div className="known-npc-meta">
-              {npc.conditionStatus && npc.conditionStatus !== 'active' && (
-                <span className="known-npc-condition">{getNpcStatusLabel(npc.conditionStatus)}</span>
-              )}
               {npc.followsPlayer && <span className="known-npc-in-scene">acompanha jogador</span>}
               {npc.lastKnownLocation && <span className="known-npc-location">📍 {npc.lastKnownLocation}</span>}
             </div>
@@ -3122,19 +3118,6 @@ export function GamePage() {
                 >
                   <span className="npc-mention-dot" />
                   <span className="npc-mention-name">{npc.displayName ?? npc.name}</span>
-                  {npc.status && npc.status !== 'active' && (
-                    <span className="npc-mention-status">
-                      {npc.status === 'incapacitated'
-                        ? 'Incapacitado'
-                        : npc.status === 'defeated'
-                          ? 'Derrotado'
-                          : npc.status === 'dead'
-                            ? 'Morto'
-                            : npc.status === 'left'
-                              ? 'Foi embora'
-                            : ''}
-                    </span>
-                  )}
                 </li>
               ))}
             </ul>

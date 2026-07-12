@@ -1,3 +1,5 @@
+import { SKILLS, ATTRIBUTES } from '../../domain/savage-worlds/constants.js'
+
 /**
  * Schema de saída estruturada para o turno do Narrador (Gemini responseSchema).
  *
@@ -18,6 +20,20 @@
  * O sanitizeNarratorResponse permanece a fonte de verdade do contrato: este
  * schema só reduz a probabilidade de JSON malformado, não substitui a validação.
  */
+
+/**
+ * Lista fechada de nomes válidos para diceCheck.traco: rótulos (em PT-BR) de
+ * todas as perícias + todos os atributos de savage-worlds/constants.ts. Gerado
+ * dinamicamente para nunca dessincronizar da lista canônica usada na
+ * sanitização (findSkillDefinition/sanitizeAttributeName em gemini.adapter.ts).
+ * Sem isso, o LLM já inventou nomes inexistentes (ex.: "Liderança", que não é
+ * perícia nem atributo neste sistema) — o app tinha que descartar o teste.
+ */
+const TRACO_ENUM: readonly string[] = [
+  ...SKILLS.map((s) => s.label),
+  ...ATTRIBUTES.map((a) => a.label)
+]
+
 export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
   type: 'OBJECT',
   properties: {
@@ -59,7 +75,12 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
           diceCheck: {
             type: 'OBJECT',
             properties: {
-              traco: { type: 'STRING', nullable: true, description: 'Nome da perícia ou atributo testado; null se a ação não exige teste.' },
+              traco: {
+                type: 'STRING',
+                enum: TRACO_ENUM,
+                nullable: true,
+                description: 'Nome EXATO da perícia ou atributo testado (um destes valores) — null se a ação não exige teste.'
+              },
               difficulty: { type: 'STRING', enum: ['facil', 'normal', 'dificil', 'extremo'], nullable: true },
               reason: { type: 'STRING' }
             },

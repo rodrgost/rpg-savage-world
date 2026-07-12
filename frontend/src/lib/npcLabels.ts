@@ -1,17 +1,5 @@
 import type { RelationalStatus } from '../types'
 
-/** Label PT-BR da condição do NPC (ativo/incapacitado/derrotado/morto). */
-export function getNpcStatusLabel(status?: string): string {
-  switch (status) {
-    case 'incapacitated': return 'Incapacitado'
-    case 'defeated': return 'Derrotado'
-    case 'dead': return 'Morto'
-    case 'left': return 'Foi embora'
-    case 'active': return 'Ativo'
-    default: return ''
-  }
-}
-
 /** Labels PT-BR do status relacional do NPC com o personagem. */
 export const RELATION_LABELS: Record<RelationalStatus, string> = {
   desconhecido: 'Desconhecido',

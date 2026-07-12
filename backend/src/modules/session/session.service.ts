@@ -1293,6 +1293,9 @@ export class SessionService {
       if (docs.length) await batch.commit()
     }
 
+    // ── Apagar NPCs conhecidos do personagem ──
+    await this.npcRelations.deleteAllKnownNpcs(characterId)
+
     // ── Recriar estado do zero ──
     const campaign = campaignId ? await this.campaigns.get(campaignId) : null
     const world = worldId ? await this.worlds.get(worldId) : null

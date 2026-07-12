@@ -81,6 +81,10 @@ export class NpcRelationsService {
     }
   }
 
+  async deleteAllKnownNpcs(characterId: string): Promise<void> {
+    await this.knownNpcs.deleteAllByCharacter(characterId)
+  }
+
   private hasChanges(existing: KnownNpcDoc, desired: KnownNpcUpsert): boolean {
     const fields = [
       'name',
