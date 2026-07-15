@@ -43,6 +43,8 @@ export type ItemChange = {
   name: string
   quantity: number
   changeType: 'gained' | 'lost' | 'used'
+  /** Descrição do que o item é / o que contém / para que serve — preenchida pela narrativa para itens não óbvios, para orientar o LLM em turnos futuros */
+  description?: string
   /** Categoria do item — obrigatória para veículos e propriedades */
   category?: ItemCategory
   /** Bônus de Resistência concedido quando este item (categoria "armor") é equipado como armadura corporal */

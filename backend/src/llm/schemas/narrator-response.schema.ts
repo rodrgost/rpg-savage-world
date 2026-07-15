@@ -123,6 +123,11 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
           name: { type: 'STRING' },
           quantity: { type: 'INTEGER' },
           changeType: { type: 'STRING', enum: ['gained', 'lost', 'used'] },
+          description: {
+            type: 'STRING',
+            nullable: true,
+            description: 'Descrição curta do que o item é / o que contém / para que serve. OBRIGATÓRIA para itens NÃO ÓBVIOS (artefatos, itens de missão, itens mágicos/tecnológicos, recipientes com conteúdo, itens com efeito ou uso especial). Omitir ou null para itens triviais e autoexplicativos (ex.: "Espada", "Maçã", "Moedas de Ouro").'
+          },
           category: {
             type: 'STRING',
             enum: ['weapon', 'armor', 'consumable', 'ammunition', 'money', 'vehicle', 'property', 'quest', 'misc']
@@ -139,7 +144,7 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
           }
         },
         required: ['name', 'quantity', 'changeType', 'category'],
-        propertyOrdering: ['itemId', 'name', 'quantity', 'changeType', 'category', 'armorValue', 'parryBonus']
+        propertyOrdering: ['itemId', 'name', 'quantity', 'changeType', 'description', 'category', 'armorValue', 'parryBonus']
       }
     },
     statusChanges: {
