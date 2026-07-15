@@ -605,10 +605,24 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
             <span
               key={change.itemId}
               className={`item-change ${change.changeType}`}
+              title={change.description || undefined}
             >
               {change.changeType === 'gained' ? '+' : '-'} {change.name} (x{change.quantity})
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Descrições de itens não óbvios recém-ganhos */}
+      {message.itemChanges && message.itemChanges.some((c) => c.changeType === 'gained' && c.description) && (
+        <div className="item-change-descriptions">
+          {message.itemChanges
+            .filter((c) => c.changeType === 'gained' && c.description)
+            .map((c) => (
+              <p key={c.itemId} className="item-change-desc">
+                <span className="item-change-desc-name">{c.name}:</span> {c.description}
+              </p>
+            ))}
         </div>
       )}
 
