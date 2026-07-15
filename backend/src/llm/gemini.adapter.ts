@@ -1999,10 +1999,7 @@ export class GeminiAdapter implements Narrator {
       '  • qualquer menção a regras, dados ou mecânica — incluindo termos literais ("Abalado", "Ferido", "Fadiga"). Narre o efeito em vez disso: "o braço cede", "a visão embaça".',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
-      'O contexto estruturado desta chamada é a única fonte canônica para os campos JSON.',
-      'Se um NPC, item, efeito, destino, condição ou recurso não estiver no contexto estruturado, ele NÃO PODE ser criado nos campos JSON.',
-      'Na dúvida, prefira manter npcs, itemChanges e statusChanges vazios/null e preservar a continuidade apenas na narrativa e nas options.',
-      'EXCEÇÃO OBRIGATÓRIA — NPCs em cena: se a SUA narrativa deste turno traz uma pessoa ou criatura para dentro da cena (alguém aparece, aborda, ataca ou fala), esse NPC DEVE ser declarado em npcs[] com newlyIntroduced=true. A proibição acima vale para entidades NÃO narradas — nunca deixe um NPC narrado em cena fora de npcs[].',
+      'NPCs em cena: todo NPC que sua narrativa deste turno traz para a cena (aparece, aborda, ataca ou fala) DEVE ser declarado em npcs[] com newlyIntroduced=true. Nunca deixe um NPC narrado em cena fora de npcs[].',
       '',
       'Você DEVE retornar APENAS um JSON válido (sem markdown, sem comentários) com a seguinte estrutura:',
       '{',
@@ -3319,18 +3316,6 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
-    // Turnos consecutivos de narração sem nenhum NPC em cena: alimenta a regra
-    // anti-estagnação (RITMO EM EXPLORAÇÃO) com um sinal objetivo no prompt.
-    let turnsSinceLastNpc = 0
-    if (req.context.npcsPresent.length === 0) {
-      for (let i = req.recentMessages.length - 1; i >= 0; i--) {
-        const msg = req.recentMessages[i]
-        if (msg.role !== 'narrator') continue
-        if ((msg.segments ?? []).some((segment) => segment.type === 'npc')) break
-        turnsSinceLastNpc++
-      }
-    }
-
     // Reforço das regras mais violadas junto da ação: em prompts longos com
     // histórico crescente, o modelo passa a ignorar regras do meio do system
     // prompt (narrações de 1 frase nos logs) — repetir aqui restaura a adesão.
@@ -3347,11 +3332,6 @@ export class GeminiAdapter implements Narrator {
       'Não contradiga o bloco currentTurn.engineEvents. Não invente entidades fora do contexto.',
       'NPCs já presentes devem reutilizar exatamente o mesmo id/displayName do envelope.',
       lengthReminder,
-      ...(turnsSinceLastNpc >= 3
-        ? [
-            `RITMO CRÍTICO: já são ${turnsSinceLastNpc} turnos seguidos sem nenhum NPC ou evento concreto em cena. NESTE turno o mundo DEVE agir: concretize o último gancho narrado trazendo a pessoa/ameaça PARA DENTRO DA CENA e declare-a em npcs[] com newlyIntroduced=true.`
-          ]
-        : []),
       '',
       'ENVELOPE_JSON:',
       JSON.stringify(turnEnvelope, null, 2)
