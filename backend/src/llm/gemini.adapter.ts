@@ -2123,7 +2123,7 @@ export class GeminiAdapter implements Narrator {
       '    { "displayName": "<nome amigável exibido ao jogador>", "id": "<copie o hash de NPCS PRESENTES se já estiver presente; omita para NPCs novos>", "disposition": "hostile|neutral|friendly", "newlyIntroduced": true|false, "status": "active|incapacitated|defeated|dead|left", "followsPlayer": true|false, "relation": "conhecido|aliado|amigavel|neutro|desconfiado|hostil|inimigo" }',
       '  ],',
       '  "itemChanges": [',
-      '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "category": "weapon|armor|consumable|ammunition|money|vehicle|property|quest|misc", "armorValue": <1-4 ou omitir>, "parryBonus": <1-2 ou omitir> }',
+      '    { "itemId": "<uuid>", "name": "<nome do item>", "quantity": 1, "changeType": "gained|lost|used", "description": "<o que é / o que contém / para que serve — para itens não óbvios; omitir para triviais>", "category": "weapon|armor|consumable|ammunition|money|vehicle|property|quest|misc", "armorValue": <1-4 ou omitir>, "parryBonus": <1-2 ou omitir> }',
       '  ],',
       '  "statusChanges": [',
       '    { "effectId": "<uuid>", "name": "<nome do efeito>", "changeType": "applied|removed", "turnsRemaining": 3, "description": "<descrição>", "targetType": "player|npc", "targetId": "<id do NPC quando targetType=npc, ou null>" }',
@@ -2162,6 +2162,8 @@ export class GeminiAdapter implements Narrator {
       '',
       '### Itens (itemChanges)',
       '- Itens ganhos devem ter nomes criativos e coerentes com o cenário. O campo "name" deve conter APENAS o nome do item — NUNCA inclua quantidade ou sufixos no estilo "x3" no nome (use o campo "quantity" para isso).',
+      '- **Descrição de itens não óbvios (campo "description"):** ao GANHAR ("gained") um item cujo nome NÃO deixa claro o que ele é, o que contém ou para que serve, preencha "description" com uma explicação curta (1-2 frases): o que é, o que contém e/ou qual seu uso/efeito. Isso vale para artefatos, itens de missão (quest), itens mágicos ou tecnológicos, recipientes com conteúdo (bolsas, baús, frascos, caixas), chaves, documentos, dispositivos e qualquer item com efeito ou uso especial. Essa descrição fica registrada no inventário e é reapresentada em TODOS os turnos futuros no bloco "## Inventário", servindo de referência canônica para você narrar o item de forma consistente. NÃO invente propriedades novas depois: descreva o item por completo aqui.',
+      '- Itens triviais e autoexplicativos (ex.: "Espada", "Maçã", "Tocha", "Moedas de Ouro", "Flechas") NÃO precisam de "description" — deixe o campo omitido ou null para não poluir o inventário.',
       '- **Regra crítica — itemChanges:**',
       '  - changeType "gained": SOMENTE quando o RESULTADO MECÂNICO contém evidência explícita ([item_gained]).',
       '  - changeType "lost" ou "used": registre quando (a) o RESULTADO MECÂNICO tem evidência explícita ([item_lost], [item_used], [ammunition_consumed]), OU (b) sua narrativa NESTE turno descreve explicitamente o item sendo largado, destruído, confiscado, consumido, ou de alguma forma saindo da posse do jogador. Exemplo: se a narrativa diz "forçando você a soltá-lo" sobre um item, registre esse item com changeType "lost".',
@@ -2702,11 +2704,13 @@ export class GeminiAdapter implements Narrator {
       const isArmorCategory = rawCategory === 'armor'
       const rawArmorValue = typeof item.armorValue === 'number' ? Math.round(item.armorValue) : undefined
       const rawParryBonus = typeof item.parryBonus === 'number' ? Math.round(item.parryBonus) : undefined
+      const rawDescription = typeof item.description === 'string' ? sanitizeInlineText(item.description, '').trim() : ''
       return {
         itemId: typeof item.itemId === 'string' ? item.itemId : randomUUID(),
         name: stripQuantityFromName(sanitizeInlineText(item.name, 'Item')),
         quantity: typeof item.quantity === 'number' ? item.quantity : 1,
         changeType: (['gained', 'lost', 'used'].includes(item.changeType as string) ? item.changeType : 'gained') as ItemChange['changeType'],
+        ...(rawDescription ? { description: rawDescription } : {}),
         ...(rawCategory && VALID_ITEM_CATEGORIES.has(rawCategory) ? { category: rawCategory as ItemChange['category'] } : {}),
         ...(isArmorCategory && rawArmorValue !== undefined && rawArmorValue > 0
           ? { armorValue: Math.min(6, Math.max(1, rawArmorValue)) }
@@ -3280,7 +3284,7 @@ export class GeminiAdapter implements Narrator {
       '- Se a arma for à distância (arco, besta, pistola, rifle, espingarda, etc.), inclua OBRIGATORIAMENTE a munição correspondente como item separado (flechas, virotes, balas, cartuchos, etc.) com quantidade apropriada ao contexto',
       '- Armadura ou roupa de proteção, se aplicável',
       '- Suprimentos básicos de viagem (bolsa, corda, ferramentas úteis, etc.)',
-      '- 1 a 2 itens temáticos/narrativos que conectam o personagem ao mundo (amuleto de família, carta misteriosa, mapa antigo, diário, etc.)',
+      '- 1 a 2 itens temáticos/narrativos que conectam o personagem ao mundo (amuleto de família, carta misteriosa, mapa antigo, diário, etc.). Esses itens NÃO ÓBVIOS DEVEM ter o campo "description" preenchido (o que é / o que contém / para que serve), conforme a regra de descrição de itens do system prompt.',
       '- Dinheiro inicial OBRIGATÓRIO: inclua 1 item com categoria "money" e o nome apropriado ao cenário (ex.: "Moedas de Ouro", "Créditos", "Dólares", "Gil", etc.) e "quantity" com a quantia numérica exata coerente com o cenário e o contexto do personagem.',
       '- Para cenários modernos/futuristas: se o personagem tem profissão ou contexto que justifique, inclua um veículo (categoria "vehicle": carro, moto, nave, etc.) ou propriedade (categoria "property": apartamento, base, etc.) como item inicial.',
       'Mencione os itens naturalmente dentro da narrativa de abertura (ex.: descreva o personagem checando seus pertences, ou um NPC entregando algo).',

@@ -130,11 +130,15 @@ export class InventoryService {
       if (change.changeType === 'gained') {
         if (existing) {
           existing.quantity += change.quantity
+          // Preenche a descrição se ela ainda não existir e a narrativa forneceu uma
+          if (!existing.description && change.description) {
+            existing.description = change.description
+          }
         } else {
           inventory.push({
             id: change.itemId,
             name: change.name,
-            description: '',
+            description: change.description ?? '',
             quantity: change.quantity,
             ...(change.category ? { category: change.category } : {}),
             ...(typeof change.armorValue === 'number' ? { armorValue: change.armorValue } : {}),
