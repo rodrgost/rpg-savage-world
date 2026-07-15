@@ -1186,6 +1186,25 @@ button:disabled {
   color: #ef4444;
 }
 
+.item-change-descriptions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: var(--space-2);
+}
+
+.item-change-desc {
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.item-change-desc-name {
+  font-weight: 600;
+  color: #22c55e;
+}
+
 .status-change.applied {
   background: rgba(96, 165, 250, 0.15);
   color: #60a5fa;

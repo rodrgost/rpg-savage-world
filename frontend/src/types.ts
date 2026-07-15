@@ -112,6 +112,8 @@ export type ItemChange = {
   name: string
   quantity: number
   changeType: 'gained' | 'lost' | 'used'
+  /** Descrição do que o item é / o que contém / para que serve — presente em itens não óbvios */
+  description?: string
   category?: ItemCategory
   armorValue?: number
   parryBonus?: number
