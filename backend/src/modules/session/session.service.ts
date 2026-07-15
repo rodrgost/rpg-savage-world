@@ -31,11 +31,12 @@ import {
   calcParry,
   calcToughness,
   difficultyToModifier,
-  findArmorDefinition,
   findSkillDefinition,
   findWeaponDefinition,
-  getShieldParryBonus,
   isDieType,
+  isShieldItem,
+  resolveArmorValue,
+  resolveShieldParryBonus,
   resolveSkillDie
 } from '../../domain/savage-worlds/constants.js'
 import type { Narrator } from '../../llm/narrator.js'
@@ -103,7 +104,7 @@ function normalizePlayerAction(action: PlayerAction): PlayerAction {
     case 'attack':
       return {
         ...action,
-        skill: normalizeSkillName(action.skill) ?? 'Luta'
+        skill: normalizeSkillName(action.skill)
       }
     default:
       return action
@@ -175,11 +176,8 @@ export class SessionService {
       ? this.getInventoryItemById(state, state.player.equippedShieldItemId)
       : undefined
 
-    const armorDef = findArmorDefinition(armorItem?.name)
-    const shieldDef = findArmorDefinition(shieldItem?.name)
-
-    const armorValue = armorDef?.armorValue ?? 0
-    const parryBonusFromShield = getShieldParryBonus(shieldDef)
+    const armorValue = resolveArmorValue(armorItem)
+    const parryBonusFromShield = resolveShieldParryBonus(shieldItem)
     const fightingDie = resolveSkillDie(state.player.skills, 'Luta') ?? 0
     const baseParry = calcParry(fightingDie as DieType | 0, state.player.edges)
     const parry = baseParry + parryBonusFromShield
@@ -205,22 +203,21 @@ export class SessionService {
       ? this.getInventoryItemById(state, state.player.equippedShieldItemId)
       : undefined
 
-    const armorDef = findArmorDefinition(equippedArmorItem?.name)
-    const shieldDef = findArmorDefinition(equippedShieldItem?.name)
-
     const equippedAttackItemId = state.player.equippedAttackItemId && inventoryIds.has(state.player.equippedAttackItemId)
       ? state.player.equippedAttackItemId
       : undefined
     const equippedArmorItemId = state.player.equippedArmorItemId
       && inventoryIds.has(state.player.equippedArmorItemId)
-      && armorDef
-      && getShieldParryBonus(armorDef) <= 0
+      && equippedArmorItem
+      && equippedArmorItem.category === 'armor'
+      && !isShieldItem(equippedArmorItem)
       ? state.player.equippedArmorItemId
       : undefined
     const equippedShieldItemId = state.player.equippedShieldItemId
       && inventoryIds.has(state.player.equippedShieldItemId)
-      && shieldDef
-      && getShieldParryBonus(shieldDef) > 0
+      && equippedShieldItem
+      && equippedShieldItem.category === 'armor'
+      && isShieldItem(equippedShieldItem)
       ? state.player.equippedShieldItemId
       : undefined
 
@@ -273,8 +270,9 @@ export class SessionService {
 
     const item = this.getInventoryItemById(state, params.itemId)
     if (!item) throw new NotFoundException('Item não encontrado no inventário')
-    const armorDef = findArmorDefinition(item.name)
-    if (!armorDef || getShieldParryBonus(armorDef) > 0) throw new NotFoundException('Item não pode ser equipado como armadura')
+    if (item.category !== 'armor' || isShieldItem(item)) {
+      throw new NotFoundException('Item não pode ser equipado como armadura')
+    }
 
     const nextState = this.recomputePlayerCombatStatsFromEquipment({
       ...state,
@@ -294,8 +292,7 @@ export class SessionService {
 
     const item = this.getInventoryItemById(state, params.itemId)
     if (!item) throw new NotFoundException('Item não encontrado no inventário')
-    const shieldDef = findArmorDefinition(item.name)
-    if (!shieldDef || getShieldParryBonus(shieldDef) <= 0) {
+    if (item.category !== 'armor' || !isShieldItem(item)) {
       throw new NotFoundException('Item não pode ser equipado como escudo')
     }
 
@@ -644,7 +641,9 @@ export class SessionService {
           }
         }
 
-        const attackSkill = normalizeSkillName(diceCheck?.skill) ?? 'Luta'
+        // Sem perícia forçada: se a LLM não informou uma perícia de combate válida,
+        // diceCheck.skill fica null e o rule-engine sinaliza a ausência na execução.
+        const attackSkill = normalizeSkillName(diceCheck?.skill) ?? null
         if (diceCheck) {
           diceCheck.skill = attackSkill
           diceCheck.attribute = null
@@ -891,15 +890,11 @@ export class SessionService {
       sceneLocation: state.worldState.activeLocation,
       allowCreate: true
     })
-    // O storyHook não é exibido (fica fora dos segments), mas conta como
-    // narrativa do turno para ancoragem: opções podem referenciar o gancho.
     const canonicalAnchors = buildCanonicalAnchors({
       state: canonicalNarrativeState,
       recentMessages,
       summaryText,
-      currentNarrative: [segmentsToText(response.segments), response.storyHook?.trim() ?? '']
-        .filter(Boolean)
-        .join('\n\n')
+      currentNarrative: segmentsToText(response.segments)
     })
     const itemChanges = this.validateNarratorItemChanges(response.itemChanges, state, mode, action)
     const options = this.completeValidatedOptions(
@@ -1230,7 +1225,6 @@ export class SessionService {
       turn: 0,
       role: 'narrator',
       segments: narratorResponse.segments,
-      storyHook: narratorResponse.storyHook ?? null,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
@@ -1413,7 +1407,6 @@ export class SessionService {
       turn: 0,
       role: 'narrator',
       segments: narratorResponse.segments,
-      storyHook: narratorResponse.storyHook ?? null,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
@@ -1820,7 +1813,6 @@ export class SessionService {
       turn: finalState.meta.turn,
       role: 'narrator',
       segments: narratorResponse.segments,
-      storyHook: narratorResponse.storyHook ?? null,
       options: narratorResponse.options,
       npcs: narratorResponse.npcs,
       itemChanges: narratorResponse.itemChanges,
@@ -1946,9 +1938,11 @@ export class SessionService {
         }
       case 'attack':
         // damageFormula/ap NÃO vêm mais do LLM — o rule-engine resolve a arma equipada.
+        // skill sem fallback: sem perícia válida da LLM, o rule-engine sinaliza a
+        // ausência na execução em vez de assumir 'Luta'.
         return {
           type: 'attack',
-          skill: normalizeSkillName(dc?.skill) ?? 'Luta',
+          skill: normalizeSkillName(dc?.skill),
           targetId: typeof payload.targetId === 'string' ? payload.targetId : 'unknown',
           modifier: appModifier
         }
@@ -2074,7 +2068,10 @@ export class SessionService {
         return `Teste de ${normalizeSkillName(action.skill) ?? action.attribute ?? 'perícia'}${action.description ? ` — ${action.description}` : ''}`
       case 'attack': {
         const calledShotLabel = action.calledShot ? ` (tiro certeiro: ${action.calledShot})` : ''
-        return `Ataque contra ${action.targetId} usando ${normalizeSkillName(action.skill) ?? 'Luta'}${calledShotLabel}`
+        const skillLabel = normalizeSkillName(action.skill)
+        return skillLabel
+          ? `Ataque contra ${action.targetId} usando ${skillLabel}${calledShotLabel}`
+          : `Ataque contra ${action.targetId} (sem perícia de combate informada)${calledShotLabel}`
       }
       case 'travel':
         return `Viajar para ${action.to}`

@@ -1,4 +1,4 @@
-import { SKILLS, ATTRIBUTES } from '../../domain/savage-worlds/constants.js'
+import { SKILLS } from '../../domain/savage-worlds/constants.js'
 
 /**
  * Schema de saída estruturada para o turno do Narrador (Gemini responseSchema).
@@ -23,16 +23,14 @@ import { SKILLS, ATTRIBUTES } from '../../domain/savage-worlds/constants.js'
 
 /**
  * Lista fechada de nomes válidos para diceCheck.traco: rótulos (em PT-BR) de
- * todas as perícias + todos os atributos de savage-worlds/constants.ts. Gerado
- * dinamicamente para nunca dessincronizar da lista canônica usada na
- * sanitização (findSkillDefinition/sanitizeAttributeName em gemini.adapter.ts).
- * Sem isso, o LLM já inventou nomes inexistentes (ex.: "Liderança", que não é
- * perícia nem atributo neste sistema) — o app tinha que descartar o teste.
+ * todas as perícias de savage-worlds/constants.ts — só perícias, nunca atributos.
+ * Testes de atributo puro (soak_roll, recover_shaken) já são resolvidos direto
+ * pelo rule-engine, sem passar pelo traco da LLM. Gerado dinamicamente para
+ * nunca dessincronizar da lista canônica usada em findSkillDefinition
+ * (gemini.adapter.ts). O traço agora é só o que a LLM devolve dentro deste
+ * enum fechado — se não bater, não há perícia (sem inferência, sem fallback).
  */
-const TRACO_ENUM: readonly string[] = [
-  ...SKILLS.map((s) => s.label),
-  ...ATTRIBUTES.map((a) => a.label)
-]
+const TRACO_ENUM: readonly string[] = SKILLS.map((s) => s.label)
 
 export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
   type: 'OBJECT',
@@ -128,10 +126,20 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
           category: {
             type: 'STRING',
             enum: ['weapon', 'armor', 'consumable', 'ammunition', 'money', 'vehicle', 'property', 'quest', 'misc']
+          },
+          armorValue: {
+            type: 'INTEGER',
+            nullable: true,
+            description: 'APENAS para category="armor" quando o item é vestido como armadura corporal: bônus de Resistência concedido (tipicamente 1 a 4). Omitir para itens que não são armadura corporal.'
+          },
+          parryBonus: {
+            type: 'INTEGER',
+            nullable: true,
+            description: 'APENAS para category="armor" quando o item é um escudo/anteparo empunhado: bônus de Aparar concedido (tipicamente 1 a 2). Omitir para armadura corporal (sem parryBonus).'
           }
         },
         required: ['name', 'quantity', 'changeType', 'category'],
-        propertyOrdering: ['itemId', 'name', 'quantity', 'changeType', 'category']
+        propertyOrdering: ['itemId', 'name', 'quantity', 'changeType', 'category', 'armorValue', 'parryBonus']
       }
     },
     statusChanges: {
@@ -179,13 +187,54 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
       },
       required: ['mechanicalResult', 'narratedOutcome', 'justification'],
       propertyOrdering: ['mechanicalResult', 'narratedOutcome', 'justification']
-    },
-    storyHook: {
-      type: 'STRING',
-      nullable: true,
-      description: 'Gancho de história: 1 frase curta sobre algo acontecendo fora de cena — um evento, indício ou ameaça que cria tensão ou curiosidade para o próximo turno. Omitir (null) quando não houver nada relevante além da consequência direta da ação.'
     }
   },
   required: ['segments', 'options'],
-  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride', 'storyHook']
+  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride']
+}
+
+/**
+ * Schema de saída estruturada para validateAction (classificação de ação livre
+ * digitada pelo jogador). Reaproveita o mesmo TRACO_ENUM fechado do narrador —
+ * a LLM já resolve o traço aqui dentro do enum; não há mais sanitização/
+ * inferência posterior (sanitizeValidateActionResponse foi removido). Se o
+ * traco não vier ou não bater com o enum, a ação segue sem teste de dados.
+ */
+export const VALIDATE_ACTION_RESPONSE_SCHEMA: Record<string, unknown> = {
+  type: 'OBJECT',
+  properties: {
+    feasible: { type: 'BOOLEAN' },
+    feasibilityReason: { type: 'STRING', nullable: true },
+    actionType: { type: 'STRING', enum: ['custom', 'trait_test', 'attack', 'travel', 'flag'] },
+    actionPayload: {
+      type: 'OBJECT',
+      description: 'Campos parciais para montar a ação mecânica (todos opcionais). Perícia NÃO vai aqui — use diceCheck.traco.',
+      properties: {
+        targetId: { type: 'STRING', nullable: true },
+        to: { type: 'STRING', nullable: true },
+        input: { type: 'STRING', nullable: true },
+        key: { type: 'STRING', nullable: true }
+      },
+      propertyOrdering: ['targetId', 'to', 'input', 'key']
+    },
+    diceCheck: {
+      type: 'OBJECT',
+      nullable: true,
+      properties: {
+        traco: {
+          type: 'STRING',
+          enum: TRACO_ENUM,
+        nullable: true,
+          description: 'Nome EXATO da perícia testada (um destes valores) — null se a ação não exige teste.'
+        },
+        difficulty: { type: 'STRING', enum: ['facil', 'normal', 'dificil', 'extremo'], nullable: true },
+        reason: { type: 'STRING' }
+      },
+      required: ['reason'],
+      propertyOrdering: ['traco', 'difficulty', 'reason']
+    },
+    interpretation: { type: 'STRING' }
+  },
+  required: ['feasible', 'actionType', 'actionPayload', 'interpretation'],
+  propertyOrdering: ['feasible', 'feasibilityReason', 'actionType', 'actionPayload', 'diceCheck', 'interpretation']
 }

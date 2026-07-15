@@ -1,25 +1,23 @@
 /**
  * Contador simples em memória (não persistido, reseta a cada restart do
- * processo) de quantas vezes a inferência determinística de skill
- * (inferSkillFromText, ver domain/savage-worlds/constants.ts) precisou ser
- * acionada dentro de sanitizeNarratorResponse — e com que resultado.
+ * processo) de quantas vezes uma opção com trait_test/attack chegou da LLM
+ * sem uma perícia válida dentro da lista fechada (SKILLS, ver
+ * domain/savage-worlds/constants.ts) e teve a rolagem descartada dentro de
+ * sanitizeNarratorResponse (gemini.adapter.ts).
  *
  * Existe pra dar visibilidade agregada sobre o quanto o LLM ainda erra o
- * campo diceCheck.traco fora da lista fechada (SKILLS + ATTRIBUTES), sem
- * precisar grepar o log de LLM manualmente linha a linha em busca de
- * "Skill inferida" / "Sem trait inferível". Ver GET /health/llm-metrics.
+ * campo diceCheck.traco fora da lista fechada, sem precisar grepar o log de
+ * LLM manualmente linha a linha em busca de "Sem perícia válida". Ver
+ * GET /health/llm-metrics.
  *
- * Idealmente, depois que o Structured Outputs da OpenAI estiver realmente em
- * produção (buildOpenAiJsonSchemaResponseFormat em openai-strict-schema.ts),
- * esses contadores devem tender a ~0 para o provider 'openai' — se não
- * tenderem, é sinal de que o schema não está sendo aplicado/respeitado.
+ * Não há mais inferência de perícia por texto neste código: se "traco" não
+ * bate com nenhum nome da lista fechada, a rolagem é sempre descartada — o
+ * único desfecho possível aqui é 'discarded'.
  */
 
-export type SkillInferenceOutcome = 'inferredFromText' | 'inferredFromReason' | 'discarded'
+export type SkillInferenceOutcome = 'discarded'
 
 const counters: Record<SkillInferenceOutcome, number> = {
-  inferredFromText: 0,
-  inferredFromReason: 0,
   discarded: 0
 }
 
@@ -38,7 +36,7 @@ export function getSkillInferenceMetrics(): {
 } {
   return {
     counters: { ...counters },
-    total: counters.inferredFromText + counters.inferredFromReason + counters.discarded,
+    total: counters.discarded,
     sinceISO: new Date(processStartMs).toISOString()
   }
 }

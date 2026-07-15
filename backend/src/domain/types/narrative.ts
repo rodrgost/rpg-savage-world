@@ -26,6 +26,10 @@ export type InventoryItem = {
   category?: ItemCategory
   /** Tags opcionais para categorização adicional */
   tags?: string[]
+  /** Bônus de Resistência (Toughness) quando equipado como armadura corporal — definido pela narrativa na criação do item */
+  armorValue?: number
+  /** Bônus de Aparar (Parry) quando equipado como escudo — definido pela narrativa na criação do item */
+  parryBonus?: number
 }
 
 export type EquippedItemsBrief = {
@@ -41,6 +45,10 @@ export type ItemChange = {
   changeType: 'gained' | 'lost' | 'used'
   /** Categoria do item — obrigatória para veículos e propriedades */
   category?: ItemCategory
+  /** Bônus de Resistência concedido quando este item (categoria "armor") é equipado como armadura corporal */
+  armorValue?: number
+  /** Bônus de Aparar concedido quando este item (categoria "armor") é equipado como escudo */
+  parryBonus?: number
 }
 
 // ─── Status Effects ───
@@ -165,7 +173,7 @@ export type ValidateActionRequest = {
     playerSkills?: Record<string, string>
     rulesDigest?: string
   }
-  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; storyHook?: string | null; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
 }
 
 // ─── Opções de ação ───
@@ -231,12 +239,6 @@ export type NarratorTurnResponse = {
   npcAttacks?: NpcAttackEntry[]
   /** Preenchido apenas quando o desfecho narrado diverge do resultado mecânico, com a justificativa na ficção */
   outcomeOverride?: OutcomeOverride | null
-  /**
-   * Gancho de história: evento ou indício ocorrido fora de cena que cria tensão ou
-   * curiosidade para o próximo turno. 1 frase curta. Omitir quando não houver nada
-   * relevante acontecendo além da consequência direta da ação.
-   */
-  storyHook?: string | null
   /** true quando o conteúdo é um fallback estático por falha do LLM */
   isFallback?: boolean
 }
@@ -325,7 +327,7 @@ export type NarrateTurnRequest = {
     /** Catálogo de NPCs nomeados do mundo — permite referenciar NPCs canônicos por ID */
     npcCatalog?: Array<{ id: string; name: string; description?: string; dispositionDefault: string }>
   }
-  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; storyHook?: string | null; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
   narrativeStyle?: NarrativeStyle
   simpleVocabulary?: boolean
 }

@@ -54,11 +54,6 @@ function getSkillDie(state: GameState, skillName: string): DieType {
   return resolveSkillDie(state.player.skills, skillName) ?? 4
 }
 
-function getAttributeDie(state: GameState, attrName: string): DieType {
-  const attrs = state.player.attributes as Record<string, DieType | undefined>
-  return attrs[attrName] ?? 4
-}
-
 function findNPC(state: GameState, targetId: string): NPCCombatant | undefined {
   return state.npcs.find((n) => n.id === targetId) ?? state.combat?.combatants.find((c) => c.id === targetId)
 }
@@ -218,12 +213,17 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
     // ─── Trait Test ───
     case 'trait_test': {
       const skillName = getCanonicalSkillLabel(action.skill)
-      const traitName = skillName ?? action.attribute ?? 'Percepção'
-      const traitDie = skillName
-        ? getSkillDie(nextState, skillName)
-        : action.attribute
-          ? getAttributeDie(nextState, action.attribute)
-          : 4 as DieType
+      // Sem perícia válida (traço só vem da LLM, sem fallback nem invenção pelo
+      // código): não rola dado nenhum, só sinaliza que o teste foi pulado.
+      if (!skillName) {
+        emittedEvents.push({
+          type: 'trait_test_skipped',
+          payload: { reason: 'Nenhuma perícia válida informada', description: action.description ?? null }
+        })
+        break
+      }
+      const traitName = skillName
+      const traitDie = getSkillDie(nextState, skillName)
       // nerveOfSteel / Nervos de Aço: reduz penalidade de ferimento em 1
       const rawWoundPenalty = woundPenalty(nextState.player.wounds)
       const nerveBonus = nextState.player.edges.some((e) => e === 'nerveOfSteel' || e === 'Nervos de Aço') ? 1 : 0
@@ -267,7 +267,16 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
         break
       }
 
-      const attackSkill = getCanonicalSkillLabel(action.skill) ?? 'Luta'
+      const attackSkill = getCanonicalSkillLabel(action.skill)
+      // Sem perícia válida de combate: não forçamos 'Luta' nem nenhuma outra —
+      // o ataque não rola dado, só sinaliza que faltou perícia.
+      if (!attackSkill) {
+        emittedEvents.push({
+          type: 'attack_skill_missing',
+          payload: { targetId: action.targetId }
+        })
+        break
+      }
       const attackSkillKey = findSkillDefinition(attackSkill)?.key ?? ''
       const attackDie = getSkillDie(nextState, attackSkill)
       const penalty = woundPenalty(nextState.player.wounds)

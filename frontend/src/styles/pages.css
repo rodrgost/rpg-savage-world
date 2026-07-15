@@ -2718,7 +2718,6 @@
 /* Ações / Log / Normal / Ficha: pill neutra (cinza), conforme imagem de referência */
 .page-game .pill-ficha,
 .page-game .pill-actions,
-.page-game .pill-log,
 .page-game .pill-speed {
   border-color: var(--border-subtle);
   color: var(--text-secondary);
@@ -2726,8 +2725,7 @@
 }
 
 .page-game .pill-ficha:hover,
-.page-game .pill-actions:hover,
-.page-game .pill-log:hover {
+.page-game .pill-actions:hover {
   border-color: var(--border-strong);
   background: var(--bg-surface-hover);
   color: var(--text-primary);

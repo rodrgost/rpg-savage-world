@@ -62,46 +62,6 @@ export const SKILLS: readonly SkillDefinition[] = [
 
 export const CORE_SKILL_KEYS = SKILLS.map((s) => s.key)
 
-// Formas verbais/coloquiais que a LLM por vezes confunde com o label canônico
-// (ex.: narra "Intimidar o guarda" e devolve "skill": "Intimidar" em vez de "Intimidação").
-// Levantamento amplo de verbos (infinitivo) e substantivos que a LLM costuma
-// usar no lugar do label canônico. Alimenta TANTO o match exato do campo
-// (findSkillDefinition) QUANTO a inferência por texto (inferSkillFromText).
-// Regra de curadoria: cada forma de superfície pertence a UMA única skill —
-// não repita a mesma palavra em skills diferentes (evita falso positivo).
-const SKILL_VERB_ALIASES: Record<string, readonly string[]> = {
-  athletics: ['Atletismo', 'Correr', 'Escalar', 'Saltar', 'Pular', 'Nadar', 'Subir', 'Trepar', 'Arremessar', 'Escapar', 'Esquivar'],
-  boating: ['Navegar', 'Remar', 'Velejar'],
-  driving: ['Conduzir', 'Dirigir', 'Direção'],
-  piloting: ['Pilotar', 'Voar'],
-  fighting: ['Lutar', 'Golpear', 'Combater', 'Brigar', 'Esgrimir', 'Desferir'],
-  riding: ['Cavalgar', 'Montar', 'Galopar'],
-  shooting: ['Atirar', 'Disparar', 'Mirar', 'Alvejar', 'Fuzilar', 'Pontaria'],
-  stealth: ['Furtividade', 'Esconder', 'Esgueirar', 'Espreitar', 'Camuflar', 'Ocultar'],
-  thievery: ['Ladinagem', 'Roubar', 'Furtar', 'Surrupiar', 'Arrombar', 'Saquear'],
-  academics: ['Acadêmico', 'Erudição', 'Recordar'],
-  commonKnowledge: ['Conhecimento'],
-  electronics: ['Eletrônica'],
-  hacking: ['Hackear', 'Crackear'],
-  healing: ['Curar', 'Tratar', 'Medicar', 'Estabilizar', 'Cicatrizar', 'Socorrer', 'Medicina'],
-  language: ['Idioma', 'Idiomas', 'Traduzir'],
-  notice: ['Perceber', 'Notar', 'Observar', 'Vigiar', 'Espiar', 'Buscar', 'Procurar', 'Vasculhar', 'Examinar', 'Inspecionar', 'Detectar', 'Avistar'],
-  occult: ['Ocultismo'],
-  repair: ['Reparar', 'Consertar', 'Remendar', 'Restaurar', 'Ofícios', 'Ofício', 'Mecânica', 'Engenharia', 'Manutenção', 'Improvisar', 'Ajustar', 'Calibrar'],
-  research: ['Investigar', 'Investigação', 'Averiguar', 'Apurar'],
-  science: ['Ciência'],
-  battle: ['Tática', 'Comandar', 'Estratégia'],
-  gambling: ['Apostar', 'Jogatina'],
-  intimidation: ['Intimidar', 'Ameaçar', 'Coagir', 'Amedrontar', 'Exigir', 'Forçar', 'Pressionar'],
-  performance: ['Atuar', 'Cantar', 'Dançar', 'Entreter', 'Encenar'],
-  persuasion: ['Persuadir', 'Convencer', 'Negociar', 'Barganhar', 'Seduzir', 'Argumentar'],
-  taunt: ['Provocar', 'Zombar', 'Insultar', 'Debochar'],
-  faith: ['Rezar', 'Orar', 'Abençoar'],
-  focus: ['Focar', 'Concentrar', 'Canalizar', 'Meditar'],
-  spellcasting: ['Conjurar', 'Encantar', 'Enfeitiçar', 'Feitiçar'],
-  survival: ['Sobreviver', 'Rastrear', 'Caçar', 'Acampar', 'Acampamento', 'Forragear', 'Trilhar']
-}
-
 function normalizeSkillLookupValue(value: string): string {
   return value
     .normalize('NFD')
@@ -110,59 +70,14 @@ function normalizeSkillLookupValue(value: string): string {
     .toLowerCase()
 }
 
+// Traço agora vem só da LLM (enum fechado no schema/prompt): sem alias de verbos
+// e sem inferência por texto livre. Se o traco não bater com key/label exato,
+// não há perícia — a ação segue sem teste de dados, sem tentativa de adivinhar.
 const SKILL_DEFINITION_BY_LOOKUP = new Map<string, SkillDefinition>()
 
 for (const skill of SKILLS) {
   SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(skill.key), skill)
   SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(skill.label), skill)
-
-  for (const alias of SKILL_VERB_ALIASES[skill.key] ?? []) {
-    SKILL_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(alias), skill)
-  }
-}
-
-// Mapa dedicado à inferência por TEXTO: palavra normalizada (token único,
-// apenas letras, tamanho mínimo) → skill. Usado quando a LLM não devolve uma
-// skill válida no campo e precisamos deduzir o verbo a partir do texto da opção.
-const SKILL_BY_TEXT_WORD = new Map<string, SkillDefinition>()
-
-function registerTextWord(word: string, skill: SkillDefinition): void {
-  const normalized = normalizeSkillLookupValue(word)
-  // Tokens curtos ou com caracteres não-alfabéticos geram falso positivo — ignorados.
-  if (normalized.length < 4 || /[^a-z]/.test(normalized)) return
-  // Primeiro a registrar vence: mantém o mapeamento determinístico e estável.
-  if (!SKILL_BY_TEXT_WORD.has(normalized)) SKILL_BY_TEXT_WORD.set(normalized, skill)
-}
-
-for (const skill of SKILLS) {
-  // Chaves (key) são em inglês e não aparecem na narração PT — fora da inferência.
-  registerTextWord(skill.label, skill)
-  for (const alias of SKILL_VERB_ALIASES[skill.key] ?? []) {
-    registerTextWord(alias, skill)
-  }
-}
-
-/**
- * Inferência determinística da skill a partir do texto livre de uma opção.
- * Normaliza o texto, quebra em palavras e devolve a primeira skill cujo verbo/
- * substantivo for reconhecido (ordem de leitura). Sem fuzzy: só correspondência
- * exata de palavra contra a tabela de aliases.
- */
-export function inferSkillFromText(text: string | null | undefined): SkillDefinition | undefined {
-  if (typeof text !== 'string' || !text.trim()) return undefined
-
-  const normalized = text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-
-  for (const word of normalized.split(/[^a-z]+/)) {
-    if (!word) continue
-    const hit = SKILL_BY_TEXT_WORD.get(word)
-    if (hit) return hit
-  }
-
-  return undefined
 }
 
 export function findSkillDefinition(skillName: string | null | undefined): SkillDefinition | undefined {
@@ -512,6 +427,42 @@ export function getShieldParryBonus(armor: ArmorDefinition | undefined): number 
   const match = armor.notes.match(/\+(\d+)\s*Aparar/i)
   if (!match) return 0
   return Number(match[1] ?? 0)
+}
+
+/**
+ * Itens de armadura/escudo criados pela narrativa (LLM) trazem seus próprios
+ * campos `armorValue`/`parryBonus` — não dependem mais de bater com o nome de
+ * um item do catálogo fixo ARMORS. Este catálogo continua servindo de
+ * fallback para itens antigos, salvos antes dessa mudança, que não têm esses
+ * campos preenchidos.
+ */
+type EquippableItemLike = { name?: string; armorValue?: number; parryBonus?: number }
+
+/** Um item é um escudo quando seu `parryBonus` explícito é > 0, ou — na
+ * ausência de campos novos (item legado) — quando o nome bate no catálogo
+ * de escudos. Um item com `armorValue` explícito (e sem `parryBonus`) NUNCA
+ * é tratado como escudo. */
+export function isShieldItem(item: EquippableItemLike | undefined): boolean {
+  if (!item) return false
+  if (typeof item.parryBonus === 'number') return item.parryBonus > 0
+  if (typeof item.armorValue === 'number') return false
+  return getShieldParryBonus(findArmorDefinition(item.name)) > 0
+}
+
+/** Bônus de Resistência (Toughness) concedido por um item de armadura. */
+export function resolveArmorValue(item: EquippableItemLike | undefined): number {
+  if (!item) return 0
+  if (typeof item.armorValue === 'number' && item.armorValue > 0) return item.armorValue
+  if (isShieldItem(item)) return 0
+  return findArmorDefinition(item.name)?.armorValue ?? 0
+}
+
+/** Bônus de Aparar (Parry) concedido por um item equipado como escudo. */
+export function resolveShieldParryBonus(item: EquippableItemLike | undefined): number {
+  if (!item) return 0
+  if (typeof item.parryBonus === 'number' && item.parryBonus > 0) return item.parryBonus
+  if (!isShieldItem(item)) return 0
+  return getShieldParryBonus(findArmorDefinition(item.name))
 }
 
 // ─── Ranks de Progressão ───

@@ -3,14 +3,13 @@ import type { SessionSummaryRow } from '../repositories/sessionSummary.repo.js'
 import type { EquippedItemsBrief, InventoryItem, NarrativeSegment } from '../domain/types/narrative.js'
 import type { ChatMessageRow } from '../repositories/chatMessage.repo.js'
 import {
-  SKILLS,
   EDGES,
   HINDRANCES,
   ATTRIBUTES,
-  findArmorDefinition,
   findWeaponDefinition,
   getCanonicalSkillLabel,
-  getShieldParryBonus
+  resolveArmorValue,
+  resolveShieldParryBonus
 } from '../domain/savage-worlds/constants.js'
 
 function resolveEquippedItemsBrief(state: GameState): EquippedItemsBrief {
@@ -23,8 +22,8 @@ function resolveEquippedItemsBrief(state: GameState): EquippedItemsBrief {
   const shieldItem = findById(state.player.equippedShieldItemId)
 
   const attackWeapon = findWeaponDefinition(attackItem?.name)
-  const armorDef = findArmorDefinition(armorItem?.name)
-  const shieldDef = findArmorDefinition(shieldItem?.name)
+  const armorValue = resolveArmorValue(armorItem)
+  const shieldParryBonus = resolveShieldParryBonus(shieldItem)
 
   return {
     ...(attackItem
@@ -38,21 +37,21 @@ function resolveEquippedItemsBrief(state: GameState): EquippedItemsBrief {
           }
         }
       : {}),
-    ...(armorItem && armorDef
+    ...(armorItem && armorValue > 0
       ? {
           armor: {
             itemId: armorItem.id,
             name: armorItem.name,
-            armorValue: armorDef.armorValue
+            armorValue
           }
         }
       : {}),
-    ...(shieldItem && shieldDef
+    ...(shieldItem && shieldParryBonus > 0
       ? {
           shield: {
             itemId: shieldItem.id,
             name: shieldItem.name,
-            parryBonus: getShieldParryBonus(shieldDef)
+            parryBonus: shieldParryBonus
           }
         }
       : {})
@@ -111,15 +110,10 @@ function buildRulesDigest(state: GameState): string {
   // contexto do PERSONAGEM (perícias, Edges, Hindrances, atributos) que o
   // modelo precisa para escolher perícias e narrar com coerência.
 
-  // 1. Skills with descriptions
-  sections.push([
-    '=== AVAILABLE SKILLS (use these exact names in diceCheck.skill) ===',
-
-    ...SKILLS.map(s => {
-      const attr = ATTRIBUTES.find(a => a.key === s.linkedAttribute)
-      return `${s.label} (${attr?.label ?? s.linkedAttribute}): ${s.description}`
-    })
-  ].join('\n'))
+  // A lista fechada de perícias válidas (nomes exatos para diceCheck/traco) já
+  // vive no system prompt via DICE_TRACO_FIELD_EXPLANATION_PT (dice-rules.ts) —
+  // manter "AVAILABLE SKILLS" aqui também só duplicava a mesma informação no
+  // user prompt a cada turno, sem necessidade.
 
   // 3. Character edges
   const playerEdges = state.player.edges
@@ -150,7 +144,7 @@ function buildRulesDigest(state: GameState): string {
     ].join('\n'))
   }
 
-  // 5. Character attributes
+  /*// 5. Character attributes
   const attrLines = ATTRIBUTES.map(a => {
     const die = state.player.attributes[a.key]
     return `${a.label}: d${die}`
@@ -160,6 +154,7 @@ function buildRulesDigest(state: GameState): string {
     ...attrLines,
     `Parry: ${state.player.parry} | Toughness: ${state.player.toughness} | Armor: ${state.player.armor} | Pace: ${state.player.pace}`
   ].join('\n'))
+  */
 
   const equippedLines: string[] = []
   if (equippedItems.attack) {
@@ -221,7 +216,7 @@ export type LlmContext = {
   }
   /** Digest compacto das regras SW + traços do personagem + equipamento */
   rulesDigest: string
-  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; storyHook?: string | null; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+  recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
 }
 
 function buildRecentSegments(m: ChatMessageRow): NarrativeSegment[] | undefined {
@@ -299,7 +294,6 @@ export function buildLlmContext(params: {
       role: m.role,
       segments: buildRecentSegments(m),
       playerInput: typeof m.playerInput === 'string' ? normalizeLlmText(m.playerInput) : m.playerInput,
-      storyHook: typeof m.storyHook === 'string' && m.storyHook.trim() ? normalizeLlmText(m.storyHook) : undefined,
       engineEvents: m.engineEvents?.map((event) => ({
         type: event.type,
         payload: event.payload

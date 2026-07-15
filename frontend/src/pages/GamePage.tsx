@@ -30,7 +30,6 @@ import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, I
 import { RELATION_LABELS, RELATION_OPTIONS, relationClass, relationFromDisposition } from '../lib/npcLabels'
 import { ATTRIBUTES, SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
 import { YouTubeAmbient } from '../components/YouTubeAmbient'
-import { NarrationLogPanel } from '../components/game/NarrationLogPanel'
 
 // ─── Helpers ───
 
@@ -177,14 +176,11 @@ function normalizeActionPayload(actionPayload: Record<string, unknown>): Record<
   )
 }
 
-function resolveDiceCheckTrait(
-  diceCheck: DiceCheck | null | undefined,
-  actionPayload: Record<string, unknown>
+function diceCheckTrait(
+  diceCheck: DiceCheck | null | undefined
 ): { skill: string | null; attribute: string | null; label: string } {
-  const payloadSkill = typeof actionPayload.skill === 'string' ? normalizeInlineText(actionPayload.skill) : null
-  const payloadAttribute = typeof actionPayload.attribute === 'string' ? normalizeInlineText(actionPayload.attribute) : null
-  const skill = diceCheck?.skill ? normalizeInlineText(diceCheck.skill) : payloadSkill
-  const attribute = diceCheck?.attribute ? normalizeInlineText(diceCheck.attribute) : payloadAttribute
+  const skill = diceCheck?.skill ?? null
+  const attribute = diceCheck?.attribute ?? null
 
   return {
     skill,
@@ -231,40 +227,22 @@ function resolvePlayerTraitDie(
 
 function normalizeValidationResponse(validation: ValidateActionResponse): ValidateActionResponse {
   const actionPayload = normalizeActionPayload(validation.actionPayload ?? {})
-  const resolvedTrait = resolveDiceCheckTrait(validation.diceCheck, actionPayload)
 
   return {
     ...validation,
     interpretation: normalizeInlineText(validation.interpretation),
     feasibilityReason: validation.feasibilityReason ? normalizeInlineText(validation.feasibilityReason) : validation.feasibilityReason,
-    actionPayload,
-    diceCheck: validation.diceCheck
-      ? {
-          ...validation.diceCheck,
-          skill: resolvedTrait.skill,
-          attribute: resolvedTrait.attribute,
-          reason: normalizeInlineText(validation.diceCheck.reason ?? '')
-        }
-      : validation.diceCheck
+    actionPayload
   }
 }
 
 function normalizeOption(option: ActionOption): ActionOption {
   const actionPayload = normalizeActionPayload(option.actionPayload ?? {})
-  const resolvedTrait = resolveDiceCheckTrait(option.diceCheck, actionPayload)
 
   return {
     ...option,
     text: normalizeInlineText(option.text),
-    actionPayload,
-    diceCheck: option.diceCheck
-      ? {
-          ...option.diceCheck,
-          skill: resolvedTrait.skill,
-          attribute: resolvedTrait.attribute,
-          reason: normalizeInlineText(option.diceCheck.reason ?? '')
-        }
-      : option.diceCheck
+    actionPayload
   }
 }
 
@@ -686,7 +664,7 @@ function ActionOptions({
         {options.map((option, idx) => {
           const dc = option.diceCheck
           const hasDice = dc?.required === true
-          const trait = resolveDiceCheckTrait(dc, option.actionPayload)
+          const trait = diceCheckTrait(dc)
           return (
             <button
               key={option.id}
@@ -811,7 +789,7 @@ function DiceCheckConfirmModal({
   const dc = option.diceCheck
   if (!dc) return null
 
-  const trait = resolveDiceCheckTrait(dc, option.actionPayload)
+  const trait = diceCheckTrait(dc)
   const traitName = trait.label
   const playerDie = resolvePlayerTraitDie(playerState, trait)
 
@@ -1432,16 +1410,11 @@ function DiceResultCard({ event }: { event: SessionEvent }) {
 
 // ─── Character Sidebar ───
 
-type SidebarTab = 'status' | 'attributes' | 'skills' | 'equipment' | 'inventory' | 'edges' | 'effects' | 'known' | 'narration'
+type SidebarTab = 'status' | 'inventory' | 'known' | 'narration'
 
 const SIDEBAR_TABS: { key: SidebarTab; label: string; icon: string }[] = [
   { key: 'status', label: 'Status', icon: '❤️' },
-  { key: 'attributes', label: 'Atributos', icon: '🎯' },
-  { key: 'skills', label: 'Perícias', icon: '📖' },
-  { key: 'equipment', label: 'Equipamento', icon: '🛡️' },
   { key: 'inventory', label: 'Mochila', icon: '🎒' },
-  { key: 'edges', label: 'Vantagens', icon: '⭐' },
-  { key: 'effects', label: 'Efeitos', icon: '✨' },
   { key: 'known', label: 'Conhecidos', icon: '👥' },
   { key: 'narration', label: 'Narração', icon: '🎭' },
 ]
@@ -1532,12 +1505,18 @@ function CharacterSidebar({
             <p className="muted">Carregando...</p>
           ) : (
             <>
-              {tab === 'status' && <SidebarStatus player={p} location={state?.worldState.activeLocation ?? '?'} turn={state?.meta.turn ?? 0} chapter={state?.meta.chapter ?? 0} />}
-              {tab === 'attributes' && <SidebarAttributes player={p} />}
-              {tab === 'skills' && <SidebarSkills player={p} />}
-              {tab === 'equipment' && (
-                <SidebarEquipment
+              {tab === 'status' && (
+                <SidebarOverview
+                  player={p}
+                  location={state?.worldState.activeLocation ?? '?'}
+                  turn={state?.meta.turn ?? 0}
+                  chapter={state?.meta.chapter ?? 0}
+                />
+              )}
+              {tab === 'inventory' && (
+                <SidebarInventory
                   items={p.inventory}
+                  onRemove={onRemoveItem}
                   equippedAttackItemId={p.equippedAttackItemId}
                   equippedArmorItemId={p.equippedArmorItemId}
                   equippedShieldItemId={p.equippedShieldItemId}
@@ -1549,9 +1528,6 @@ function CharacterSidebar({
                   onUnequipShield={onUnequipShield}
                 />
               )}
-              {tab === 'inventory' && <SidebarInventory items={p.inventory} onRemove={onRemoveItem} />}
-              {tab === 'edges' && <SidebarEdges edges={p.edges} hindrances={p.hindrances} />}
-              {tab === 'effects' && <SidebarEffects effects={p.statusEffects} />}
               {tab === 'known' && (
                 <SidebarKnownNpcs
                   knownNpcs={knownNpcs}
@@ -1663,6 +1639,31 @@ function SidebarNarration({
   )
 }
 
+function SidebarOverview({ player, location, turn, chapter }: {
+  player: GameState['player']
+  location: string
+  turn: number
+  chapter: number
+}) {
+  return (
+    <div className="sidebar-overview">
+      <SidebarStatus player={player} location={location} turn={turn} chapter={chapter} />
+
+      <h4 className="sidebar-section-header">Atributos</h4>
+      <SidebarAttributes player={player} />
+
+      <h4 className="sidebar-section-header">Perícias</h4>
+      <SidebarSkills player={player} />
+
+      <h4 className="sidebar-section-header">Vantagens &amp; Complicações</h4>
+      <SidebarEdges edges={player.edges} hindrances={player.hindrances} />
+
+      <h4 className="sidebar-section-header">Efeitos Ativos</h4>
+      <SidebarEffects effects={player.statusEffects} />
+    </div>
+  )
+}
+
 function SidebarStatus({ player: p, location, turn, chapter }: {
   player: GameState['player']
   location: string
@@ -1753,47 +1754,9 @@ function SidebarSkills({ player: p }: { player: GameState['player'] }) {
   )
 }
 
-function SidebarInventory({ items, onRemove }: { items: InventoryItem[]; onRemove?: (itemId: string) => void }) {
-  const [confirmId, setConfirmId] = useState<string | null>(null)
-  if (!items.length) return <p className="muted">Mochila vazia</p>
-
-  return (
-    <div className="sidebar-inventory">
-      {items.map((item) => (
-        <div key={item.id} className="sidebar-inv-item">
-          <div className="inv-item-header">
-            <span className="inv-item-name">{item.name}</span>
-            <span className="inv-item-header-right">
-              {item.quantity > 1 && <span className="inv-item-qty">x{item.quantity}</span>}
-              {onRemove && (
-                confirmId === item.id ? (
-                  <span className="inv-item-confirm">
-                    <button type="button" className="inv-confirm-yes" onClick={() => { setConfirmId(null); onRemove(item.id) }}>Descartar</button>
-                    <button type="button" className="inv-confirm-no" onClick={() => setConfirmId(null)}>✕</button>
-                  </span>
-                ) : (
-                  <button type="button" className="inv-item-remove" title="Descartar item" onClick={() => setConfirmId(item.id)}>🗑️</button>
-                )
-              )}
-            </span>
-          </div>
-          {confirmId === item.id && (
-            <p className="inv-confirm-text">Descartar "{item.name}"?</p>
-          )}
-          {item.description && <p className="inv-item-desc">{item.description}</p>}
-          {item.tags && item.tags.length > 0 && (
-            <div className="inv-item-tags">
-              {item.tags.map((t) => <span key={t} className="inv-tag">{t}</span>)}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function SidebarEquipment({
+function SidebarInventory({
   items,
+  onRemove,
   equippedAttackItemId,
   equippedArmorItemId,
   equippedShieldItemId,
@@ -1805,6 +1768,7 @@ function SidebarEquipment({
   onUnequipShield,
 }: {
   items: InventoryItem[]
+  onRemove?: (itemId: string) => void
   equippedAttackItemId?: string
   equippedArmorItemId?: string
   equippedShieldItemId?: string
@@ -1815,85 +1779,96 @@ function SidebarEquipment({
   onEquipShield?: (itemId: string) => Promise<void>
   onUnequipShield?: () => Promise<void>
 }) {
-  const attackItem = items.find((item) => item.id === equippedAttackItemId)
-  const armorItem = items.find((item) => item.id === equippedArmorItemId)
-  const shieldItem = items.find((item) => item.id === equippedShieldItemId)
-
-  const armorCandidates = items.filter((item) => item.category === 'armor' && !/escudo/i.test(item.name))
-  const shieldCandidates = items.filter((item) => item.category === 'armor' && /escudo/i.test(item.name))
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  if (!items.length) return <p className="muted">Mochila vazia</p>
 
   return (
     <div className="sidebar-inventory">
-      <div className="sidebar-inv-item">
-        <div className="inv-item-header">
-          <span className="inv-item-name">Ataque</span>
-          {attackItem && onUnequipAttack && (
-            <button type="button" className="inv-item-remove" onClick={() => void onUnequipAttack()} title="Desequipar ataque">✕</button>
-          )}
-        </div>
-        <p className="inv-item-desc">Equipado: {attackItem?.name ?? 'nenhum'}</p>
-        <div className="inv-item-tags">
-          {items.map((item) => (
-            <button
-              key={`atk-${item.id}`}
-              type="button"
-              className="inv-tag"
-              onClick={() => onEquipAttack && void onEquipAttack(item.id)}
-              disabled={item.id === equippedAttackItemId || !onEquipAttack}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
-      </div>
+      {items.map((item) => {
+        // Espelha a lógica do backend (isShieldItem em constants.ts): prioriza
+        // os campos definidos pela narrativa na criação do item; para itens
+        // antigos sem esses campos, cai no heurístico por nome.
+        const isShield = item.category === 'armor' && (
+          typeof item.parryBonus === 'number'
+            ? item.parryBonus > 0
+            : typeof item.armorValue === 'number'
+              ? false
+              : /escudo/i.test(item.name)
+        )
+        const isArmor = item.category === 'armor' && !isShield
+        const isWeapon = item.category === 'weapon'
+        const isEquippable = isWeapon || isArmor || isShield
 
-      <div className="sidebar-inv-item">
-        <div className="inv-item-header">
-          <span className="inv-item-name">Armadura</span>
-          {armorItem && onUnequipArmor && (
-            <button type="button" className="inv-item-remove" onClick={() => void onUnequipArmor()} title="Desequipar armadura">✕</button>
-          )}
-        </div>
-        <p className="inv-item-desc">Equipado: {armorItem?.name ?? 'nenhuma'}</p>
-        <div className="inv-item-tags">
-          {armorCandidates.length === 0 && <span className="inv-tag">Sem armadura</span>}
-          {armorCandidates.map((item) => (
-            <button
-              key={`arm-${item.id}`}
-              type="button"
-              className="inv-tag"
-              onClick={() => onEquipArmor && void onEquipArmor(item.id)}
-              disabled={item.id === equippedArmorItemId || !onEquipArmor}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
-      </div>
+        const isEquipped = isWeapon
+          ? item.id === equippedAttackItemId
+          : isShield
+            ? item.id === equippedShieldItemId
+            : isArmor
+              ? item.id === equippedArmorItemId
+              : false
 
-      <div className="sidebar-inv-item">
-        <div className="inv-item-header">
-          <span className="inv-item-name">Escudo</span>
-          {shieldItem && onUnequipShield && (
-            <button type="button" className="inv-item-remove" onClick={() => void onUnequipShield()} title="Desequipar escudo">✕</button>
-          )}
-        </div>
-        <p className="inv-item-desc">Equipado: {shieldItem?.name ?? 'nenhum'}</p>
-        <div className="inv-item-tags">
-          {shieldCandidates.length === 0 && <span className="inv-tag">Sem escudo</span>}
-          {shieldCandidates.map((item) => (
-            <button
-              key={`shd-${item.id}`}
-              type="button"
-              className="inv-tag"
-              onClick={() => onEquipShield && void onEquipShield(item.id)}
-              disabled={item.id === equippedShieldItemId || !onEquipShield}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
-      </div>
+        const equipHandler = isWeapon ? onEquipAttack : isShield ? onEquipShield : isArmor ? onEquipArmor : undefined
+        const unequipHandler = isWeapon ? onUnequipAttack : isShield ? onUnequipShield : isArmor ? onUnequipArmor : undefined
+        const equipLabel = isWeapon ? 'Equipar como arma' : isShield ? 'Equipar escudo' : 'Equipar armadura'
+
+        return (
+          <div key={item.id} className={`sidebar-inv-item${isEquipped ? ' equipped' : ''}`}>
+            <div className="inv-item-header">
+              <span className="inv-item-name">
+                {item.name}
+                {isEquipped && <span className="inv-equipped-badge">Equipado</span>}
+              </span>
+              <span className="inv-item-header-right">
+                {item.quantity > 1 && <span className="inv-item-qty">x{item.quantity}</span>}
+                {onRemove && (
+                  confirmId === item.id ? (
+                    <span className="inv-item-confirm">
+                      <button type="button" className="inv-confirm-yes" onClick={() => { setConfirmId(null); onRemove(item.id) }}>Descartar</button>
+                      <button type="button" className="inv-confirm-no" onClick={() => setConfirmId(null)}>✕</button>
+                    </span>
+                  ) : (
+                    <button type="button" className="inv-item-remove" title="Descartar item" onClick={() => setConfirmId(item.id)}>🗑️</button>
+                  )
+                )}
+              </span>
+            </div>
+            {confirmId === item.id && (
+              <p className="inv-confirm-text">Descartar "{item.name}"?</p>
+            )}
+            {item.description && <p className="inv-item-desc">{item.description}</p>}
+            {(item.tags && item.tags.length > 0) || (isArmor && item.armorValue) || (isShield && item.parryBonus) ? (
+              <div className="inv-item-tags">
+                {isArmor && item.armorValue ? <span className="inv-tag inv-tag-stat">+{item.armorValue} Resistência</span> : null}
+                {isShield && item.parryBonus ? <span className="inv-tag inv-tag-stat">+{item.parryBonus} Aparar</span> : null}
+                {item.tags?.map((t) => <span key={t} className="inv-tag">{t}</span>)}
+              </div>
+            ) : null}
+            {isEquippable && (
+              <div className="inv-item-equip-row">
+                {isEquipped ? (
+                  <button
+                    type="button"
+                    className="btn-unequip"
+                    disabled={!unequipHandler}
+                    onClick={() => void unequipHandler?.()}
+                  >
+                    Desequipar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-equip"
+                    disabled={!equipHandler}
+                    onClick={() => void equipHandler?.(item.id)}
+                  >
+                    {equipLabel}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -2076,7 +2051,6 @@ export function GamePage() {
   const [selectedSkill, setSelectedSkill] = useState('')
   const [selectedAttribute, setSelectedAttribute] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [showNarrationLog, setShowNarrationLog] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null)
@@ -2816,14 +2790,6 @@ export function GamePage() {
               >
                 ⚔️ Ações
               </button>
-              <button
-                type="button"
-                className="subheader-btn pill-log"
-                onClick={() => setShowNarrationLog(!showNarrationLog)}
-                title="Log de Narração"
-              >
-                🗒 Log
-              </button>
               <select
                 className="subheader-btn pill-speed"
                 value={typewriterSpeed}
@@ -2839,12 +2805,6 @@ export function GamePage() {
           </>
         )}
       </div>
-
-      <NarrationLogPanel
-        sessionId={sessionId ?? ''}
-        isOpen={showNarrationLog}
-        onClose={() => setShowNarrationLog(false)}
-      />
 
       {/* ── Sidebar do Personagem (fixa à direita) ── */}
       <CharacterSidebar
@@ -3009,17 +2969,11 @@ export function GamePage() {
                 <div className="dice-detail-row">
                   <span className="dice-detail-label">Teste</span>
                   <span className="dice-detail-value">
-                    {resolveDiceCheckTrait(
-                      pendingValidation.validation.diceCheck,
-                      pendingValidation.validation.actionPayload
-                    ).label}
+                    {diceCheckTrait(pendingValidation.validation.diceCheck).label}
                   </span>
                 </div>
                 {(() => {
-                  const trait = resolveDiceCheckTrait(
-                    pendingValidation.validation.diceCheck,
-                    pendingValidation.validation.actionPayload
-                  )
+                  const trait = diceCheckTrait(pendingValidation.validation.diceCheck)
                   const playerDie = resolvePlayerTraitDie(state?.player ?? null, trait)
                   return playerDie != null ? (
                     <div className="dice-detail-row">

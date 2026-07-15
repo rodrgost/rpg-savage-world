@@ -137,6 +137,8 @@ export class InventoryService {
             description: '',
             quantity: change.quantity,
             ...(change.category ? { category: change.category } : {}),
+            ...(typeof change.armorValue === 'number' ? { armorValue: change.armorValue } : {}),
+            ...(typeof change.parryBonus === 'number' ? { parryBonus: change.parryBonus } : {}),
             tags: []
           })
         }

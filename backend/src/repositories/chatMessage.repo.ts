@@ -24,12 +24,6 @@ export type ChatMessageRow = {
   narrative?: string
   segments?: NarrativeSegment[]
   playerInput?: string
-  /**
-   * Gancho fora de cena gerado pela LLM neste turno. NÃO é exibido na UI (fica
-   * fora de segments); é realimentado no histórico enviado à LLM para que o
-   * gancho possa ser concretizado em cena nos turnos seguintes.
-   */
-  storyHook?: string | null
   options?: ActionOption[]
   npcs?: NPCMention[]
   itemChanges?: ItemChange[]

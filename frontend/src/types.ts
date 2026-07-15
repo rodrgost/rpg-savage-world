@@ -101,6 +101,10 @@ export type InventoryItem = {
   quantity: number
   category?: ItemCategory
   tags?: string[]
+  /** Bônus de Resistência quando equipado como armadura corporal */
+  armorValue?: number
+  /** Bônus de Aparar quando equipado como escudo */
+  parryBonus?: number
 }
 
 export type ItemChange = {
@@ -109,6 +113,8 @@ export type ItemChange = {
   quantity: number
   changeType: 'gained' | 'lost' | 'used'
   category?: ItemCategory
+  armorValue?: number
+  parryBonus?: number
 }
 
 export type StatusChange = {

@@ -4,29 +4,19 @@ import { join } from 'node:path'
 const LOG_DIR = join(process.cwd(), 'logs')
 if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true })
 
-function timestamp(): string {
-  return new Date().toISOString().replace('T', ' ').replace('Z', '')
-}
-
-/** Timestamp curto para console (HH:MM:SS.mmm) */
-function shortTimestamp(): string {
-  const d = new Date()
-  return d.toLocaleTimeString('pt-BR', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0')
-}
-
-// ─── Console Logger com timestamp ───
+// ─── Console Logger ───
 
 export function log(tag: string, ...args: unknown[]): void {
-  console.log(`[${shortTimestamp()}] [${tag}]`, ...args)
+  console.log(`[${tag}]`, ...args)
 }
 
 export function warn(tag: string, ...args: unknown[]): void {
-  console.warn(`[${shortTimestamp()}] [${tag}]`, ...args)
+  console.warn(`[${tag}]`, ...args)
   writeLine(`[WARN] [${tag}] ${args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')}`)
 }
 
 export function error(tag: string, ...args: unknown[]): void {
-  console.error(`[${shortTimestamp()}] [${tag}]`, ...args)
+  console.error(`[${tag}]`, ...args)
 }
 
 // ─── File Logger ───
@@ -38,7 +28,7 @@ function logFilePath(): string {
 
 function writeLine(line: string): void {
   try {
-    appendFileSync(logFilePath(), `[${timestamp()}] ${line}\n`, 'utf-8')
+    appendFileSync(logFilePath(), `${line}\n`, 'utf-8')
   } catch {
     // silently ignore write errors
   }
@@ -96,6 +86,6 @@ export function logLlmResponse(tag: string, opts: {
 
 export function logLlmError(tag: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error)
-  console.error(`[${shortTimestamp()}] [LLM ERROR] [${tag}]`, message)
+  console.error(`[LLM ERROR] [${tag}]`, message)
   writeLine(`✖ LLM ERROR [${tag}]  ${message}`)
 }
