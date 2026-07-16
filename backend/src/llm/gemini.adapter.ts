@@ -146,6 +146,22 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
+function readBool(name: string, fallback: boolean): boolean {
+  const raw = readEnv(name).toLowerCase()
+  if (raw === '') return fallback
+  return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on'
+}
+
+// Alguns modelos OpenAI (família de raciocínio: gpt-5, o1, o3, o4, ...) só aceitam
+// o valor padrão de temperature (1). Qualquer outro valor — inclusive 1.05 gerado
+// pelo decremento das tentativas de retry — é rejeitado com HTTP 400
+// ("Unsupported value: 'temperature' does not support X with this model.").
+// Nesses casos o parâmetro deve ser omitido para que a API use o default.
+function openAiModelOnlySupportsDefaultTemperature(model: string): boolean {
+  const normalized = model.trim().toLowerCase()
+  return /^o\d/.test(normalized) || normalized.startsWith('gpt-5')
+}
+
 function normalizeFinishReason(provider: SupportedLlmProvider, finishReason: string | null | undefined): string | undefined {
   if (!finishReason) return undefined
   if (provider === 'gemini') return finishReason
@@ -1125,6 +1141,13 @@ export class GeminiAdapter implements Narrator {
     0.8
   )
   private readonly normalizedBaseUrl = this.baseUrl.replace(/\/+$/, '')
+  // Se o modelo OpenAI aceita temperature customizada. Por padrão detecta pelo
+  // nome do modelo (modelos de raciocínio só aceitam o default 1) e pode ser
+  // forçado via OPENAI_SUPPORTS_TEMPERATURE ("true"/"false"). Quando false, o
+  // parâmetro temperature é omitido da requisição.
+  private readonly openAiSupportsCustomTemperature = this.provider === 'openai'
+    ? readBool('OPENAI_SUPPORTS_TEMPERATURE', !openAiModelOnlySupportsDefaultTemperature(this.model))
+    : true
 
   private generateTextCallId = 0
 
@@ -1275,6 +1298,7 @@ export class GeminiAdapter implements Narrator {
     const responseMimeType = options.responseMimeType
     const responseSchema = options.responseSchema
     const temperature = options.temperature ?? this.temperature
+    const sendTemperature = this.openAiSupportsCustomTemperature
     const systemInstruction = options.systemInstruction
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -1302,7 +1326,7 @@ export class GeminiAdapter implements Narrator {
       userPrompt: logPrompt,
       model: this.model,
       maxOutputTokens,
-      temperature
+      temperature: sendTemperature ? temperature : undefined
     })
 
     const startMs = Date.now()
@@ -1317,7 +1341,9 @@ export class GeminiAdapter implements Narrator {
         body: JSON.stringify({
           model: this.model,
           messages: buildOpenAiCompatibleMessages(promptOrContents, systemInstruction),
-          temperature,
+          // Modelos que só aceitam o temperature padrão (1) rejeitam qualquer
+          // valor explícito; nesses casos omitimos o campo para usar o default.
+          ...(sendTemperature ? { temperature } : {}),
           ...(this.provider === 'openai'
             ? { max_completion_tokens: maxOutputTokens }
             : { max_tokens: maxOutputTokens }),
