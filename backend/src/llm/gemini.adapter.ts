@@ -2329,7 +2329,9 @@ export class GeminiAdapter implements Narrator {
       lines.push(
         '',
         '## Regras de Início de Sessão',
-        '- Você DEVE preencher itemChanges com changeType "gained" para dar ao personagem seu kit inicial (4 a 8 itens coerentes com o personagem — mesma faixa exigida no prompt do usuário).',
+        '- PREMISSA CANÔNICA: o personagem acorda SEM MEMÓRIA em um lugar desconhecido. Ele não sabe quem é, como chegou ali, nem qual é seu passado. A abertura DEVE começar nesse despertar amnésico e a perda de memória é o mistério central da aventura.',
+        '- Não exponha ao jogador o histórico, a origem, os vínculos ou objetivos prévios do personagem. Trate profissão, raça, vantagens e itens como pistas que o personagem redescobre sobre si mesmo, não como conhecimento que ele já domina conscientemente.',
+        '- Você DEVE preencher itemChanges com changeType "gained" para dar ao personagem seu kit inicial (4 a 8 itens coerentes com o personagem — mesma faixa exigida no prompt do usuário). Narre esses itens como pertences que o personagem descobre consigo ao acordar, sem lembrar de onde vieram.',
       )
     } else {
       lines.push(
@@ -3304,10 +3306,12 @@ export class GeminiAdapter implements Narrator {
       '',
       startContextMarkdown,
       '',
-      'Crie uma abertura rica, imersiva que coloque o personagem no início de sua missão/campanha.',
-      'Descreva a cena de abertura com detalhes sensoriais concretos — específicos deste universo, não genéricos.',
-      'Apresente um gancho narrativo claro: uma tensão palpável, um problema imediato, ou uma oportunidade que exige uma decisão agora.',
-      'Estabeleça pelo menos 1 detalhe específico de worldbuilding (um nome de lugar, uma facção, um costume local, um objeto estranho) que o jogador possa explorar.',
+      'PREMISSA DE ABERTURA (OBRIGATÓRIA): O personagem ACORDA SEM MEMÓRIA. Ele desperta em um lugar desconhecido e não se lembra de quem é, de como chegou ali, nem de seu passado. Não revele ao jogador o histórico, a missão prévia ou as conexões do personagem — a amnésia é o ponto de partida da história e o mistério a ser desvendado ao longo da aventura.',
+      'Abra a cena no exato momento em que o personagem recobra a consciência: descreva as primeiras sensações confusas (a superfície onde está deitado, sons, cheiros, luz), a desorientação e o vazio de memória.',
+      'Deixe claro, através da narração e não de forma expositiva, que o personagem não reconhece o ambiente e não consegue recordar seu nome ou sua história. Ele pode ter apenas fragmentos vagos ou nenhuma lembrança.',
+      'Trate os dados do personagem (profissão, raça, vantagens, itens) como coisas que ele DESCOBRE aos poucos sobre si mesmo — não como conhecimento consciente que ele já domina. Ele pode estranhar suas próprias roupas, ferramentas ou marcas no corpo sem entender de onde vieram.',
+      'Apresente um gancho narrativo claro ligado ao mistério da amnésia: uma tensão palpável, uma ameaça imediata, uma pista intrigante ou uma decisão urgente que force o personagem a agir mesmo sem saber quem é.',
+      'Estabeleça pelo menos 1 detalhe específico de worldbuilding (um nome de lugar, uma facção, um costume local, um objeto estranho) que o jogador possa explorar para começar a reconstruir sua identidade.',
       'Ofereça 4 opções de ação que façam mais sentido para esta cena de abertura — deixe a situação decidir quais ações se encaixam; cada opção deve parecer uma escolha de história, não um botão de menu.',
       'Para CADA opção, avalie se ela exige uma rolagem de dados (diceCheck) segundo as regras de Savage Worlds.',
       '',
@@ -3321,7 +3325,7 @@ export class GeminiAdapter implements Narrator {
       '- 1 a 2 itens temáticos/narrativos que conectam o personagem ao mundo (amuleto de família, carta misteriosa, mapa antigo, diário, etc.). Esses itens NÃO ÓBVIOS DEVEM ter o campo "description" preenchido (o que é / o que contém / para que serve), conforme a regra de descrição de itens do system prompt.',
       '- Dinheiro inicial OBRIGATÓRIO: inclua 1 item com categoria "money" e o nome apropriado ao cenário (ex.: "Moedas de Ouro", "Créditos", "Dólares", "Gil", etc.) e "quantity" com a quantia numérica exata coerente com o cenário e o contexto do personagem.',
       '- Para cenários modernos/futuristas: se o personagem tem profissão ou contexto que justifique, inclua um veículo (categoria "vehicle": carro, moto, nave, etc.) ou propriedade (categoria "property": apartamento, base, etc.) como item inicial.',
-      'Mencione os itens naturalmente dentro da narrativa de abertura (ex.: descreva o personagem checando seus pertences, ou um NPC entregando algo).',
+      'Mencione os itens naturalmente dentro da narrativa de abertura, de forma coerente com a amnésia: descreva o personagem descobrindo esses pertences consigo ao acordar (revistando os próprios bolsos, encontrando objetos ao seu lado, estranhando as roupas ou o equipamento que veste) sem saber por que os possui.',
       'Use o mesmo formato de itemChanges já definido no system prompt. Cada item DEVE ter o campo "category" corretamente preenchido.'
     ].filter(Boolean).join('\n')
 
