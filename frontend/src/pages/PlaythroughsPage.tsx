@@ -70,7 +70,7 @@ export function PlaythroughsPage({ uid }: Props) {
           const campaign = campById.get(p.campaignId)
           const world = worldById.get(p.worldId ?? character?.worldId ?? campaign?.worldId ?? '')
           const characterName = character?.name ?? 'Personagem'
-          const campaignName = campaign?.name || 'Campanha'
+          const campaignName = campaign?.name || (p.campaignId ? 'Campanha' : 'Sem campanha')
           const worldName = world?.name ?? 'Universo'
 
           return (

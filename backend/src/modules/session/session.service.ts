@@ -1064,13 +1064,14 @@ export class SessionService {
       .sort((a, b) => b.updatedAtMillis - a.updatedAtMillis)
   }
 
-  async createSession(params: { ownerId: string; campaignId: string; characterId: string; narrativeStyle?: NarrativeStyle; simpleVocabulary?: boolean }) {
+  async createSession(params: { ownerId: string; campaignId?: string; characterId: string; narrativeStyle?: NarrativeStyle; simpleVocabulary?: boolean }) {
     const [campaign, character] = await Promise.all([
-      this.campaigns.get(params.campaignId),
+      params.campaignId ? this.campaigns.get(params.campaignId) : Promise.resolve(null),
       this.characters.get(params.characterId)
     ])
-    if (!campaign) throw new NotFoundException('Campanha não encontrada')
-    if (campaign.ownerId !== params.ownerId && campaign.visibility !== 'public') {
+    // Campanha é opcional: é possível iniciar um jogo sem selecionar uma campanha.
+    if (params.campaignId && !campaign) throw new NotFoundException('Campanha não encontrada')
+    if (campaign && campaign.ownerId !== params.ownerId && campaign.visibility !== 'public') {
       throw new NotFoundException('Sem permissão para esta campanha')
     }
     if (!character) throw new NotFoundException('Character não encontrado')
@@ -1080,19 +1081,24 @@ export class SessionService {
     if (characterOwnerId !== params.ownerId) throw new NotFoundException('Sem permissão para este character')
     // Personagem agora pertence ao Mundo (não à Campanha). Invariante: mesmo mundo.
     // Personagens legados sem worldId são tolerados (serão backfillados).
-    if (character.worldId && character.worldId !== campaign.worldId) {
+    if (campaign && character.worldId && character.worldId !== campaign.worldId) {
       throw new NotFoundException('Personagem pertence a outro mundo')
     }
 
-    const resumeKey = this.buildResumeKey(params)
-    const reusableSessionId = await this.findReusableSessionId(params)
+    // Sem campanha, o mundo vem do próprio personagem (pode ser inexistente em fichas legadas).
+    const campaignId = params.campaignId ?? ''
+    const worldId = campaign?.worldId ?? character.worldId
+    const resumeParams = { ownerId: params.ownerId, campaignId, characterId: params.characterId }
+
+    const resumeKey = this.buildResumeKey(resumeParams)
+    const reusableSessionId = await this.findReusableSessionId(resumeParams)
     if (reusableSessionId) {
       log('createSession', `Retomando sessão existente ${reusableSessionId} para ${resumeKey}`)
       const payload = await this.buildSessionPayload(reusableSessionId)
       return { sessionId: reusableSessionId, ...payload }
     }
 
-    const world = await this.worlds.get(campaign.worldId)
+    const world = worldId ? await this.worlds.get(worldId) : null
 
     const sessionId = randomUUID()
 
@@ -1102,9 +1108,9 @@ export class SessionService {
       .set({
         sessionId,
         ownerId: params.ownerId,
-        campaignId: params.campaignId,
+        campaignId,
         characterId: params.characterId,
-        worldId: campaign.worldId,
+        ...(worldId ? { worldId } : {}),
         resumeKey,
         ...(params.narrativeStyle ? { narrativeStyle: params.narrativeStyle } : {}),
         ...(params.simpleVocabulary !== undefined ? { simpleVocabulary: params.simpleVocabulary } : {}),
@@ -1144,8 +1150,8 @@ export class SessionService {
 
     let state = createInitialState({
       sessionId,
-      campaignId: params.campaignId,
-      worldId: campaign.worldId,
+      campaignId,
+      worldId,
       narrativeStyle: params.narrativeStyle,
       simpleVocabulary: params.simpleVocabulary,
       character: {
@@ -1170,10 +1176,12 @@ export class SessionService {
               narrativeStyleGuide: world.narrativeStyleGuide
             }
           : undefined,
-        campaign: {
-          storyDescription: campaign.storyDescription ?? campaign.storyDescriptionEn ?? '',
-          name: campaign.name
-        },
+        campaign: campaign
+          ? {
+              storyDescription: campaign.storyDescription ?? campaign.storyDescriptionEn ?? '',
+              name: campaign.name
+            }
+          : undefined,
         character: {
           name: character.name ?? 'Aventureiro',
           profession: character.profession ?? character.professionEn,

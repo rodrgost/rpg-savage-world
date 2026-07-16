@@ -254,7 +254,7 @@ export type NarrateStartRequest = {
     lore?: string
     narrativeStyleGuide?: string
   }
-  campaign: {
+  campaign?: {
     storyDescription: string
     name?: string
   }

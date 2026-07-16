@@ -3274,10 +3274,12 @@ export class GeminiAdapter implements Narrator {
         ].filter((line): line is string => Boolean(line))
       : []
 
-    const campaignLines = [
-      campaign.name ? `- Nome: ${campaign.name}` : null,
-      campaign.storyDescription ? `- História: ${campaign.storyDescription}` : null
-    ].filter((line): line is string => Boolean(line))
+    const campaignLines = campaign
+      ? [
+          campaign.name ? `- Nome: ${campaign.name}` : null,
+          campaign.storyDescription ? `- História: ${campaign.storyDescription}` : null
+        ].filter((line): line is string => Boolean(line))
+      : []
 
     const characterLines = [
       `- Nome: ${character.name}`,
@@ -3334,7 +3336,7 @@ export class GeminiAdapter implements Narrator {
       // Fallback mínimo para não bloquear a sessão
       return {
         isFallback: true,
-        segments: [{ type: 'narrator', text: `Você chega a um novo lugar. O ar carrega o peso de histórias não contadas. Ao seu redor, a paisagem de ${req.campaign.name ?? 'este mundo'} se estende até onde a vista alcança. Um caminho se abre à sua frente, e você sente que a aventura está prestes a começar.` }],
+        segments: [{ type: 'narrator', text: `Você chega a um novo lugar. O ar carrega o peso de histórias não contadas. Ao seu redor, a paisagem de ${req.campaign?.name ?? req.world?.name ?? 'este mundo'} se estende até onde a vista alcança. Um caminho se abre à sua frente, e você sente que a aventura está prestes a começar.` }],
         options: [
           { id: randomUUID(), text: 'Explorar o caminho principal', actionType: 'custom', actionPayload: { input: 'Explorar o caminho principal' }, diceCheck: { required: false, reason: 'Caminho seguro e acessível' } },
           { id: randomUUID(), text: 'Observar os arredores com cuidado', actionType: 'trait_test', actionPayload: {}, diceCheck: { required: true, skill: 'Percepção', modifier: 0, tn: 4, reason: 'Detectar detalhes ocultos no ambiente' } },
