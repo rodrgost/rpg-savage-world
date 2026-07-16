@@ -247,7 +247,7 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
             <div
               className="panel"
               onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: 440, width: '100%', display: 'flex', flexDirection: 'column', gap: 12, padding: 20 }}
+              style={{ maxWidth: 440, width: '100%', maxHeight: '85vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, padding: 20 }}
             >
               <h3 style={{ margin: 0 }}>Escolha a campanha</h3>
               <p className="muted" style={{ margin: 0 }}>
