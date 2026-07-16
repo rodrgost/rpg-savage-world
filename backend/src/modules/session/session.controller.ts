@@ -7,7 +7,7 @@ import { error as logError } from '../../utils/file-logger.js'
 import { getNarrationLog } from '../../services/narrationLog.js'
 
 const StartSessionBody = z.object({
-  campaignId: z.string().min(1),
+  campaignId: z.string().min(1).optional(),
   characterId: z.string().min(1),
   narrativeStyle: z.enum(['concise', 'balanced']).optional(),
   simpleVocabulary: z.boolean().optional()

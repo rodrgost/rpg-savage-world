@@ -52,14 +52,14 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
     setPlayCharacter(character)
   }
 
-  async function confirmPlay(campaignId: string) {
+  async function confirmPlay(campaignId?: string) {
     if (!playCharacter || startingId) return
     setStartingId(playCharacter.id)
     setError('')
     try {
       const { sessionId } = await startSession({
         characterId: playCharacter.id,
-        campaignId
+        ...(campaignId ? { campaignId } : {})
       })
       navigate(`/game/${sessionId}`)
     } catch (e) {
@@ -255,7 +255,7 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
               </p>
               {playCampaigns.length === 0 ? (
                 <p className="muted" style={{ margin: 0 }}>
-                  Nenhuma campanha disponível neste universo. Crie uma campanha para jogar.
+                  Nenhuma campanha disponível neste universo. Você pode jogar sem campanha ou criar uma.
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -272,6 +272,14 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                   ))}
                 </div>
               )}
+              <button
+                type="button"
+                className="button-primary"
+                disabled={Boolean(startingId)}
+                onClick={() => confirmPlay()}
+              >
+                {startingId === playCharacter.id ? 'Abrindo…' : '▶ Jogar sem campanha'}
+              </button>
               <button
                 type="button"
                 className="button-secondary"

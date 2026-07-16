@@ -683,7 +683,7 @@ export async function updateCharacter(
 
 export async function startSession(params: {
   characterId: string
-  campaignId: string
+  campaignId?: string
 }): Promise<{ sessionId: string; state: GameState; messages: ChatMessage[]; narratorResponse?: NarratorTurnResponse; knownNpcs?: KnownNpc[] }> {
   return await apiRequest<{ sessionId: string; state: GameState; messages: ChatMessage[]; narratorResponse?: NarratorTurnResponse; knownNpcs?: KnownNpc[] }>('/sessions/start', {
     method: 'POST',
