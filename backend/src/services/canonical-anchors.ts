@@ -7,6 +7,7 @@ export type CanonicalAnchors = {
   confirmedLocations: string[]
   presentNpcNames: string[]
   inventoryItemNames: string[]
+  sceneObjectsCurrent: string[]
   activeStatusNames: string[]
   historicalProperNames: string[]
   /** Texto da narrativa do turno corrente — itens mencionados aqui são permitidos nas opções mesmo sem estar no inventário. */
@@ -246,6 +247,32 @@ const LOCATION_REFERENCE_PATTERN = /(?<![\p{L}\d])(?:ir|seguir|voltar|correr|ava
 const PROPER_NAME_PATTERN = /(?<![\p{L}\d])[\p{Lu}][\p{L}\d'-]*(?:\s+(?:de|da|do|dos|das|e)\s+[\p{Lu}][\p{L}\d'-]*|\s+[\p{Lu}][\p{L}\d'-]*){0,4}(?![\p{L}\d])/gu
 const LOCATION_CANDIDATE_PATTERN = /(?<![\p{L}\d])(?:em|na|no|para|rumo a|direcao a|direção a|ate|até)\s+([\p{Lu}][\p{L}\d'-]*(?:\s+(?:de|da|do|dos|das|e)\s+[\p{Lu}][\p{L}\d'-]*|\s+[\p{Lu}][\p{L}\d'-]*){0,5})(?![\p{L}\d])/gu
 
+const SCENE_OBJECT_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'terminal', pattern: /\bterminal\b/iu },
+  { label: 'painel', pattern: /\bpainel\b/iu },
+  { label: 'porta', pattern: /\bporta\b/iu },
+  { label: 'escotilha', pattern: /\bescotilha\b/iu },
+  { label: 'trava', pattern: /\btrava\b/iu },
+  { label: 'corredor', pattern: /\bcorredor\b/iu },
+  { label: 'piso', pattern: /\bpiso\b/iu },
+  { label: 'risco escuro', pattern: /\brisco\s+escuro\b/iu },
+  { label: 'linha escura', pattern: /\blinha\s+escura\b/iu },
+  { label: 'escotilha aberta', pattern: /\bescotilha\s+aberta\b/iu },
+  { label: 'luzes vermelhas', pattern: /\bluzes\s+vermelhas\b/iu },
+  { label: 'fresta do piso', pattern: /\bfresta\s+do\s+piso\b/iu }
+]
+
+export function extractSceneObjectsFromText(text: string): string[] {
+  const cleaned = text.trim()
+  if (!cleaned) return []
+
+  const objects: string[] = []
+  for (const { label, pattern } of SCENE_OBJECT_PATTERNS) {
+    if (pattern.test(cleaned)) objects.push(label)
+  }
+  return uniqueNames(objects)
+}
+
 function normalizeCanonicalToken(value: string): string {
   return value
     .normalize('NFD')
@@ -427,6 +454,12 @@ export function buildCanonicalAnchors(params: {
       .map((npc) => npc.name)
   )
   const inventoryItemNames = uniqueNames((state.player.inventory ?? []).map((item) => item.name))
+  const sceneObjectsCurrent = uniqueNames([
+    ...extractSceneObjectsFromText(currentNarrative ?? ''),
+    ...recentMessages
+      .filter((message) => message.role === 'narrator' && message.location === state.worldState.activeLocation)
+      .flatMap((message) => extractSceneObjectsFromText(messageText(message)))
+  ])
   const activeStatusNames = uniqueNames((state.player.statusEffects ?? []).map((effect) => effect.name))
   const historicalText = collectHistoricalText(recentMessages, summaryText)
   const historicalProperNames = uniqueNames([
@@ -438,14 +471,7 @@ export function buildCanonicalAnchors(params: {
   ])
   const confirmedLocations = uniqueNames([
     state.worldState.activeLocation,
-    ...historicalText.flatMap((entry) => extractLocationCandidates(entry)),
-    // Destinos de opções de viagem propostas pelo LLM no histórico recente
-    ...recentMessages.flatMap((m) =>
-      (m.options ?? [])
-        .filter((o) => o.actionType === 'travel' && typeof o.actionPayload?.to === 'string')
-        .map((o) => (o.actionPayload.to as string).trim())
-        .filter(Boolean)
-    )
+    ...historicalText.flatMap((entry) => extractLocationCandidates(entry))
   ])
 
   return {
@@ -453,6 +479,7 @@ export function buildCanonicalAnchors(params: {
     confirmedLocations,
     presentNpcNames,
     inventoryItemNames,
+    sceneObjectsCurrent,
     activeStatusNames,
     historicalProperNames,
     currentNarrativeText: currentNarrative?.trim() || undefined
@@ -462,6 +489,7 @@ export function buildCanonicalAnchors(params: {
 export function buildCanonicalPromptSection(anchors: CanonicalAnchors): string {
   const npcsText = anchors.presentNpcNames.length ? anchors.presentNpcNames.join(', ') : 'nenhum'
   const inventoryText = anchors.inventoryItemNames.length ? anchors.inventoryItemNames.join(', ') : 'nenhum'
+  const sceneObjectsText = anchors.sceneObjectsCurrent.length ? anchors.sceneObjectsCurrent.join(', ') : 'nenhum'
   const statusText = anchors.activeStatusNames.length ? anchors.activeStatusNames.join(', ') : 'nenhum'
   const locationsText = anchors.confirmedLocations.length ? anchors.confirmedLocations.join(', ') : anchors.currentLocation
   const historyNamesText = anchors.historicalProperNames.length ? anchors.historicalProperNames.slice(0, 12).join(', ') : 'nenhum'
@@ -471,9 +499,11 @@ export function buildCanonicalPromptSection(anchors: CanonicalAnchors): string {
     '- Prefira as entidades abaixo ao criar opções e interpretar ações.',
     '- Não invente NPCs, itens ou locais que não constem nas listas abaixo, a menos que a narrativa deste turno os introduza explicitamente.',
     '- Priorize entidades confirmadas abaixo para interação direta, ataque, diálogo, entrega de item ou deslocamento.',
-    '- Nomes do histórico recente servem apenas para continuidade narrativa; não assuma presença imediata de NPC fora da cena atual.',
+    '- Nomes do histórico recente servem apenas para continuidade narrativa; não assuma presença imediata de NPCs ou OBJETOS DE CENÁRIO (móveis, terminais, portas, estruturas fixas) fora da cena atual.',
+    '- Se "Objetos do cenário atual" estiver como "nenhum", use SOMENTE os elementos explicitamente narrados neste turno para construir opções; não recupere objetos de salas anteriores.',
     `Local atual confirmado: ${anchors.currentLocation}`,
     `NPCs presentes agora: ${npcsText}`,
+    `Objetos do cenário atual: ${sceneObjectsText}`,
     `Itens disponíveis agora: ${inventoryText}`,
     `Efeitos ativos confirmados: ${statusText}`,
     `Locais já confirmados no histórico: ${locationsText}`,

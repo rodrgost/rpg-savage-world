@@ -13,6 +13,7 @@ import { KnownNpcsRepo } from '../../repositories/knownNpcs.repo.js'
 import {
   buildCanonicalAnchors,
   buildCanonicalPromptSection,
+  extractSceneObjectsFromText,
   type CanonicalAnchors,
 } from '../../services/canonical-anchors.js'
 import { deriveCanonicalFacts, buildCanonicalFactsPromptSection } from '../../services/canonical-facts.js'
@@ -78,6 +79,40 @@ function normalizeLookupValue(value: string | null | undefined): string {
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase()
+}
+
+function hasConcreteOptionAnchor(text: string, anchors?: CanonicalAnchors): boolean {
+  if (!anchors) return false
+  const normalizedText = normalizeLookupValue(text)
+  if (!normalizedText) return false
+
+  const anchorCandidates = [
+    anchors.currentLocation,
+    ...anchors.presentNpcNames,
+    ...anchors.inventoryItemNames,
+    ...anchors.sceneObjectsCurrent,
+  ]
+
+  return anchorCandidates
+    .map((entry) => normalizeLookupValue(entry))
+    .filter((entry) => entry.length >= 3)
+    .some((entry) => normalizedText.includes(entry))
+}
+
+function isLikelyNoImpactOption(text: string): boolean {
+  const normalized = normalizeLookupValue(text)
+  if (!normalized) return true
+
+  const patterns = [
+    /\bapontar\b.*\b(arma|rifle|pistola|revolver|espingarda)\b/,
+    /\bmanter\b.*\b(arma|rifle|pistola)\b.*\b(apontad|pront)/,
+    /\bobservar\b.*\b(arredores|ambiente|entorno|situacao)\b/,
+    /\bavaliar\b.*\b(situacao|ambiente|entorno)\b/,
+    /\bficar\b.*\b(atento|em guarda|de prontidao)\b/,
+    /\b(aguardar|esperar)\b.*\b(aqui|momento|situacao)?\b/
+  ]
+
+  return patterns.some((pattern) => pattern.test(normalized))
 }
 
 function normalizeAttributeName(attributeName: string | null | undefined): AttributeName | undefined {
@@ -496,16 +531,30 @@ export class SessionService {
 
   private hydrateSceneNpcsFromRecentNarration(state: GameState, recentMessages: ChatMessageRow[]): GameState {
     const activeLocation = state.worldState.activeLocation
-    // Acumula NPCs apenas das mensagens da cena atual (mensagens legadas sem location são incluídas para retrocompatibilidade)
+    // Acumula NPCs apenas das mensagens da cena atual.
+    // Modo conservador: mensagens legadas sem location são ignoradas para evitar
+    // vazamento de contexto entre salas após travel.
     const accumulatedNpcs = new Map<string, NarratorTurnResponse['npcs'][number]>()
+    let legacyMessagesIgnored = 0
     for (const message of recentMessages) {
       if (message.role === 'narrator' && Array.isArray(message.npcs)) {
-        if (!message.location || message.location === activeLocation) {
+        if (!message.location) {
+          legacyMessagesIgnored += 1
+          continue
+        }
+        if (message.location === activeLocation) {
           for (const npc of message.npcs) {
             accumulatedNpcs.set(npc.id, npc)
           }
         }
       }
+    }
+
+    if (legacyMessagesIgnored > 0) {
+      warn(
+        'hydrateSceneNpcs',
+        `Ignorando ${legacyMessagesIgnored} mensagem(ns) legada(s) sem location para evitar bleed entre cenas`
+      )
     }
 
     if (!accumulatedNpcs.size) return state
@@ -553,27 +602,11 @@ export class SessionService {
       completed.push(option)
     }
 
-    // Reposição: descartes da validação não podem deixar o jogador com menos
-    // de 4 opções (o contrato do narrador é sempre 4).
     if (completed.length < 4) {
-      const fallbackTexts = [
-        'Observar os arredores com atenção',
-        'Avaliar a situação antes de agir',
-        'Avançar com cautela',
-        'Examinar o local mais de perto'
-      ]
-      for (const text of fallbackTexts) {
-        if (completed.length >= 4) break
-        if (completed.some((option) => option.text.trim().toLowerCase() === text.toLowerCase())) continue
-        warn('completeValidatedOptions', `Repondo opção descartada com fallback genérico: "${text}"`)
-        completed.push({
-          id: randomUUID(),
-          text,
-          actionType: 'custom',
-          actionPayload: { input: text },
-          diceCheck: { required: false, reason: 'Ação simples sem risco imediato' }
-        })
-      }
+      warn(
+        'completeValidatedOptions',
+        `Opções válidas abaixo de 4 após validação (${completed.length}). Mantendo apenas opções coerentes em vez de fallback genérico.`
+      )
     }
 
     return completed
@@ -583,7 +616,8 @@ export class SessionService {
     option: NarratorTurnResponse['options'][number],
     state: GameState,
     mode: 'start' | 'turn',
-    canonicalAnchors?: CanonicalAnchors
+    canonicalAnchors?: CanonicalAnchors,
+    action?: PlayerAction
   ): NarratorTurnResponse['options'][number] | null {
     // NPCs derrotados/mortos/incapacitados/fora de cena (left) não são alvos
     // válidos, mesmo que ainda constem na cena neste turno. Excluí-los aqui impede
@@ -708,6 +742,57 @@ export class SessionService {
       }
       default:
         break
+    }
+
+    if (mode === 'turn' && action?.type === 'travel' && canonicalAnchors) {
+      const narrativeAnchors = extractSceneObjectsFromText(canonicalAnchors.currentNarrativeText ?? '')
+      const anchoredSceneObjects = (
+        canonicalAnchors.sceneObjectsCurrent.length
+          ? canonicalAnchors.sceneObjectsCurrent
+          : narrativeAnchors
+      ).map((name) => normalizeLookupValue(name))
+      const spatialAnchorText = normalizeLookupValue(canonicalAnchors.currentNarrativeText ?? '')
+      const optionText = normalizeLookupValue(`${option.text} ${(actionPayload.input as string | undefined) ?? ''}`)
+      const fixedSceneTokens = [
+        'terminal',
+        'painel',
+        'console',
+        'mesa',
+        'cadeira',
+        'armario',
+        'gaveta',
+        'interruptor',
+        'alavanca',
+        'maca'
+      ]
+
+      for (const token of fixedSceneTokens) {
+        const tokenMentionedInOption = optionText.includes(token)
+        const tokenAnchoredByObjects = anchoredSceneObjects.some((name) => name.includes(token) || token.includes(name))
+        const tokenAnchoredByNarrative = spatialAnchorText.includes(token)
+        if (tokenMentionedInOption && !tokenAnchoredByObjects && !tokenAnchoredByNarrative) {
+          warn(
+            'validateNarratorOption',
+            `spatial_coherence_violation: descartando opção pós-travel com objeto fixo fora da cena atual (${token}): "${option.text}"`
+          )
+          return null
+        }
+      }
+    }
+
+    if (mode === 'turn') {
+      const optionNarrativeText = `${option.text} ${(actionPayload.input as string | undefined) ?? ''}`
+      const hasAnchor = hasConcreteOptionAnchor(optionNarrativeText, canonicalAnchors)
+      const lowImpactNoOp = isLikelyNoImpactOption(optionNarrativeText)
+      const guaranteedImpactTypes = new Set<NarratorTurnResponse['options'][number]['actionType']>(['attack', 'travel', 'heal', 'flag'])
+
+      if (!guaranteedImpactTypes.has(option.actionType) && lowImpactNoOp && !hasAnchor) {
+        warn(
+          'validateNarratorOption',
+          `non_impact_option: descartando opção vaga sem ação concreta: "${option.text}"`
+        )
+        return null
+      }
     }
 
     if (mode === 'turn' && option.actionType === 'attack' && !sceneNpcIds.has(String(actionPayload.targetId ?? ''))) {
@@ -899,7 +984,7 @@ export class SessionService {
     const itemChanges = this.validateNarratorItemChanges(response.itemChanges, state, mode, action)
     const options = this.completeValidatedOptions(
       response.options
-        .map((option) => this.validateNarratorOption(option, canonicalNarrativeState, mode, canonicalAnchors))
+        .map((option) => this.validateNarratorOption(option, canonicalNarrativeState, mode, canonicalAnchors, action))
         .filter((option): option is NarratorTurnResponse['options'][number] => option !== null)
     )
     const sceneNpcIds = new Set(
@@ -1468,6 +1553,7 @@ export class SessionService {
         bennies: context.stateBrief.bennies,
         npcsPresent: context.stateBrief.npcsPresent,
         defeatedNpcIds: context.stateBrief.defeatedNpcIds,
+        sceneObjectsCurrent: context.stateBrief.sceneObjectsCurrent,
         inventory: context.stateBrief.inventory,
         equippedItems: context.stateBrief.equippedItems,
         activeStatusEffects: context.stateBrief.activeStatusEffects,
@@ -1533,7 +1619,8 @@ export class SessionService {
       sessionId: params.sessionId,
       turn: result.nextState.meta.turn,
       role: 'player',
-      playerInput: actionDescription
+      playerInput: actionDescription,
+      location: result.nextState.worldState.activeLocation
     })
 
     // 2.5 Salvar resultados de dados como mensagem de sistema (persistente no chat)
@@ -1546,7 +1633,8 @@ export class SessionService {
         sessionId: params.sessionId,
         turn: result.nextState.meta.turn,
         role: 'system',
-        engineEvents: diceEvents.map((e) => ({ type: e.type, payload: e.payload }))
+        engineEvents: diceEvents.map((e) => ({ type: e.type, payload: e.payload })),
+        location: result.nextState.worldState.activeLocation
       })
     }
 
@@ -1616,6 +1704,7 @@ export class SessionService {
           bennies: context.stateBrief.bennies,
           npcsPresent: context.stateBrief.npcsPresent,
           defeatedNpcIds: context.stateBrief.defeatedNpcIds,
+          sceneObjectsCurrent: context.stateBrief.sceneObjectsCurrent,
           inventory: context.stateBrief.inventory,
           equippedItems: context.stateBrief.equippedItems,
           activeStatusEffects: context.stateBrief.activeStatusEffects,
@@ -1764,7 +1853,8 @@ export class SessionService {
         sessionId: params.sessionId,
         turn: finalState.meta.turn,
         role: 'system',
-        engineEvents: npcAttackEvents.map((e) => ({ type: e.type, payload: e.payload as Record<string, unknown> }))
+        engineEvents: npcAttackEvents.map((e) => ({ type: e.type, payload: e.payload as Record<string, unknown> })),
+        location: finalState.worldState.activeLocation
       })
     }
 

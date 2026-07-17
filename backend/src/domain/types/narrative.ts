@@ -169,6 +169,8 @@ export type ValidateActionRequest = {
     }>
     /** IDs de NPCs já derrotados nesta sessão */
     defeatedNpcIds?: string[]
+    /** Objetos/estruturas fixas detectados no local atual (terminal, escotilha, painel, etc.) */
+    sceneObjectsCurrent?: string[]
     inventory: InventoryItem[]
     equippedItems?: EquippedItemsBrief
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
@@ -317,6 +319,8 @@ export type NarrateTurnRequest = {
     }>
     /** IDs de NPCs já derrotados nesta sessão */
     defeatedNpcIds?: string[]
+    /** Objetos/estruturas fixas detectados no local atual (terminal, escotilha, painel, etc.) */
+    sceneObjectsCurrent?: string[]
     inventory: InventoryItem[]
     equippedItems?: EquippedItemsBrief
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>

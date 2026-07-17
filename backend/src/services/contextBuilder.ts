@@ -2,6 +2,8 @@ import type { GameState, DieType, Hindrance, NpcDefinition } from '../domain/typ
 import type { SessionSummaryRow } from '../repositories/sessionSummary.repo.js'
 import type { EquippedItemsBrief, InventoryItem, NarrativeSegment } from '../domain/types/narrative.js'
 import type { ChatMessageRow } from '../repositories/chatMessage.repo.js'
+import { messageText } from '../domain/segments.js'
+import { extractSceneObjectsFromText } from './canonical-anchors.js'
 import {
   EDGES,
   HINDRANCES,
@@ -208,6 +210,8 @@ export type LlmContext = {
      * Apenas campos narrativos relevantes (id, name, description, dispositionDefault).
      */
     npcCatalog: Array<{ id: string; name: string; description?: string; dispositionDefault: string }>
+    /** Objetos/estruturas fixas detectados no local atual a partir da narração recente */
+    sceneObjectsCurrent: string[]
     inventory: InventoryItem[]
     equippedItems: EquippedItemsBrief
     activeStatusEffects: Array<{ id: string; name: string; turnsRemaining?: number }>
@@ -217,6 +221,29 @@ export type LlmContext = {
   /** Digest compacto das regras SW + traços do personagem + equipamento */
   rulesDigest: string
   recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
+}
+
+function buildSceneObjectsCurrent(recentMessages: ChatMessageRow[] | undefined, activeLocation: string): string[] {
+  if (!recentMessages?.length) return []
+
+  const unique = new Set<string>()
+  const add = (value: string) => {
+    const clean = value.trim()
+    if (!clean) return
+    unique.add(clean)
+  }
+
+  for (const message of recentMessages) {
+    if (message.role !== 'narrator') continue
+    if (message.location !== activeLocation) continue
+
+    const text = messageText(message)
+    for (const objectName of extractSceneObjectsFromText(text)) {
+      add(objectName)
+    }
+  }
+
+  return [...unique]
 }
 
 function buildRecentSegments(m: ChatMessageRow): NarrativeSegment[] | undefined {
@@ -239,6 +266,7 @@ export function buildLlmContext(params: {
 }): LlmContext {
   const { state, summary, recentMessages, npcCatalog } = params
   const equippedItems = resolveEquippedItemsBrief(state)
+  const sceneObjectsCurrent = buildSceneObjectsCurrent(recentMessages, state.worldState.activeLocation)
 
   const situation: LlmContext['stateBrief']['situation'] = state.combat ? 'combat' : 'exploracao'
 
@@ -280,6 +308,7 @@ export function buildLlmContext(params: {
         ...(def.description ? { description: def.description } : {}),
         dispositionDefault: def.dispositionDefault
       })),
+      sceneObjectsCurrent,
       inventory: state.player.inventory ?? [],
       equippedItems,
       activeStatusEffects: state.player.statusEffects.map((e) => ({

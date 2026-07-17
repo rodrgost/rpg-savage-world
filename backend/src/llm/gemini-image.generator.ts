@@ -115,7 +115,7 @@ export class GeminiImageGenerator {
   private readonly apiKey = readEnv('GEMINI_API_KEY')
   private readonly model = readEnv('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image')
   private readonly baseUrl = readEnv('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com')
-  private readonly temperature = toNumber(readEnv('GEMINI_IMAGE_TEMPERATURE', '0.8'), 0.8)
+  private readonly temperature = toNumber(readEnv('GEMINI_TEMPERATURE', '0.8'), 0.8)
   private readonly timeoutMs = withMin(toNumber(readEnv('GEMINI_IMAGE_TIMEOUT_MS', readEnv('GEMINI_TIMEOUT_MS', '120000')), 120000), 30000)
 
   async generateImage(params: ImageGenerationParams): Promise<GeneratedImage> {

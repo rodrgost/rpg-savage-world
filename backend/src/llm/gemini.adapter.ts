@@ -497,6 +497,13 @@ function renderPlayerSkillsMarkdown(skills?: Record<string, string>): string | n
     .join('\n')
 }
 
+function renderSceneObjectsMarkdown(sceneObjects?: string[]): string | null {
+  if (!sceneObjects?.length) {
+    return '- nenhum objeto de cenário confirmado neste momento; use apenas elementos explicitamente narrados neste turno.'
+  }
+  return sceneObjects.map((name) => `- ${name}`).join('\n')
+}
+
 type ScenePromptState = {
   location: string
   situationLabel?: string
@@ -510,6 +517,7 @@ type ScenePromptState = {
   npcsPresent: ScenePromptNpc[]
   defeatedNpcIds?: string[]
   npcCatalog?: Array<{ id: string; name: string; description?: string; dispositionDefault: string }>
+  sceneObjectsCurrent?: string[]
   playerSkills?: Record<string, string>
   rulesDigest?: string
   summaryText?: string
@@ -535,6 +543,9 @@ function renderSceneStateMarkdown(state: ScenePromptState): string {
     `- Ferimentos: ${state.wounds} | Fadiga: ${state.fatigue} | Abalado: ${formatBoolPt(state.isShaken)} | Bennies: ${state.bennies}`
   ].filter((line): line is string => Boolean(line))
   sections.push(`## Estado Atual\n${stateLines.join('\n')}`)
+
+  const sceneObjectsText = renderSceneObjectsMarkdown(state.sceneObjectsCurrent)
+  sections.push(`## Objetos do Cenário Atual\n${sceneObjectsText}`)
 
   sections.push(`## Inventário\n${renderInventoryMarkdown(state.inventory)}`)
 
@@ -1096,30 +1107,10 @@ export class GeminiAdapter implements Narrator {
     ),
     30000
   )
-  private readonly narrateStartTemperature = toNumber(
-    this.provider === 'gemini'
-      ? readEnv('GEMINI_NARRATE_START_TEMPERATURE', '0.25')
-      : readEnv(`${this.openAiCompatibleEnvPrefix}_NARRATE_START_TEMPERATURE`, '0.25'),
-    0.25
-  )
-  private readonly narrateTurnTemperature = toNumber(
-    this.provider === 'gemini'
-      ? readEnv('GEMINI_NARRATE_TURN_TEMPERATURE', '0.20')
-      : readEnv(`${this.openAiCompatibleEnvPrefix}_NARRATE_TURN_TEMPERATURE`, '0.20'),
-    0.20
-  )
-  private readonly summaryTemperature = toNumber(
-    this.provider === 'gemini'
-      ? readEnv('GEMINI_SUMMARY_TEMPERATURE', '0.20')
-      : readEnv(`${this.openAiCompatibleEnvPrefix}_SUMMARY_TEMPERATURE`, '0.15'),
-    this.provider === 'gemini' ? 0.20 : 0.15
-  )
-  private readonly summaryHistoryTemperature = toNumber(
-    this.provider === 'gemini'
-      ? readEnv('GEMINI_SUMMARY_HISTORY_TEMPERATURE', '0.15')
-      : readEnv(`${this.openAiCompatibleEnvPrefix}_SUMMARY_HISTORY_TEMPERATURE`, '0.10'),
-    this.provider === 'gemini' ? 0.15 : 0.10
-  )
+  private readonly narrateStartTemperature = this.temperature
+  private readonly narrateTurnTemperature = this.temperature
+  private readonly summaryTemperature = this.temperature
+  private readonly summaryHistoryTemperature = this.temperature
   private readonly characterSuggestionMaxOutputTokens = withMin(
     toNumber(
       this.provider === 'gemini'
@@ -1133,13 +1124,8 @@ export class GeminiAdapter implements Narrator {
     toNumber(readEnv('GEMINI_CHARACTER_SUGGEST_THINKING_BUDGET', '0'), 0),
     0
   )
-  // Temperatura global das descrições visuais (mundo, campanha e personagem)
-  private readonly imageDescriptionTemperature = toNumber(
-    this.provider === 'gemini'
-      ? readEnv('GEMINI_IMAGE_DESCRIPTION_TEMPERATURE', '0.8')
-      : readEnv(`${this.openAiCompatibleEnvPrefix}_IMAGE_DESCRIPTION_TEMPERATURE`, '0.8'),
-    0.8
-  )
+  // Reaproveita a temperatura base do provider para descrições visuais.
+  private readonly imageDescriptionTemperature = this.temperature
   private readonly normalizedBaseUrl = this.baseUrl.replace(/\/+$/, '')
   // Se o modelo OpenAI aceita temperature customizada. Por padrão detecta pelo
   // nome do modelo (modelos de raciocínio só aceitam o default 1) e pode ser
@@ -2097,7 +2083,7 @@ export class GeminiAdapter implements Narrator {
   } = {}): string {
     const { world, campaign, rulesDigest, summaryText, playerSkills, mode = 'turn', narrativeStyle, simpleVocabulary } = opts
     const lines = [
-      'Você é o Narrador de uma história. Responda em português do Brasil, sempre na segunda pessoa do singular ("Você entra...", "Você vê...").',
+      'Você é o Narrador de uma história de RPG. Responda em português do Brasil, sempre na segunda pessoa do singular ("Você entra...", "Você vê...").',
       '',
       '## Hierarquia Canônica — Leia Isto Primeiro',
       'Há duas camadas de contexto neste prompt:',
@@ -2108,19 +2094,12 @@ export class GeminiAdapter implements Narrator {
       'NUNCA redirecione a história de volta ao arco planejado se o jogador já se desviou dele — a história emergente É a história.',
       '',
       '## Estrutura da Resposta: Segments e Story Hook',
-      'A resposta se divide em DUAS partes narrativas distintas:',
-      '',
-      '### Segments (consequência direta)',
-      'Narre APENAS a consequência direta da ação atual do jogador. A narração DEVE parar exatamente quando a consequência se torna visível — NÃO descreva o que o jogador faz depois deste momento.',
-      'OBRIGATÓRIO: os segments do narrador cobrem UM único beat: o que mudou AGORA como resultado desta ação. O próximo movimento do jogador é SEMPRE escolhido a partir do campo "options", NUNCA decidido dentro dos segments.',
-      'FOCO: o que mudou, o que aconteceu. Evite recapitulações, repetições de estado e conclusões editoriais.',
-      '',
-      '**Não escreva nos segments:**',
-      '- estados que não mudaram, ausências, ou preenchimento genérico ("nada mudou", "o tempo passa", "nenhuma ameaça à vista")',
-      '- qualquer menção a regras, dados ou mecânica — incluindo termos literais ("Abalado", "Ferido", "Fadiga"). Narre o efeito em vez disso: "o braço cede", "a visão embaça".',
+      'A resposta tem DUAS camadas narrativas: segments mostram a consequência imediata da ação atual; options mostram o próximo movimento possível.',
+      'Os segments devem parar no ponto em que a consequência fica visível. Não use segments para decidir a próxima ação do jogador.',
+      'Toda opção do jogador deve nascer do estado recém-criado neste turno e permanecer fora dos segments.',
       '',
       '## NPCs em Cena',
-      'Todo NPC que sua narrativa deste turno traz para a cena (aparece, aborda, ataca ou fala) DEVE ser declarado em npcs[] com newlyIntroduced=true. Nunca deixe um NPC narrado em cena fora de npcs[].',
+      'Qualquer NPC que apareça, intervenha, ataque ou fale neste turno deve ser declarado em npcs[] com newlyIntroduced=true, e um segment do tipo "npc" só deve existir quando houver fala literal em voz alta.',
       '',
       '### Persona do NPC',
       'Ao escrever um segment do tipo "npc" (ou qualquer fala/reação atribuída a ele), baseie tom, vocabulário e escolha de palavras nos campos personality, motivation e speechPattern desse NPC em NPCS PRESENTES (quando preenchidos). Um NPC arrogante fala diferente de um NPC covarde; um NPC com motivação de vingança reage diferente de um leal. Mantenha essa voz consistente turno após turno — não apenas na primeira aparição do NPC.',
@@ -2183,6 +2162,11 @@ export class GeminiAdapter implements Narrator {
       '- o array "options" é OBRIGATÓRIO e NUNCA pode ficar vazio. Sempre retorne 4 opções.',
       '- Escolha as 4 opções que fazem mais sentido para a cena atual; deixe a situação decidir.',
       '- **Agência real:** só ofereça as 4 opções que são de fato executáveis AGORA. Se uma ação depende de um item que o jogador não tem, NÃO ofereça essa opção — substitua por uma alternativa que já é executável (ex.: buscar o item, uma ação totalmente diferente). Nunca ofereça uma opção sabendo de antemão que ela não pode ser executada.',
+      '- **Ancoragem obrigatória no turno:** cada opção deve nascer da consequência recém-narrada neste turno e/ou do Resultado Mecânico deste turno. Não use menu genérico reaproveitado de turnos anteriores.',
+      '- **Coerência Espacial:** se a ação deste turno foi um deslocamento (travel) para um novo local, NÃO ofereça interação com painéis, terminais, móveis ou estruturas fixas que ficaram na sala anterior. As opções devem explorar apenas o local atual, entidades presentes agora ou itens do inventário.',
+      '- **Sem ação placebo:** não ofereça opções que não produzem consequência verificável no estado do jogo (ex.: "apontar a arma", "ficar atento", "avaliar a situação" sem alvo/objeto). Toda opção deve levar a uma interação concreta, teste mecânico, deslocamento, ataque, cura ou marcação de estado.',
+      '- **Proibido opção vazia/genérica sem gancho local:** não ofereça textos como "Observar os arredores", "Avaliar a situação" ou "Avançar com cautela" sem um detalhe concreto estabelecido na narração deste turno que justifique essa ação agora.',
+      '- **Exemplo de ancoragem correta:** se você narrou "o guarda derrubou a lanterna e recuou", opções válidas incluem "Pegar a lanterna no chão", "Avançar antes que ele recupere postura", "Interrogar o guarda enquanto ele hesita". Evite opções que ignoram esse estado.',
       '',
       '### Payload por Tipo de Ação',
       '- Para actionType "attack", inclua APENAS "targetId" no actionPayload. NÃO envie damageFormula ou ap — o app resolve o dano da arma do jogador a partir da arma equipada.',
@@ -2197,7 +2181,7 @@ export class GeminiAdapter implements Narrator {
       '- **Descrição de itens não óbvios (campo "description"):** ao GANHAR ("gained") um item cujo nome NÃO deixa claro o que ele é, o que contém ou para que serve, preencha "description" com uma explicação CURTA e DIRETA (1-2 frases, sem prosa floreada): o que é, o que contém e/ou qual seu uso/efeito. Isso vale para itens de missão (quest), recipientes com conteúdo (bolsas, baús, frascos, caixas), chaves, documentos, dispositivos e itens com efeito ou uso especial. Essa descrição fica registrada no inventário e é reapresentada em TODOS os turnos futuros no bloco "## Inventário", servindo de referência canônica para você narrar o item de forma consistente. NÃO invente propriedades novas depois: descreva o item por completo aqui.',
       '- Itens triviais e autoexplicativos (ex.: "Espada", "Maçã", "Tocha", "Moedas de Ouro", "Flechas", "Corda") NÃO precisam de "description" — deixe o campo omitido ou null para não poluir o inventário.',
       '- **Regra crítica — itemChanges:**',
-      '  - changeType "gained": SOMENTE quando o RESULTADO MECÂNICO contém evidência explícita ([item_gained]).',
+      '  - changeType "gained": use quando o turno explicitamente estabelecer a aquisição do item, seja pela narrativa, seja por evidência mecânica explícita; não invente ganhos sem base canônica.',
       '  - changeType "lost" ou "used": registre quando (a) o RESULTADO MECÂNICO tem evidência explícita ([item_lost], [item_used], [ammunition_consumed]), OU (b) sua narrativa NESTE turno descreve explicitamente o item sendo largado, destruído, confiscado, consumido, ou de alguma forma saindo da posse do jogador. Exemplo: se a narrativa diz "forçando você a soltá-lo" sobre um item, registre esse item com changeType "lost".',
       '  ⚠️ NÃO REGISTRAR UMA PERDA DE ITEM NARRADA É UM BUG: se sua narrativa diz que um item foi perdido mas você omite a entrada em itemChanges, o item permanece no inventário e turnos futuros vão contradizer a história.',
       '  - **Consumível vs durável — distinção obrigatória:** apenas itens de categoria "consumable" (itens de uso limitado) e "ammunition" são GASTOS ao serem usados e devem sair do inventário com changeType "used"/"lost". Itens DURÁVEIS — categorias "weapon", "armor", "vehicle", "property", "quest", "misc" — NÃO se gastam com o uso. Usar uma espada, vestir uma armadura, dirigir um veículo ou empunhar um artefato NÃO os remove do inventário.',
@@ -2351,7 +2335,7 @@ export class GeminiAdapter implements Narrator {
         '```',
         '',
         '### Ganho de Itens',
-        '- GANHO DE ITEM em um turno normal: use changeType "gained" sempre que a narrativa deste turno justificar — seja generoso. Situações válidas: visitar uma loja ou mercado (jogador compra ou troca por itens), saquear um inimigo derrotado ou contêiner, receber uma recompensa, presente ou pagamento de um NPC, encontrar um item abandonado na cena, ou receber equipamento de uma facção ou aliado. Registre TODOS os itens que a narrativa estabelece que o personagem obteve neste turno, incluindo armas, armaduras e qualquer categoria.',
+        '- GANHO DE ITEM: use changeType "gained" quando o turno explicitamente estabelecer a aquisição do item, seja pela narrativa, seja por evidência mecânica explícita; não invente ganhos sem base canônica. Situações válidas incluem comprar/trocar em loja, saquear inimigo ou contêiner, receber recompensa/presente/pagamento, encontrar item abandonado ou receber equipamento de facção/aliado.',
         '',
         '### Status Effects',
         '- statusChanges "applied": APENAS para efeitos narrativos não mecânicos (veneno ambiental, queimadura narrativa, um medo ou maldição guiados pela história). NUNCA registre estados do motor de combate via statusChanges — Abalado (Shaken), Ferido (Wounded), Fadiga e todas as condições mecânicas de combate são gerenciadas EXCLUSIVAMENTE pelo motor de regras. Se você os registrar aqui, serão descartados.',
@@ -3160,6 +3144,7 @@ export class GeminiAdapter implements Narrator {
       fatigue: ctx.fatigue,
       isShaken: ctx.isShaken,
       bennies: ctx.bennies,
+      sceneObjectsCurrent: ctx.sceneObjectsCurrent,
       inventory: ctx.inventory,
       equippedItems: ctx.equippedItems,
       activeStatusEffects: ctx.activeStatusEffects,
@@ -3421,6 +3406,7 @@ export class GeminiAdapter implements Narrator {
       fatigue: req.context.fatigue,
       isShaken: req.context.isShaken,
       bennies: req.context.bennies,
+      sceneObjectsCurrent: req.context.sceneObjectsCurrent,
       inventory: req.context.inventory,
       equippedItems: req.context.equippedItems,
       activeStatusEffects: req.context.activeStatusEffects,
@@ -3450,6 +3436,10 @@ export class GeminiAdapter implements Narrator {
       : req.narrativeStyle === 'balanced'
         ? 'LEMBRETE DE TAMANHO: sua narração DEVE ter entre 2 e 4 frases, em 1 ou 2 parágrafos. Uma narração de 1 frase única é INVÁLIDA.'
         : 'LEMBRETE DE TAMANHO: máximo 3 frases curtas, em 1 parágrafo.'
+    const optionsAnchoringReminder = 'LEMBRETE DE OPTIONS: as 4 opções devem nascer da consequência narrada NESTE turno e do Resultado Mecânico abaixo. Não use opções genéricas sem vínculo explícito com a cena atual. Todas as opções devem ser executáveis AGORA com o estado atual.'
+    const optionsSpatialReminder = req.playerAction.type === 'travel'
+      ? 'LEMBRETE DE COERÊNCIA ESPACIAL: como este turno foi de deslocamento (travel), NÃO ofereça interação com objetos fixos da sala anterior (terminal, painel, porta, mobiliário). Use apenas elementos do local atual e inventário.'
+      : null
 
     const currentTurnPrompt = [
       'TURNO DE JOGO — Narre a consequência da ação do jogador.',
@@ -3458,6 +3448,8 @@ export class GeminiAdapter implements Narrator {
       'Não contradiga a seção Resultado Mecânico. Não invente entidades fora do contexto.',
       'NPCs já presentes devem reutilizar exatamente o mesmo id/displayName do contexto.',
       lengthReminder,
+      optionsAnchoringReminder,
+      optionsSpatialReminder,
       '',
       sceneStateMarkdown,
       '',
