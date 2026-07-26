@@ -1,5 +1,3 @@
-import { SKILLS } from '../../domain/savage-worlds/constants.js'
-
 /**
  * Schema de saída estruturada para o turno do Narrador (Gemini responseSchema).
  *
@@ -7,30 +5,12 @@ import { SKILLS } from '../../domain/savage-worlds/constants.js'
  * generationConfig.responseSchema). Os nomes de `type` seguem a convenção do
  * proto Schema do Gemini (UPPERCASE: "OBJECT", "ARRAY", "STRING", ...).
  *
- * IMPORTANTE (a verificar na doc atual do modelo em uso):
- *  - Nem todo keyword do JSON Schema é honrado. Aqui usamos apenas:
- *    type, properties, items, required, enum, nullable, propertyOrdering.
- *  - Evitamos `additionalProperties`, `minItems`/`maxItems`, `anyOf` e
- *    condicionais — suporte irregular entre versões. A regra "exatamente 4
- *    opções" continua no prompt e é garantida na sanitização.
- *  - `actionPayload` é um objeto de chaves variáveis; como o Gemini exige
- *    `properties` em OBJECT, enumeramos todas as chaves conhecidas (todas
- *    opcionais). Aliases e campos extras são tratados na sanitização.
+ * O LLM narra livremente e decide por si mesmo o resultado das ações — sem
+ * rolagem de dados, sem diceCheck, sem npcAttacks mecânicos.
  *
  * O sanitizeNarratorResponse permanece a fonte de verdade do contrato: este
  * schema só reduz a probabilidade de JSON malformado, não substitui a validação.
  */
-
-/**
- * Lista fechada de nomes válidos para diceCheck.traco: rótulos (em PT-BR) de
- * todas as perícias de savage-worlds/constants.ts — só perícias, nunca atributos.
- * Testes de atributo puro (soak_roll, recover_shaken) já são resolvidos direto
- * pelo rule-engine, sem passar pelo traco da LLM. Gerado dinamicamente para
- * nunca dessincronizar da lista canônica usada em findSkillDefinition
- * (gemini.adapter.ts). O traço agora é só o que a LLM devolve dentro deste
- * enum fechado — se não bater, não há perícia (sem inferência, sem fallback).
- */
-const TRACO_ENUM: readonly string[] = SKILLS.map((s) => s.label)
 
 export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
   type: 'OBJECT',
@@ -59,35 +39,20 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
         type: 'OBJECT',
         properties: {
           text: { type: 'STRING' },
-          actionType: { type: 'STRING', enum: ['custom', 'trait_test', 'attack', 'travel', 'flag', 'heal'] },
+          actionType: { type: 'STRING', enum: ['custom', 'travel', 'flag'] },
           actionPayload: {
             type: 'OBJECT',
-            description: 'Campos parciais para montar a ação mecânica (todos opcionais). Dano/AP NÃO são informados aqui — o app os resolve pela arma equipada. Perícia/atributo NÃO vão aqui — use diceCheck.traco.',
+            description: 'Campos parciais para montar a ação (todos opcionais).',
             properties: {
-              targetId: { type: 'STRING', nullable: true },
               to: { type: 'STRING', nullable: true },
-              input: { type: 'STRING', nullable: true }
+              input: { type: 'STRING', nullable: true },
+              key: { type: 'STRING', nullable: true }
             },
-            propertyOrdering: ['targetId', 'to', 'input']
-          },
-          diceCheck: {
-            type: 'OBJECT',
-            properties: {
-              traco: {
-                type: 'STRING',
-                enum: TRACO_ENUM,
-                nullable: true,
-                description: 'Nome EXATO da perícia ou atributo testado (um destes valores) — null se a ação não exige teste.'
-              },
-              difficulty: { type: 'STRING', enum: ['facil', 'normal', 'dificil', 'extremo'], nullable: true },
-              reason: { type: 'STRING' }
-            },
-            required: ['reason'],
-            propertyOrdering: ['traco', 'difficulty', 'reason']
+            propertyOrdering: ['to', 'input', 'key']
           }
         },
-        required: ['text', 'actionType', 'diceCheck'],
-        propertyOrdering: ['text', 'actionType', 'actionPayload', 'diceCheck']
+        required: ['text', 'actionType'],
+        propertyOrdering: ['text', 'actionType', 'actionPayload']
       }
     },
     npcs: {
@@ -135,12 +100,12 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
           armorValue: {
             type: 'INTEGER',
             nullable: true,
-            description: 'APENAS para category="armor" quando o item é vestido como armadura corporal: bônus de Resistência concedido (tipicamente 1 a 4). Omitir para itens que não são armadura corporal.'
+            description: 'APENAS para category="armor" quando o item é vestido como armadura corporal: bônus de proteção concedido (tipicamente 1 a 4). Omitir para itens que não são armadura corporal.'
           },
           parryBonus: {
             type: 'INTEGER',
             nullable: true,
-            description: 'APENAS para category="armor" quando o item é um escudo/anteparo empunhado: bônus de Aparar concedido (tipicamente 1 a 2). Omitir para armadura corporal (sem parryBonus).'
+            description: 'APENAS para category="armor" quando o item é um escudo/anteparo empunhado: bônus de defesa concedido (tipicamente 1 a 2). Omitir para armadura corporal.'
           }
         },
         required: ['name', 'quantity', 'changeType', 'category'],
@@ -163,83 +128,35 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
         required: ['name', 'changeType', 'description'],
         propertyOrdering: ['effectId', 'name', 'changeType', 'turnsRemaining', 'description', 'targetType', 'targetId']
       }
-    },
-    npcAttacks: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          npcId: { type: 'STRING' },
-          // O responseSchema do Gemini só aceita `enum` em campos STRING;
-          // enum numérico causa HTTP 400. Valores válidos (6, 8, 10, 12) são
-          // garantidos na sanitização (sanitizeNarratorResponse).
-          skillDie: { type: 'INTEGER', description: 'Dado de perícia do NPC. Valores válidos: 6, 8, 10 ou 12.' },
-          damageFormula: { type: 'STRING' },
-          ap: { type: 'INTEGER' }
-        },
-        required: ['npcId', 'skillDie', 'damageFormula', 'ap'],
-        propertyOrdering: ['npcId', 'skillDie', 'damageFormula', 'ap']
-      }
-    },
-    outcomeOverride: {
-      type: 'OBJECT',
-      nullable: true,
-      description: 'Preencha SOMENTE quando o desfecho narrado divergir do resultado mecânico do dado. Caso contrário, omita ou use null.',
-      properties: {
-        mechanicalResult: { type: 'STRING', enum: ['success', 'failure'], description: 'Resultado mecânico produzido pelo dado.' },
-        narratedOutcome: { type: 'STRING', enum: ['success', 'failure'], description: 'Desfecho efetivamente narrado (deve diferir de mechanicalResult).' },
-        justification: { type: 'STRING', description: 'Causa explícita na ficção que justifica a inversão (interferência, imprevisto, sorte etc.).' }
-      },
-      required: ['mechanicalResult', 'narratedOutcome', 'justification'],
-      propertyOrdering: ['mechanicalResult', 'narratedOutcome', 'justification']
     }
   },
   required: ['segments', 'options'],
-  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride']
+  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges']
 }
 
 /**
  * Schema de saída estruturada para validateAction (classificação de ação livre
- * digitada pelo jogador). Reaproveita o mesmo TRACO_ENUM fechado do narrador —
- * a LLM já resolve o traço aqui dentro do enum; não há mais sanitização/
- * inferência posterior (sanitizeValidateActionResponse foi removido). Se o
- * traco não vier ou não bater com o enum, a ação segue sem teste de dados.
+ * digitada pelo jogador). O LLM classifica a ação como custom, travel ou flag
+ * sem inferência de perícia nem rolagem de dados.
  */
 export const VALIDATE_ACTION_RESPONSE_SCHEMA: Record<string, unknown> = {
   type: 'OBJECT',
   properties: {
     feasible: { type: 'BOOLEAN' },
     feasibilityReason: { type: 'STRING', nullable: true },
-    actionType: { type: 'STRING', enum: ['custom', 'trait_test', 'attack', 'travel', 'flag'] },
+    actionType: { type: 'STRING', enum: ['custom', 'travel', 'flag'] },
     actionPayload: {
       type: 'OBJECT',
-      description: 'Campos parciais para montar a ação mecânica (todos opcionais). Perícia NÃO vai aqui — use diceCheck.traco.',
+      description: 'Campos parciais para montar a ação (todos opcionais).',
       properties: {
-        targetId: { type: 'STRING', nullable: true },
         to: { type: 'STRING', nullable: true },
         input: { type: 'STRING', nullable: true },
         key: { type: 'STRING', nullable: true }
       },
-      propertyOrdering: ['targetId', 'to', 'input', 'key']
-    },
-    diceCheck: {
-      type: 'OBJECT',
-      nullable: true,
-      properties: {
-        traco: {
-          type: 'STRING',
-          enum: TRACO_ENUM,
-        nullable: true,
-          description: 'Nome EXATO da perícia testada (um destes valores) — null se a ação não exige teste.'
-        },
-        difficulty: { type: 'STRING', enum: ['facil', 'normal', 'dificil', 'extremo'], nullable: true },
-        reason: { type: 'STRING' }
-      },
-      required: ['reason'],
-      propertyOrdering: ['traco', 'difficulty', 'reason']
+      propertyOrdering: ['to', 'input', 'key']
     },
     interpretation: { type: 'STRING' }
   },
   required: ['feasible', 'actionType', 'actionPayload', 'interpretation'],
-  propertyOrdering: ['feasible', 'feasibilityReason', 'actionType', 'actionPayload', 'diceCheck', 'interpretation']
+  propertyOrdering: ['feasible', 'feasibilityReason', 'actionType', 'actionPayload', 'interpretation']
 }
