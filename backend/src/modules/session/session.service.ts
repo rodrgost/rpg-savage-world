@@ -685,19 +685,10 @@ export class SessionService {
         break
       }
       case 'trait_test': {
-        const skill = normalizeSkillName(diceCheck?.skill)
-        const attribute = normalizeAttributeName(diceCheck?.attribute)
-
-        if (!skill && !attribute) {
-          warn('validateNarratorOption', `Descartando trait_test sem perícia ou atributo válido: "${option.text}"`)
-          return null
-        }
-
-        if (diceCheck) {
-          diceCheck.skill = skill ?? null
-          diceCheck.attribute = attribute ?? null
-        }
-
+        // Opção narrativa pura: converte em custom sem exigir perícia mecânica
+        option.actionType = 'custom'
+        actionPayload.input = option.text.trim()
+        if (diceCheck) diceCheck.required = false
         break
       }
       case 'travel': {

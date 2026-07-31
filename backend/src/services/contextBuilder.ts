@@ -65,18 +65,15 @@ function formatDie(die: DieType): string {
 }
 
 function buildPlayerSkillsMap(skills: Record<string, DieType>): Record<string, string> {
-  const byLabel: Record<string, DieType> = {}
+  const byLabel: Record<string, string> = {}
   for (const [key, die] of Object.entries(skills)) {
-    const label = getCanonicalSkillLabel(key) ?? key
-    const current = byLabel[label]
-    if (!current || die > current) {
-      byLabel[label] = die
+    if (die && die > 0) {
+      const label = getCanonicalSkillLabel(key) ?? key
+      byLabel[label] = 'possui'
     }
   }
 
-  return Object.fromEntries(
-    Object.entries(byLabel).map(([label, die]) => [label, formatDie(die)])
-  )
+  return byLabel
 }
 
 function normalizeLlmText(text: string): string {
@@ -105,25 +102,28 @@ function buildRulesDigest(state: GameState): string {
   const sections: string[] = []
   const equippedItems = resolveEquippedItemsBrief(state)
 
-  // NOTA: o resumo mecânico das regras de Savage Worlds (rolagens, dano vs.
-  // Resistência, Ferimentos, Soak, Bennies, Fadiga) foi REMOVIDO do prompt.
-  // Essas regras são fixas e aplicadas integralmente pelo rule-engine; o LLM
-  // recebe os eventos já calculados e apenas narra. Mantemos aqui somente o
-  // contexto do PERSONAGEM (perícias, Edges, Hindrances, atributos) que o
-  // modelo precisa para escolher perícias e narrar com coerência.
+  // Contexto do PERSONAGEM (perícias possuídas, Edges, Hindrances, atributos) que o
+  // modelo precisa para narrar com coerência.
 
-  // A lista fechada de perícias válidas (nomes exatos para diceCheck/traco) já
-  // vive no system prompt via DICE_TRACO_FIELD_EXPLANATION_PT (dice-rules.ts) —
-  // manter "AVAILABLE SKILLS" aqui também só duplicava a mesma informação no
-  // user prompt a cada turno, sem necessidade.
+  // 1. Character attributes & skills
+  const attrLines = ATTRIBUTES.map(a => a.label)
+  const possessedSkills = Object.entries(state.player.skills ?? {})
+    .filter(([_, die]) => die && die > 0)
+    .map(([key]) => getCanonicalSkillLabel(key) ?? key)
 
-  // 3. Character edges
+  sections.push([
+    '=== CARACTERÍSTICAS E HABILIDADES DO PERSONAGEM ===',
+    `Atributos principais: ${attrLines.join(', ')}`,
+    `Perícias/Habilidades que o personagem possui: ${possessedSkills.length > 0 ? possessedSkills.join(', ') : 'Nenhuma específica'}`
+  ].join('\n'))
+
+  // 2. Character edges
   const playerEdges = state.player.edges
   if (playerEdges.length > 0) {
     const edgeLines = playerEdges.map(edgeKey => {
       const def = EDGES.find(e => e.key === edgeKey)
       if (def) return `${def.label}: ${def.description}`
-      return `${edgeKey}: (effect not catalogued)`
+      return `${edgeKey}: (efeito não catalogado)`
     })
     sections.push([
       '=== CHARACTER EDGES ===',
@@ -131,14 +131,14 @@ function buildRulesDigest(state: GameState): string {
     ].join('\n'))
   }
 
-  // 4. Character hindrances
+  // 3. Character hindrances
   const playerHindrances = state.player.hindrances
   if (playerHindrances.length > 0) {
     const hindranceLines = playerHindrances.map((h: Hindrance) => {
       const def = HINDRANCES.find(hd => hd.key === h.name)
       const severity = h.severity === 'major' ? 'Major' : 'Minor'
       if (def) return `${def.label} (${severity}): ${def.description}`
-      return `${h.name} (${severity}): (effect not catalogued)`
+      return `${h.name} (${severity}): (efeito não catalogado)`
     })
     sections.push([
       '=== CHARACTER HINDRANCES ===',
@@ -146,27 +146,15 @@ function buildRulesDigest(state: GameState): string {
     ].join('\n'))
   }
 
-  /*// 5. Character attributes
-  const attrLines = ATTRIBUTES.map(a => {
-    const die = state.player.attributes[a.key]
-    return `${a.label}: d${die}`
-  })
-  sections.push([
-    '=== CHARACTER ATTRIBUTES ===',
-    ...attrLines,
-    `Parry: ${state.player.parry} | Toughness: ${state.player.toughness} | Armor: ${state.player.armor} | Pace: ${state.player.pace}`
-  ].join('\n'))
-  */
-
   const equippedLines: string[] = []
   if (equippedItems.attack) {
-    equippedLines.push(`Attack: ${equippedItems.attack.name} (damage: ${equippedItems.attack.damageFormula}, AP: ${equippedItems.attack.ap})`)
+    equippedLines.push(`Attack: ${equippedItems.attack.name}`)
   }
   if (equippedItems.armor) {
-    equippedLines.push(`Armor: ${equippedItems.armor.name} (+${equippedItems.armor.armorValue} Armor)`)
+    equippedLines.push(`Armor: ${equippedItems.armor.name}`)
   }
   if (equippedItems.shield) {
-    equippedLines.push(`Shield: ${equippedItems.shield.name} (+${equippedItems.shield.parryBonus} Parry)`)
+    equippedLines.push(`Shield: ${equippedItems.shield.name}`)
   }
   if (equippedLines.length > 0) {
     sections.push([

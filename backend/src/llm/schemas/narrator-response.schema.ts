@@ -1,36 +1,4 @@
-import { SKILLS } from '../../domain/savage-worlds/constants.js'
 
-/**
- * Schema de saída estruturada para o turno do Narrador (Gemini responseSchema).
- *
- * Formato: subconjunto OpenAPI aceito pela API Gemini (REST v1beta,
- * generationConfig.responseSchema). Os nomes de `type` seguem a convenção do
- * proto Schema do Gemini (UPPERCASE: "OBJECT", "ARRAY", "STRING", ...).
- *
- * IMPORTANTE (a verificar na doc atual do modelo em uso):
- *  - Nem todo keyword do JSON Schema é honrado. Aqui usamos apenas:
- *    type, properties, items, required, enum, nullable, propertyOrdering.
- *  - Evitamos `additionalProperties`, `minItems`/`maxItems`, `anyOf` e
- *    condicionais — suporte irregular entre versões. A regra "exatamente 4
- *    opções" continua no prompt e é garantida na sanitização.
- *  - `actionPayload` é um objeto de chaves variáveis; como o Gemini exige
- *    `properties` em OBJECT, enumeramos todas as chaves conhecidas (todas
- *    opcionais). Aliases e campos extras são tratados na sanitização.
- *
- * O sanitizeNarratorResponse permanece a fonte de verdade do contrato: este
- * schema só reduz a probabilidade de JSON malformado, não substitui a validação.
- */
-
-/**
- * Lista fechada de nomes válidos para diceCheck.traco: rótulos (em PT-BR) de
- * todas as perícias de savage-worlds/constants.ts — só perícias, nunca atributos.
- * Testes de atributo puro (soak_roll, recover_shaken) já são resolvidos direto
- * pelo rule-engine, sem passar pelo traco da LLM. Gerado dinamicamente para
- * nunca dessincronizar da lista canônica usada em findSkillDefinition
- * (gemini.adapter.ts). O traço agora é só o que a LLM devolve dentro deste
- * enum fechado — se não bater, não há perícia (sem inferência, sem fallback).
- */
-const TRACO_ENUM: readonly string[] = SKILLS.map((s) => s.label)
 
 export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
   type: 'OBJECT',
@@ -75,9 +43,8 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
             properties: {
               traco: {
                 type: 'STRING',
-                enum: TRACO_ENUM,
                 nullable: true,
-                description: 'Nome EXATO da perícia ou atributo testado (um destes valores) — null se a ação não exige teste.'
+                description: 'Nome da perícia ou habilidade — null se não houver.'
               },
               difficulty: { type: 'STRING', enum: ['facil', 'normal', 'dificil', 'extremo'], nullable: true },
               reason: { type: 'STRING' }
@@ -228,9 +195,8 @@ export const VALIDATE_ACTION_RESPONSE_SCHEMA: Record<string, unknown> = {
       properties: {
         traco: {
           type: 'STRING',
-          enum: TRACO_ENUM,
-        nullable: true,
-          description: 'Nome EXATO da perícia testada (um destes valores) — null se a ação não exige teste.'
+          nullable: true,
+          description: 'Nome da perícia ou habilidade — null se não houver.'
         },
         difficulty: { type: 'STRING', enum: ['facil', 'normal', 'dificil', 'extremo'], nullable: true },
         reason: { type: 'STRING' }
