@@ -34,6 +34,14 @@ const ActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('soak_roll') }),
   z.object({ type: z.literal('spend_benny'), purpose: z.enum(['reroll', 'soak', 'unshake']).default('reroll') }),
   z.object({ type: z.literal('recover_shaken') }),
+  z.object({
+    type: z.literal('chance_check'),
+    success: z.boolean(),
+    chance: z.number(),
+    roll: z.number(),
+    reason: z.string().optional(),
+    description: z.string().optional()
+  }),
   z.object({ type: z.literal('custom'), input: z.string().min(1) })
 ])
 

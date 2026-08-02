@@ -626,7 +626,23 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
       emittedEvents.push({ type: 'custom_action', payload: { input: action.input } })
       break
     }
+
+    // ─── Chance Check (d100 resolution) ───
+    case 'chance_check': {
+      emittedEvents.push({
+        type: 'chance_check_result',
+        payload: {
+          description: action.description ?? '',
+          success: action.success,
+          chance: action.chance,
+          roll: action.roll,
+          reason: action.reason ?? ''
+        }
+      })
+      break
+    }
   }
+
 
   return { nextState, emittedEvents }
 }

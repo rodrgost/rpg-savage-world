@@ -102,63 +102,57 @@ function buildRulesDigest(state: GameState): string {
   const sections: string[] = []
   const equippedItems = resolveEquippedItemsBrief(state)
 
-  // Contexto do PERSONAGEM (perícias possuídas, Edges, Hindrances, atributos) que o
-  // modelo precisa para narrar com coerência.
-
-  // 1. Character attributes & skills
-  const attrLines = ATTRIBUTES.map(a => a.label)
+  // 1. Perícias e Habilidades
   const possessedSkills = Object.entries(state.player.skills ?? {})
     .filter(([_, die]) => die && die > 0)
     .map(([key]) => getCanonicalSkillLabel(key) ?? key)
 
   sections.push([
-    '=== CARACTERÍSTICAS E HABILIDADES DO PERSONAGEM ===',
-    `Atributos principais: ${attrLines.join(', ')}`,
-    `Perícias/Habilidades que o personagem possui: ${possessedSkills.length > 0 ? possessedSkills.join(', ') : 'Nenhuma específica'}`
+    '=== HABILIDADES DO PERSONAGEM ===',
+    `Habilidades que o personagem possui: ${possessedSkills.length > 0 ? possessedSkills.join(', ') : 'Nenhuma específica'}`
   ].join('\n'))
 
-  // 2. Character edges
+  // 2. Vantagens (Edges)
   const playerEdges = state.player.edges
   if (playerEdges.length > 0) {
-    const edgeLines = playerEdges.map(edgeKey => {
+    const edgeNames = playerEdges.map(edgeKey => {
       const def = EDGES.find(e => e.key === edgeKey)
-      if (def) return `${def.label}: ${def.description}`
-      return `${edgeKey}: (efeito não catalogado)`
+      return def ? def.label : edgeKey
     })
     sections.push([
-      '=== CHARACTER EDGES ===',
-      ...edgeLines
+      '=== VANTAGENS DO PERSONAGEM ===',
+      edgeNames.join(', ')
     ].join('\n'))
   }
 
-  // 3. Character hindrances
+  // 3. Complicações (Hindrances)
   const playerHindrances = state.player.hindrances
   if (playerHindrances.length > 0) {
-    const hindranceLines = playerHindrances.map((h: Hindrance) => {
+    const hindranceNames = playerHindrances.map((h: Hindrance) => {
       const def = HINDRANCES.find(hd => hd.key === h.name)
-      const severity = h.severity === 'major' ? 'Major' : 'Minor'
-      if (def) return `${def.label} (${severity}): ${def.description}`
-      return `${h.name} (${severity}): (efeito não catalogado)`
+      const label = def ? def.label : h.name
+      const severity = h.severity === 'major' ? 'Grave' : 'Leve'
+      return `${label} (${severity})`
     })
     sections.push([
-      '=== CHARACTER HINDRANCES ===',
-      ...hindranceLines
+      '=== COMPLICAÇÕES DO PERSONAGEM ===',
+      hindranceNames.join(', ')
     ].join('\n'))
   }
 
   const equippedLines: string[] = []
   if (equippedItems.attack) {
-    equippedLines.push(`Attack: ${equippedItems.attack.name}`)
+    equippedLines.push(`Ataque: ${equippedItems.attack.name}`)
   }
   if (equippedItems.armor) {
-    equippedLines.push(`Armor: ${equippedItems.armor.name}`)
+    equippedLines.push(`Armadura: ${equippedItems.armor.name}`)
   }
   if (equippedItems.shield) {
-    equippedLines.push(`Shield: ${equippedItems.shield.name}`)
+    equippedLines.push(`Escudo: ${equippedItems.shield.name}`)
   }
   if (equippedLines.length > 0) {
     sections.push([
-      '=== EQUIPPED ITEMS ===',
+      '=== ITENS EQUIPADOS ===',
       ...equippedLines
     ].join('\n'))
   }

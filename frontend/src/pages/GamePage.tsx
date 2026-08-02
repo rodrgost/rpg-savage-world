@@ -5,6 +5,7 @@ import {
   executeCustomAction,
   validateCustomAction,
   executeTraitTest,
+  executeChanceCheck,
   executeAttack,
   executeSoakRoll,
   executeSpendBenny,
@@ -175,56 +176,6 @@ function normalizeActionPayload(actionPayload: Record<string, unknown>): Record<
     Object.entries(actionPayload).map(([key, value]) => [key, typeof value === 'string' ? normalizeInlineText(value) : value])
   )
 }
-
-function diceCheckTrait(
-  diceCheck: DiceCheck | null | undefined
-): { skill: string | null; attribute: string | null; label: string } {
-  const skill = diceCheck?.skill ?? null
-  const attribute = diceCheck?.attribute ?? null
-
-  return {
-    skill,
-    attribute,
-    label: skill ?? attribute ?? '?'
-  }
-}
-
-function areEquivalentSkills(left: string, right: string): boolean {
-  return normalizeLookupKey(left) === normalizeLookupKey(right)
-}
-
-function resolvePlayerTraitDie(
-  playerState: GameState['player'] | null,
-  trait: { skill: string | null; attribute: string | null }
-): number | null {
-  if (!playerState) return null
-
-  if (trait.skill) {
-    const traitSkill = trait.skill
-    const direct = playerState.skills[traitSkill]
-    if (direct != null) return direct
-
-    const matchedSkill = Object.entries(playerState.skills).find(([storedSkill]) => areEquivalentSkills(storedSkill, traitSkill))
-    if (matchedSkill) return matchedSkill[1]
-  }
-
-  if (trait.attribute) {
-    const direct = playerState.attributes[trait.attribute]
-    if (direct != null) return direct
-
-    const normalizedAttribute = normalizeLookupKey(trait.attribute)
-    const matchedAttribute = ATTRIBUTES.find((attribute) => {
-      return normalizeLookupKey(attribute.key) === normalizedAttribute || normalizeLookupKey(attribute.label) === normalizedAttribute
-    })
-
-    if (matchedAttribute && playerState.attributes[matchedAttribute.key] != null) {
-      return playerState.attributes[matchedAttribute.key]
-    }
-  }
-
-  return null
-}
-
 function normalizeValidationResponse(validation: ValidateActionResponse): ValidateActionResponse {
   const actionPayload = normalizeActionPayload(validation.actionPayload ?? {})
 
@@ -678,7 +629,6 @@ function ActionOptions({
         {options.map((option, idx) => {
           const dc = option.diceCheck
           const hasDice = dc?.required === true
-          const trait = diceCheckTrait(dc)
           return (
             <button
               key={option.id}
@@ -697,10 +647,9 @@ function ActionOptions({
               )}
               {hasDice && dc && (
                 <span className="dice-check-info">
-                  <span className="dice-check-label">Teste:</span>{' '}
+                  <span className="dice-check-label">Chance:</span>{' '}
                   <span className="dice-check-value">
-                    {trait.label}
-                    {dc.modifier ? ` (${dc.modifier > 0 ? '+' : ''}${dc.modifier})` : ''}
+                    {typeof dc.successChance === 'number' ? `${dc.successChance}%` : 'Incerta'}
                   </span>
                 </span>
               )}
@@ -791,52 +740,31 @@ function NpcStatusEffectsPanel({ npcs }: { npcs: NonNullable<GameState['npcs']> 
 
 function DiceCheckConfirmModal({
   option,
-  playerState,
   onConfirm,
   onCancel
 }: {
   option: ActionOption
-  playerState: GameState['player'] | null
   onConfirm: (optionId: string) => void
   onCancel: () => void
 }) {
   const dc = option.diceCheck
   if (!dc) return null
 
-  const trait = diceCheckTrait(dc)
-  const traitName = trait.label
-  const playerDie = resolvePlayerTraitDie(playerState, trait)
-
-  const tn = dc.tn ?? 4
-  const mod = dc.modifier ?? 0
+  const successChance = typeof dc.successChance === 'number' ? dc.successChance : null
 
   return (
     <div className="dice-confirm-overlay" onClick={onCancel}>
       <div className="dice-confirm-modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="dice-confirm-title">🎲 Teste Necessário</h3>
+        <h3 className="dice-confirm-title">🎲 Resolução por Chance</h3>
         <p className="dice-confirm-action">{option.text}</p>
 
         <div className="dice-confirm-details">
-          <div className="dice-detail-row">
-            <span className="dice-detail-label">Trait (Traço)</span>
-            <span className="dice-detail-value">{traitName}</span>
-          </div>
-          {playerDie != null && (
+          {successChance !== null && (
             <div className="dice-detail-row">
-              <span className="dice-detail-label">Seu dado</span>
-              <span className="dice-detail-value dice-die-value">{dieLabel(playerDie)} + Wild Die (Dado Selvagem)</span>
+              <span className="dice-detail-label">Chance de Sucesso</span>
+              <span className="dice-detail-value dice-die-value">{successChance}%</span>
             </div>
           )}
-          <div className="dice-detail-row">
-            <span className="dice-detail-label">Modificador</span>
-            <span className={`dice-detail-value ${mod < 0 ? 'mod-negative' : mod > 0 ? 'mod-positive' : ''}`}>
-              {mod === 0 ? '0' : `${mod > 0 ? '+' : ''}${mod}`}
-            </span>
-          </div>
-          <div className="dice-detail-row">
-            <span className="dice-detail-label">TN (alvo)</span>
-            <span className="dice-detail-value">{tn}</span>
-          </div>
         </div>
 
         {dc.reason && (
@@ -848,7 +776,7 @@ function DiceCheckConfirmModal({
             ← Voltar
           </button>
           <button className="btn-dice-confirm" onClick={() => onConfirm(option.id)} type="button">
-            🎲 Rolar Teste
+            🎲 Confirmar Ação
           </button>
         </div>
       </div>
@@ -1334,7 +1262,53 @@ function RecoverShakenCard({ event }: { event: SessionEvent }) {
   )
 }
 
+type ChanceCheckResultPayload = {
+  description: string
+  success: boolean
+  chance: number
+  roll: number
+  reason: string
+}
+
+function ChanceCheckResultCard({ event }: { event: SessionEvent }) {
+  const p = event.payload as unknown as ChanceCheckResultPayload
+
+  return (
+    <div className={`dice-result-card ${p.success ? 'dice-success' : 'dice-failure'}`}>
+      <div className="dice-result-header">
+        <span className="dice-result-icon">{p.success ? '🎲' : '❌'}</span>
+        <span className="dice-result-title">{p.description || 'Teste de Chance'}</span>
+        <span className={`dice-result-badge ${p.success ? 'success' : 'failure'}`}>
+          {p.success ? 'Sucesso' : 'Falha'}
+        </span>
+      </div>
+
+      <div className="dice-result-rolls">
+        <div className="dice-roll-group">
+          <span className="dice-roll-label">Resultado d100</span>
+          <div className="dice-roll-values">
+            <span className="dice-value">{Math.round(p.roll)}</span>
+            <span className="dice-roll-total">vs Limiar {p.chance}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="dice-result-summary">
+        <span className="dice-final">Chance: <strong>{p.chance}%</strong></span>
+        <span className="dice-tn">Rolado: {Math.round(p.roll)}</span>
+      </div>
+
+      {p.reason && (
+        <p className="dice-confirm-reason" style={{ marginTop: '8px', fontSize: '0.85rem', opacity: 0.8 }}>{p.reason}</p>
+      )}
+    </div>
+  )
+}
+
 function DiceResultCard({ event }: { event: SessionEvent }) {
+  if (event.type === 'chance_check_result') {
+    return <ChanceCheckResultCard event={event} />
+  }
   if (event.type === 'attack_hit' || event.type === 'attack_miss') {
     return <AttackResultCard event={event} />
   }
@@ -2412,8 +2386,8 @@ export function GamePage() {
     // Limpar o campo de texto manual
     setInput('')
 
-    // Se a opção tem dice check required, abrir modal de confirmação
-    if (chosen?.diceCheck?.required) {
+    // Se a opção tem dice check required, abrir modal de confirmação (exceto para ataques que rolam direto)
+    if (chosen?.diceCheck?.required && chosen.actionType !== 'attack') {
       setPendingDiceOption(chosen)
       return
     }
@@ -2491,30 +2465,20 @@ export function GamePage() {
     const signal = getStreamController()
     try {
       let result
-      // Se a validação indicou trait_test ou diceCheck com skill/attribute, enviar como trait_test
       const dc = validation?.diceCheck
-      const isAttack = validation?.actionType === 'attack'
-      const combatSkill = isAttack ? (dc?.skill ?? 'Luta') : null
-      if (dc?.required && (dc.skill || dc.attribute)) {
-        result = await executeTraitTest(
+      if (dc?.required) {
+        // Rolar o d100 de chance check no frontend e enviar para o backend
+        const successChance = typeof dc.successChance === 'number' ? dc.successChance : 50
+        const roll = Math.random() * 100
+        const success = roll < successChance
+
+        result = await executeChanceCheck(
           {
             sessionId,
-            skill: dc.skill ?? undefined,
-            attribute: dc.attribute ?? undefined,
-            modifier: dc.modifier ?? 0,
-            description: text,
-            displayText: text
-          },
-          handleEnginePhase,
-          signal
-        )
-      } else if (isAttack && combatSkill) {
-        // Ataque livre sem dice check required explícito — rolar a perícia de combate
-        result = await executeTraitTest(
-          {
-            sessionId,
-            skill: combatSkill,
-            modifier: dc?.modifier ?? 0,
+            success,
+            chance: successChance,
+            roll,
+            reason: dc.reason ?? '',
             description: text,
             displayText: text
           },
@@ -2897,7 +2861,6 @@ export function GamePage() {
       {pendingDiceOption && (
         <DiceCheckConfirmModal
           option={pendingDiceOption}
-          playerState={state?.player ?? null}
           onConfirm={handleConfirmDiceRoll}
           onCancel={handleCancelDiceRoll}
         />
@@ -2975,39 +2938,19 @@ export function GamePage() {
       {pendingValidation && (
         <div className="dice-confirm-overlay" onClick={handleCancelValidation}>
           <div className="dice-confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="dice-confirm-title">🎲 Teste Necessário</h3>
+            <h3 className="dice-confirm-title">🎲 Resolução por Chance</h3>
             <p className="dice-confirm-action">{pendingValidation.validation.interpretation}</p>
 
             {pendingValidation.validation.diceCheck && (
               <div className="dice-confirm-details">
-                <div className="dice-detail-row">
-                  <span className="dice-detail-label">Teste</span>
-                  <span className="dice-detail-value">
-                    {diceCheckTrait(pendingValidation.validation.diceCheck).label}
-                  </span>
-                </div>
-                {(() => {
-                  const trait = diceCheckTrait(pendingValidation.validation.diceCheck)
-                  const playerDie = resolvePlayerTraitDie(state?.player ?? null, trait)
-                  return playerDie != null ? (
-                    <div className="dice-detail-row">
-                      <span className="dice-detail-label">Seu dado</span>
-                      <span className="dice-detail-value dice-die-value">{dieLabel(playerDie)} + Wild Die</span>
-                    </div>
-                  ) : null
-                })()}
-                <div className="dice-detail-row">
-                  <span className="dice-detail-label">Modificador</span>
-                  <span className="dice-detail-value">
-                    {(pendingValidation.validation.diceCheck.modifier ?? 0) === 0
-                      ? '0'
-                      : `${(pendingValidation.validation.diceCheck.modifier ?? 0) > 0 ? '+' : ''}${pendingValidation.validation.diceCheck.modifier}`}
-                  </span>
-                </div>
-                <div className="dice-detail-row">
-                  <span className="dice-detail-label">TN (alvo)</span>
-                  <span className="dice-detail-value">{pendingValidation.validation.diceCheck.tn ?? 4}</span>
-                </div>
+                {typeof pendingValidation.validation.diceCheck.successChance === 'number' && (
+                  <div className="dice-detail-row">
+                    <span className="dice-detail-label">Chance de Sucesso</span>
+                    <span className="dice-detail-value dice-die-value">
+                      {pendingValidation.validation.diceCheck.successChance}%
+                    </span>
+                  </div>
+                )}
                 {pendingValidation.validation.diceCheck.reason && (
                   <p className="dice-confirm-reason">{pendingValidation.validation.diceCheck.reason}</p>
                 )}
@@ -3019,7 +2962,7 @@ export function GamePage() {
                 ← Voltar
               </button>
               <button className="btn-dice-confirm" onClick={handleConfirmValidatedAction} type="button">
-                🎲 Rolar e Executar
+                🎲 Confirmar e Executar
               </button>
             </div>
           </div>

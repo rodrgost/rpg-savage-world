@@ -180,3 +180,26 @@ test('applyNpcAttack ignora atacante com status left', () => {
   assert.equal(result.nextState.player.wounds, 0)
   assert.equal(result.nextState.player.isShaken, false)
 })
+
+test('applyAction emite evento chance_check_result', () => {
+  const state = makeBaseState()
+  const result = applyAction(state, {
+    type: 'chance_check',
+    success: true,
+    chance: 75,
+    roll: 42.5,
+    reason: 'Desafio simples',
+    description: 'Arrombar fechadura'
+  })
+
+  assert.equal(result.emittedEvents.length, 1)
+  const ev = result.emittedEvents[0]
+  assert.equal(ev.type, 'chance_check_result')
+  assert.ok(ev.payload)
+  assert.equal(ev.payload.success, true)
+  assert.equal(ev.payload.chance, 75)
+  assert.equal(ev.payload.roll, 42.5)
+  assert.equal(ev.payload.reason, 'Desafio simples')
+  assert.equal(ev.payload.description, 'Arrombar fechadura')
+})
+

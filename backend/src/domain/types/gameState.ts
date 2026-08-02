@@ -201,6 +201,8 @@ export type PlayerAction =
   | { type: 'travel'; to: string }
   | { type: 'flag'; key: string; value: boolean }
   | { type: 'custom'; input: string }
+  | { type: 'chance_check'; success: boolean; chance: number; roll: number; reason?: string; description?: string }
+
 
 export type GameMode = 'exploracao' | 'combat' | 'dialogo'
 

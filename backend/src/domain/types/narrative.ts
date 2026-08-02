@@ -100,32 +100,27 @@ export type NarrativeSegment =
       text: string
     }
 
-// ─── Dice Check (avaliação de teste de dados) ───
+// ─── Chance Check (avaliação percentual de sucesso estimada pelo LLM) ───
 
-export type DiceCheck = {
-  /** Se esta opção exige um teste de dados */
+export type ChanceCheck = {
+  /** Se esta opção exige resolução por chance (true) ou é automática/trivial (false) */
   required: boolean
-  /** Nome da perícia Savage Worlds (ex: "Percepção", "Furtividade") */
-  skill?: string | null
-  /** Nome do atributo se não for perícia (ex: "vigor", "spirit") */
-  attribute?: string | null
   /**
-   * Dificuldade situacional declarada pelo LLM (sinal limitado de ficção).
-   * O app converte para modificador fixo via DIFFICULTY_MODIFIER
-   * (facil: +2, normal: 0, dificil: -2, extremo: -4). Não confundir com os modificadores
-   * mecânicos (ferimento/Edge/Hindrance), que o rule-engine aplica sozinho.
+   * Estimativa percentual (0–100) de sucesso para a ação no contexto atual.
+   * Populado pelo LLM apenas quando required=true.
+   * Guia de referência:
+   *   80–95 → ação rotineira com pequena chance de falha
+   *   50–70 → desafio moderado
+   *   25–45 → ação difícil
+   *   5–20  → muito improvável, mas possível
    */
-  difficulty?: 'facil' | 'normal' | 'dificil' | 'extremo' | null
-  /**
-   * Modificador situacional — APP-COMPUTED a partir de `difficulty`.
-   * Não é mais decidido pelo LLM; mantido para exibição/persistência.
-   */
-  modifier?: number
-  /** Target Number — APP-COMPUTED (sempre 4 em Savage Worlds). */
-  tn?: number
-  /** Justificativa narrativa para o teste (ex: "A escuridão dificulta a visão") */
+  successChance?: number | null
+  /** Justificativa narrativa para a estimativa (ou para a ausência de rolagem) */
   reason: string
 }
+
+/** @deprecated Use ChanceCheck. Mantido apenas para compatibilidade durante migração. */
+export type DiceCheck = ChanceCheck
 
 // ─── Validação de ação custom ───
 
@@ -134,10 +129,10 @@ export type ValidateActionResponse = {
   feasible: boolean
   /** Motivo caso não seja viável */
   feasibilityReason?: string
-  /** Se a ação exige um teste de dados antes de ser executada */
-  diceCheck?: DiceCheck | null
-  /** Tipo de ação mecânica inferida (custom, trait_test, attack, travel) */
-  actionType: PlayerAction['type']
+  /** Avaliação de chance da ação */
+  diceCheck?: ChanceCheck | null
+  /** Tipo de ação inferida — inclui chance_check (narrador-only, resolvido para 'custom' pelo adapter) */
+  actionType: PlayerAction['type'] | 'chance_check'
   /** Payload parcial para montar o PlayerAction */
   actionPayload: Record<string, unknown>
   /** Breve descrição narrativa da interpretação da ação */
@@ -188,18 +183,16 @@ export type ActionOption = {
   text: string
   /** Fala direta do personagem do jogador ao escolher esta opção (apenas opções de diálogo/confronto/social) */
   playerSpeech?: string | null
-  /** Tipo da ação mecânica correspondente no rule-engine */
-  actionType: PlayerAction['type']
+  /** Tipo da ação — inclui tipos do motor + 'chance_check' (narrador-only, resolvido para 'custom' pelo adapter) */
+  actionType: PlayerAction['type'] | 'chance_check'
   /** Payload parcial para montar o PlayerAction */
   actionPayload: Record<string, unknown>
   /**
-   * Avaliação de necessidade de teste de dados para esta opção.
-   * Não existe mais feasible/feasibilityReason/requiredItems aqui: pela regra de
-   * prompt "AGÊNCIA REAL", o narrador só deve oferecer opções já executáveis —
-   * uma opção inviável (sem alvo, sem item) deve ser substituída na origem, nunca
-   * oferecida e marcada como inviável.
+   * Avaliação percentual de chance para esta opção.
+   * required=false → ação automática, sem resolução.
+   * required=true  → app resolve com Math.random() * 100 < successChance.
    */
-  diceCheck?: DiceCheck | null
+  diceCheck?: ChanceCheck | null
 }
 
 // ─── Resposta completa de um turno narrativo ───

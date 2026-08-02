@@ -27,10 +27,10 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
         type: 'OBJECT',
         properties: {
           text: { type: 'STRING' },
-          actionType: { type: 'STRING', enum: ['custom', 'trait_test', 'attack', 'travel', 'flag', 'heal'] },
+          actionType: { type: 'STRING', enum: ['custom', 'chance_check', 'attack', 'travel', 'flag', 'heal'] },
           actionPayload: {
             type: 'OBJECT',
-            description: 'Campos parciais para montar a ação mecânica (todos opcionais). Dano/AP NÃO são informados aqui — o app os resolve pela arma equipada. Perícia/atributo NÃO vão aqui — use diceCheck.traco.',
+            description: 'Campos parciais para montar a ação mecânica (todos opcionais). Dano/AP NÃO são informados aqui — o app os resolve pela arma equipada.',
             properties: {
               targetId: { type: 'STRING', nullable: true },
               to: { type: 'STRING', nullable: true },
@@ -38,23 +38,26 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
             },
             propertyOrdering: ['targetId', 'to', 'input']
           },
-          diceCheck: {
+          chanceCheck: {
             type: 'OBJECT',
             properties: {
-              traco: {
-                type: 'STRING',
-                nullable: true,
-                description: 'Nome da perícia ou habilidade — null se não houver.'
+              required: {
+                type: 'BOOLEAN',
+                description: 'true se a ação tem resultado incerto e precisa de resolução; false se é trivial ou automática.'
               },
-              difficulty: { type: 'STRING', enum: ['facil', 'normal', 'dificil', 'extremo'], nullable: true },
-              reason: { type: 'STRING' }
+              successChance: {
+                type: 'INTEGER',
+                nullable: true,
+                description: 'Estimativa percentual (0–100) de sucesso quando required=true. Omitir ou null quando required=false.'
+              },
+              reason: { type: 'STRING', description: 'Justificativa narrativa para a estimativa (ou para a ausência de resolução).' }
             },
-            required: ['reason'],
-            propertyOrdering: ['traco', 'difficulty', 'reason']
+            required: ['required', 'reason'],
+            propertyOrdering: ['required', 'successChance', 'reason']
           }
         },
-        required: ['text', 'actionType', 'diceCheck'],
-        propertyOrdering: ['text', 'actionType', 'actionPayload', 'diceCheck']
+        required: ['text', 'actionType', 'chanceCheck'],
+        propertyOrdering: ['text', 'actionType', 'actionPayload', 'chanceCheck']
       }
     },
     npcs: {
@@ -131,23 +134,6 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
         propertyOrdering: ['effectId', 'name', 'changeType', 'turnsRemaining', 'description', 'targetType', 'targetId']
       }
     },
-    npcAttacks: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          npcId: { type: 'STRING' },
-          // O responseSchema do Gemini só aceita `enum` em campos STRING;
-          // enum numérico causa HTTP 400. Valores válidos (6, 8, 10, 12) são
-          // garantidos na sanitização (sanitizeNarratorResponse).
-          skillDie: { type: 'INTEGER', description: 'Dado de perícia do NPC. Valores válidos: 6, 8, 10 ou 12.' },
-          damageFormula: { type: 'STRING' },
-          ap: { type: 'INTEGER' }
-        },
-        required: ['npcId', 'skillDie', 'damageFormula', 'ap'],
-        propertyOrdering: ['npcId', 'skillDie', 'damageFormula', 'ap']
-      }
-    },
     outcomeOverride: {
       type: 'OBJECT',
       nullable: true,
@@ -162,25 +148,23 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
     }
   },
   required: ['segments', 'options'],
-  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride']
+  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'outcomeOverride']
 }
 
 /**
  * Schema de saída estruturada para validateAction (classificação de ação livre
- * digitada pelo jogador). Reaproveita o mesmo TRACO_ENUM fechado do narrador —
- * a LLM já resolve o traço aqui dentro do enum; não há mais sanitização/
- * inferência posterior (sanitizeValidateActionResponse foi removido). Se o
- * traco não vier ou não bater com o enum, a ação segue sem teste de dados.
+ * digitada pelo jogador). A LLM estima a chance de sucesso (0–100) em vez de
+ * mapear um traço de perícia.
  */
 export const VALIDATE_ACTION_RESPONSE_SCHEMA: Record<string, unknown> = {
   type: 'OBJECT',
   properties: {
     feasible: { type: 'BOOLEAN' },
     feasibilityReason: { type: 'STRING', nullable: true },
-    actionType: { type: 'STRING', enum: ['custom', 'trait_test', 'attack', 'travel', 'flag'] },
+    actionType: { type: 'STRING', enum: ['custom', 'chance_check', 'attack', 'travel', 'flag'] },
     actionPayload: {
       type: 'OBJECT',
-      description: 'Campos parciais para montar a ação mecânica (todos opcionais). Perícia NÃO vai aqui — use diceCheck.traco.',
+      description: 'Campos parciais para montar a ação mecânica (todos opcionais).',
       properties: {
         targetId: { type: 'STRING', nullable: true },
         to: { type: 'STRING', nullable: true },
@@ -189,23 +173,26 @@ export const VALIDATE_ACTION_RESPONSE_SCHEMA: Record<string, unknown> = {
       },
       propertyOrdering: ['targetId', 'to', 'input', 'key']
     },
-    diceCheck: {
+    chanceCheck: {
       type: 'OBJECT',
       nullable: true,
       properties: {
-        traco: {
-          type: 'STRING',
-          nullable: true,
-          description: 'Nome da perícia ou habilidade — null se não houver.'
+        required: {
+          type: 'BOOLEAN',
+          description: 'true se a ação tem resultado incerto; false se é trivial ou automática.'
         },
-        difficulty: { type: 'STRING', enum: ['facil', 'normal', 'dificil', 'extremo'], nullable: true },
+        successChance: {
+          type: 'INTEGER',
+          nullable: true,
+          description: 'Estimativa percentual (0–100) de sucesso quando required=true.'
+        },
         reason: { type: 'STRING' }
       },
-      required: ['reason'],
-      propertyOrdering: ['traco', 'difficulty', 'reason']
+      required: ['required', 'reason'],
+      propertyOrdering: ['required', 'successChance', 'reason']
     },
     interpretation: { type: 'STRING' }
   },
   required: ['feasible', 'actionType', 'actionPayload', 'interpretation'],
-  propertyOrdering: ['feasible', 'feasibilityReason', 'actionType', 'actionPayload', 'diceCheck', 'interpretation']
+  propertyOrdering: ['feasible', 'feasibilityReason', 'actionType', 'actionPayload', 'chanceCheck', 'interpretation']
 }

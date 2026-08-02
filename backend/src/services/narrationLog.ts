@@ -15,7 +15,7 @@ export type NarrationLogEntry = {
     text: string
     playerSpeech?: string | null
     actionType: string
-    diceCheck?: { skill?: string; attribute?: string; tn?: number; required?: boolean } | null
+    diceCheck?: { successChance?: number; required?: boolean } | null
   }>
   npcs: Array<{ id: string; name: string; action: string }>
   itemChanges: Array<{ name: string; changeType: string; quantity?: number }>

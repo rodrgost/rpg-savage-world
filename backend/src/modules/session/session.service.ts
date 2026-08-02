@@ -640,12 +640,9 @@ export class SessionService {
     const actionPayload = { ...(option.actionPayload ?? {}) }
     const diceCheck = option.diceCheck
       ? {
-          ...option.diceCheck,
-          skill: normalizeSkillName(option.diceCheck.skill) ?? null,
-          attribute: normalizeAttributeName(option.diceCheck.attribute) ?? null,
-          // App é dono dos números: TN sempre 4; modificador derivado da dificuldade.
-          tn: 4,
-          modifier: difficultyToModifier(option.diceCheck.difficulty)
+          required: false, // Forçado a false pois rolagens de dados estão desativadas
+          successChance: null, // Forçado a null pois rolagens de dados estão desativadas
+          reason: option.diceCheck.reason
         }
       : null
 
@@ -675,20 +672,14 @@ export class SessionService {
           }
         }
 
-        // Sem perícia forçada: se a LLM não informou uma perícia de combate válida,
-        // diceCheck.skill fica null e o rule-engine sinaliza a ausência na execução.
-        const attackSkill = normalizeSkillName(diceCheck?.skill) ?? null
-        if (diceCheck) {
-          diceCheck.skill = attackSkill
-          diceCheck.attribute = null
-        }
+        // attack sempre exige resolução
+        if (diceCheck) diceCheck.required = true
         break
       }
-      case 'trait_test': {
-        // Opção narrativa pura: converte em custom sem exigir perícia mecânica
-        option.actionType = 'custom'
-        actionPayload.input = option.text.trim()
-        if (diceCheck) diceCheck.required = false
+      case 'trait_test':
+      case 'chance_check': {
+        // Esses tipos são resolvidos via chanceCheck.successChance pelo buildActionFromOption
+        // Sem mudança necessária aqui
         break
       }
       case 'travel': {
@@ -698,14 +689,11 @@ export class SessionService {
           return null
         }
         if (normalizeLookupValue(destination) === normalizeLookupValue(state.worldState.activeLocation)) {
-          // Deriva de localização: ações custom que movem o personagem não emitem
-          // location_change, então o LLM oferece "voltar" para o próprio local do
-          // estado. Converter preserva a intenção e mantém as 4 opções.
           warn('validateNarratorOption', `Convertendo travel com destino igual ao local atual para custom: "${destination}"`)
           option.actionType = 'custom'
           delete actionPayload.to
           actionPayload.input = option.text.trim()
-          if (diceCheck) diceCheck.required = false
+          if (diceCheck) { diceCheck.required = false; diceCheck.successChance = null }
           break
         }
         actionPayload.to = destination
@@ -1554,11 +1542,10 @@ export class SessionService {
       recentMessages: context.recentMessages
     })
 
-    // App é dono dos números: converte a dificuldade declarada pelo LLM em
-    // modificador fixo e força TN 4, independentemente do que o modelo retornou.
+    // Forçar desativação de rolagens/testes de ação
     if (validation.diceCheck) {
-      validation.diceCheck.modifier = difficultyToModifier(validation.diceCheck.difficulty)
-      validation.diceCheck.tn = 4
+      validation.diceCheck.required = false
+      validation.diceCheck.successChance = null
     }
 
     return validation
@@ -1614,10 +1601,10 @@ export class SessionService {
       location: result.nextState.worldState.activeLocation
     })
 
-    // 2.5 Salvar resultados de dados como mensagem de sistema (persistente no chat)
     const diceEvents = result.emittedEvents.filter(
-      (e) => e.type === 'trait_test' || e.type === 'attack_hit' || e.type === 'attack_miss' || e.type === 'soak_roll' || e.type === 'recover_shaken' || e.type === 'recover_shaken_failed' || e.type === 'heal_success' || e.type === 'heal_failure'
+      (e) => e.type === 'chance_check_result' || e.type === 'trait_test' || e.type === 'attack_hit' || e.type === 'attack_miss' || e.type === 'soak_roll' || e.type === 'recover_shaken' || e.type === 'recover_shaken_failed' || e.type === 'heal_success' || e.type === 'heal_failure'
     )
+
     let systemMessage: ChatMessageRow | null = null
     if (diceEvents.length > 0) {
       systemMessage = await this.chatMessages.appendAndGet({
@@ -1864,9 +1851,7 @@ export class SessionService {
         playerSpeech: o.playerSpeech ?? undefined,
         actionType: o.actionType,
         diceCheck: o.diceCheck ? {
-          skill: o.diceCheck.skill ?? undefined,
-          attribute: o.diceCheck.attribute ?? undefined,
-          tn: o.diceCheck.tn ?? undefined,
+          successChance: o.diceCheck.successChance ?? undefined,
           required: o.diceCheck.required
         } : null
       })),
@@ -1976,64 +1961,41 @@ export class SessionService {
     return { action, displayText: option.text }
   }
 
-  private buildActionFromOption(option: { actionType: string; actionPayload: Record<string, unknown>; text: string; diceCheck?: { required: boolean; skill?: string | null; attribute?: string | null; difficulty?: string | null; modifier?: number; tn?: number; reason?: string } | null }): PlayerAction {
+  private buildActionFromOption(option: { actionType: string; actionPayload: Record<string, unknown>; text: string; diceCheck?: { required: boolean; successChance?: number | null; reason?: string } | null }): PlayerAction {
     const payload = option.actionPayload ?? {}
     const dc = option.diceCheck
 
-    // Modificador situacional é APP-COMPUTED a partir da dificuldade declarada
-    // pelo LLM. Os modificadores mecânicos (ferimento/Edge/Hindrance) são somados
-    // depois pelo rule-engine. Damage/AP também são resolvidos pelo motor.
-    const appModifier = difficultyToModifier(dc?.difficulty)
-
-    // Se a LLM indicou que a opção requer teste de dados E o actionType não é
-    // attack/trait_test (que já passam pelo rule-engine), promover para trait_test
-    if (
-      dc?.required &&
-      option.actionType !== 'trait_test' &&
-      option.actionType !== 'attack'
-    ) {
-      const skill = dc.skill ?? undefined
-      const attribute = dc.attribute ?? undefined
-      // Fase 5: sem skill NEM attribute, não inventamos mais 'spirit' genérico —
-      // mantém como ação narrativa livre em vez de rolar um teste sem fundamento.
-      if (!skill && !attribute) {
-        warn('buildActionFromOption', `"${option.actionType}" com required=true mas sem skill/attribute: mantido como custom (sem teste inventado)`)
-        return { type: 'custom', input: typeof payload.input === 'string' ? payload.input : option.text }
-      }
-      log('buildActionFromOption', `Promoting "${option.actionType}" → trait_test via diceCheck (skill=${skill}, attr=${attribute}, difficulty=${dc.difficulty ?? 'normal'}, mod=${appModifier}, reason=${dc.reason})`)
+    // Se a ação requer resolução por chance (chance_check ou qualquer ação com required=true)
+    // DESATIVADO: Rolagens de dados automáticas estão desativadas. O LLM decide de forma narrativa.
+    /*
+    if (dc?.required) {
+      const successChance = typeof dc.successChance === 'number' ? dc.successChance : 50
+      const roll = Math.random() * 100
+      const success = roll < successChance
+      log('buildActionFromOption', `chance_check: successChance=${successChance}% roll=${roll.toFixed(1)} → ${success ? 'SUCESSO' : 'FALHA'} (reason=${dc.reason})`)
       return {
-        type: 'trait_test',
-        skill: normalizeSkillName(skill),
-        attribute,
-        modifier: appModifier,
+        type: 'chance_check',
+        success,
+        chance: successChance,
+        roll,
+        reason: dc.reason ?? '',
         description: option.text
       }
     }
+    */
+
 
     switch (option.actionType) {
+      case 'chance_check':
       case 'trait_test':
-        // Defesa em profundidade: se o LLM ou sanitizer marcou required=false, tratar como ação narrativa.
-        // Fase 0 (instrumentação): logado para medir a frequência real desse caminho.
-        if (dc?.required === false) {
-          warn('buildActionFromOption', `trait_test com required=false convertido para custom: "${option.text}"`)
-          return { type: 'custom', input: option.text }
-        }
-        return {
-          type: 'trait_test',
-          skill: normalizeSkillName(dc?.skill),
-          attribute: dc?.attribute ?? undefined,
-          modifier: appModifier,
-          description: option.text
-        }
+        // Sem required=true: trata como ação narrativa livre
+        return { type: 'custom', input: typeof payload.input === 'string' ? payload.input : option.text }
       case 'attack':
-        // damageFormula/ap NÃO vêm mais do LLM — o rule-engine resolve a arma equipada.
-        // skill sem fallback: sem perícia válida da LLM, o rule-engine sinaliza a
-        // ausência na execução em vez de assumir 'Luta'.
         return {
           type: 'attack',
-          skill: normalizeSkillName(dc?.skill),
+          skill: 'Luta',
           targetId: typeof payload.targetId === 'string' ? payload.targetId : 'unknown',
-          modifier: appModifier
+          modifier: 0
         }
       case 'travel':
         return {
@@ -2054,7 +2016,7 @@ export class SessionService {
         return {
           type: 'heal',
           targetId: typeof payload.targetId === 'string' ? payload.targetId : undefined,
-          modifier: appModifier
+          modifier: 0
         }
       default:
         return {
@@ -2063,6 +2025,7 @@ export class SessionService {
         }
     }
   }
+
 
   /**
    * Remove itemChanges duplicados:

@@ -203,14 +203,15 @@ export type NarrativeSegment =
       text: string
     }
 
-export type DiceCheck = {
+export type ChanceCheck = {
   required: boolean
-  skill?: string | null
-  attribute?: string | null
-  modifier?: number
-  tn?: number
+  /** Estimativa percentual (0–100) de sucesso — presente apenas quando required=true */
+  successChance?: number | null
   reason: string
 }
+
+/** @deprecated Use ChanceCheck */
+export type DiceCheck = ChanceCheck
 
 export type ActionOption = {
   id: string
@@ -218,13 +219,13 @@ export type ActionOption = {
   playerSpeech?: string | null
   actionType: string
   actionPayload: Record<string, unknown>
-  diceCheck?: DiceCheck | null
+  diceCheck?: ChanceCheck | null
 }
 
 export type ValidateActionResponse = {
   feasible: boolean
   feasibilityReason?: string
-  diceCheck?: DiceCheck | null
+  diceCheck?: ChanceCheck | null
   actionType: string
   actionPayload: Record<string, unknown>
   interpretation: string

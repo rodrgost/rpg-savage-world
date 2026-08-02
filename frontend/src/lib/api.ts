@@ -810,6 +810,44 @@ export async function executeTraitTest(
   })
 }
 
+export async function executeChanceCheck(
+  params: {
+    sessionId: string
+    success: boolean
+    chance: number
+    roll: number
+    reason?: string
+    description?: string
+    displayText?: string
+  },
+  onEnginePhase?: (data: EnginePhaseData) => void,
+  signal?: AbortSignal
+): Promise<SessionPayload> {
+  const body = {
+    action: {
+      type: 'chance_check',
+      success: params.success,
+      chance: params.chance,
+      roll: params.roll,
+      reason: params.reason,
+      description: params.description
+    },
+    ...(params.displayText ? { displayText: params.displayText } : {})
+  }
+  if (onEnginePhase) {
+    return await apiStreamRequest<SessionPayload>(
+      '/sessions/' + encodeURIComponent(params.sessionId) + '/actions/stream',
+      body,
+      (data) => { if (data.phase === 'engine') onEnginePhase(data as unknown as EnginePhaseData) },
+      signal
+    )
+  }
+  return await apiRequest('/sessions/' + encodeURIComponent(params.sessionId) + '/actions', {
+    method: 'POST',
+    body: JSON.stringify(body)
+  })
+}
+
 export async function executeAttack(
   params: {
     sessionId: string
