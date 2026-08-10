@@ -2059,13 +2059,12 @@ export class GeminiAdapter implements Narrator {
       'Há duas camadas de contexto neste prompt:',
       '1. **Contexto pré-escrito** (Universo, Campanha): material de fundo — o cenário pretendido e o arco de história planejado. Use-o para tom, vocabulário e coerência do mundo.',
       '2. **Histórico jogado** (Resumo da Aventura + mensagens recentes): o registro autoritativo do que REALMENTE aconteceu durante o jogo. É a única fonte de verdade para fatos do jogo.',
-      '**Regra:** quando houver QUALQUER conflito entre o contexto pré-escrito e o histórico jogado, o histórico jogado SEMPRE vence.',
-      'NUNCA use as descrições de Universo ou Campanha para contradizer, desfazer ou sobrepor eventos já estabelecidos no Resumo da Aventura ou nos turnos recentes.',
+      '**Regra:** quando houver QUALQUER conflito entre o contexto pré-escrito e o histórico jogado, o histórico jogado SEMPRE vence — nunca use Universo ou Campanha para contradizer eventos já estabelecidos.',
       'NUNCA redirecione a história de volta ao arco planejado se o jogador já se desviou dele — a história emergente É a história.',
       '',
       '## Estrutura da Resposta: Segments e Story Hook',
       'A resposta tem DUAS camadas narrativas: segments mostram a consequência imediata da ação atual; options mostram o próximo movimento possível.',
-      'Os segments devem parar no ponto em que a consequência fica visível. Não use segments para decidir a próxima ação do jogador.',
+      'Os segments cobrem apenas a consequência imediata da ação — param quando ela fica visível.',
       'Toda opção do jogador deve nascer do estado recém-criado neste turno e permanecer fora dos segments.',
       '',
       '## NPCs em Cena',
@@ -2088,8 +2087,6 @@ export class GeminiAdapter implements Narrator {
       '      "actionType": "<tipo mecânico da ação: custom|attack|travel|flag|heal>",',
       '      "actionPayload": { <campos parciais para montar a ação mecânica> },',
       '      "chanceCheck": {',
-      '        "required": false,',
-      '        "successChance": null,',
       '        "reason": "<justificativa de por que esta ação é resolvida de forma puramente narrativa>"',
       '      }',
       '    }',
@@ -2109,15 +2106,12 @@ export class GeminiAdapter implements Narrator {
       '```',
       '',
       '## Regras do Campo chanceCheck',
-      '**Obrigatório em toda option.**',
-      '- "required": DEVE ser sempre false (pois a resolução mecânica por dados/chance está temporariamente desativada).',
-      '- "successChance": DEVE ser sempre null.',
-      '- "reason": 1 frase justificando por que a ação é resolvida de forma puramente narrativa.',
+      '**Obrigatório em toda option.** Preencha apenas "reason" (1 frase justificando por que a ação é resolvida de forma puramente narrativa). Os campos "required" e "successChance" estão desativados — ignore-os.',
       '',
       '## Regras Gerais',
       '',
       '### Segments',
-      'Os "segments" carregam a NARRAÇÃO deste turno — a prosa que descreve o que aconteceu como consequência da ação do jogador. Cobrem apenas o beat atual; NUNCA decidem o próximo movimento do jogador (isso é papel das options).',
+      'Os "segments" carregam a NARRAÇÃO deste turno — a prosa que descreve o que aconteceu como consequência da ação do jogador.',
       '- type="narrator" é o PADRÃO e carrega TODA a prosa/descrição/ação/consequência.',
       '- type="npc" carrega APENAS as palavras literais faladas em voz alta por um NPC — inclua um segment "npc" SOMENTE quando um NPC realmente fala neste turno.',
       '',
@@ -2131,13 +2125,13 @@ export class GeminiAdapter implements Narrator {
       '- o array "options" é OBRIGATÓRIO e NUNCA pode ficar vazio. Sempre retorne 4 opções.',
       '- **Diversidade obrigatória:** as 4 opções devem ser categoricamente distintas entre si — NUNCA 4 variações da mesma abordagem. Como guia padrão, cubra: (a) uma ação direta, física ou agressiva; (b) uma ação cautelosa, furtiva ou de observação com alvo concreto; (c) uma ação técnica, de investigação focada ou de uso de inventário; (d) uma ação ousada de alto risco que tente pular uma etapa inteira. Quando a cena restringir alguma categoria (incapacitação, cena puramente social, ausência de item relevante), substitua-a por outra abordagem distinta que respeite Agência real e Sem ação placebo.',
       '- **Agência real:** só ofereça as 4 opções que são de fato executáveis AGORA. Se uma ação depende de um item que o jogador não tem, NÃO ofereça essa opção — substitua por uma alternativa que já é executável (ex.: buscar o item, uma ação totalmente diferente). Nunca ofereça uma opção sabendo de antemão que ela não pode ser executada.',
-      '- **Ancoragem obrigatória no turno:** cada opção deve nascer da consequência recém-narrada neste turno e/ou do Resultado Mecânico deste turno. Não use menu genérico reaproveitado de turnos anteriores.',
+      '- **Ancoragem obrigatória no turno:** cada opção deve nascer da consequência recém-narrada neste turno e/ou do Resultado Mecânico deste turno. Não use menu genérico reaproveitado de turnos anteriores. ⚠️ PROIBIDO INVENTAR OBJETOS/ENTIDADES: se uma opção menciona interagir com algo (um compartimento, painel, objeto, estrutura), esse elemento DEVE ter sido explicitamente citado na narração DESTE turno — nunca em turnos anteriores, nunca inferido do cenário, nunca imaginado. Se o jogador encontrou uma chave e uma faca, as opções devem envolver a chave, a faca, ou o ambiente visível — não um "fundo falso" ou qualquer detalhe que não apareceu no texto narrado.',
       '- **Corte de Cena (evite o tédio):** NUNCA ofereça opções de passo incremental em ambiente vazio ("continuar andando", "virar o corredor", "seguir em frente"). Se o jogador escolher avançar/deslocar-se, narre a travessia do trecho vazio em elipse e chegue direto ao próximo Ponto de Interesse (um obstáculo, pista, inimigo, NPC ou encruzilhada); as novas opções nascem desse novo conflito. O salto continua sendo um "travel" normal (actionPayload.to = local de chegada).',
       '- **Travel de Curto Alcance:** em cenas de conflito imediato ou combate, as opções de deslocamento (`travel`) devem ter como alvo/destino localizações imediatas de refúgio na própria cena (ex.: "arbustos próximos", "atrás de uma barricada", "sala ao lado") e possuir chances realistas de sucesso. NÃO ofereça como opção de `travel` direta destinos geográficos distantes da campanha (como "Fugir para Boulder" a partir de uma viatura acidentada no meio do nada) que seriam impossíveis de alcançar em um único turno, a menos que o jogador já esteja na fronteira desse local.',
       '- **Coerência Espacial:** se a ação deste turno foi um deslocamento (travel) para um novo local, NÃO ofereça interação com painéis, terminais, móveis ou estruturas fixas que ficaram na sala anterior. As opções devem explorar apenas o local atual, entidades presentes agora ou itens do inventário.',
-      '- **Sem ação placebo:** não ofereça opções que não produzem consequência verificável no estado do jogo (ex.: "apontar a arma", "ficar atento", "avaliar a situação" sem alvo/objeto). Toda opção deve levar a uma interação concreta, teste mecânico, deslocamento, ataque, cura ou marcação de estado.',
-      '- **Proibido opção vazia/genérica sem gancho local:** não ofereça textos como "Observar os arredores", "Avaliar a situação" ou "Avançar com cautela" sem um detalhe concreto estabelecido na narração deste turno que justifique essa ação agora.',
+      '- **Sem ação placebo:** toda opção deve produzir consequência verificável no estado do jogo — interação concreta, teste mecânico, deslocamento, ataque, cura ou marcação de estado. Nunca ofereça textos genéricos sem alvo ou gancho neste turno (ex.: "Observar os arredores", "Avaliar a situação", "Avançar com cautela", "apontar a arma").',
       '- **Exemplo de ancoragem correta:** se você narrou "o guarda derrubou a lanterna e recuou", opções válidas incluem "Pegar a lanterna no chão", "Avançar antes que ele recupere postura", "Interrogar o guarda enquanto ele hesita". Evite opções que ignoram esse estado.',
+      '- **Exemplo de violação proibida:** você narrou "você encontra uma chave e uma faca" — NÃO ofereça "Forçar o fundo falso" (fundo falso não foi narrado). Só interaja com o que está no texto.',
       '',
       '### Payload por Tipo de Ação',
       '- Para actionType "attack", inclua APENAS "targetId" no actionPayload. NÃO envie damageFormula ou ap — o app resolve o dano da arma do jogador a partir da arma equipada.',
@@ -2152,7 +2146,7 @@ export class GeminiAdapter implements Narrator {
       '- **Descrição de itens não óbvios (campo "description"):** ao GANHAR ("gained") um item cujo nome NÃO deixa claro o que ele é, o que contém ou para que serve, preencha "description" com uma explicação CURTA e DIRETA (1-2 frases, sem prosa floreada): o que é, o que contém e/ou qual seu uso/efeito. Isso vale para itens de missão (quest), recipientes com conteúdo (bolsas, baús, frascos, caixas), chaves, documentos, dispositivos e itens com efeito ou uso especial. Essa descrição fica registrada no inventário e é reapresentada em TODOS os turnos futuros no bloco "## Inventário", servindo de referência canônica para você narrar o item de forma consistente. NÃO invente propriedades novas depois: descreva o item por completo aqui.',
       '- Itens triviais e autoexplicativos (ex.: "Espada", "Maçã", "Tocha", "Moedas de Ouro", "Flechas", "Corda") NÃO precisam de "description" — deixe o campo omitido ou null para não poluir o inventário.',
       '- **Regra crítica — itemChanges:**',
-      '  - changeType "gained": use quando o turno explicitamente estabelecer a aquisição do item, seja pela narrativa, seja por evidência mecânica explícita; não invente ganhos sem base canônica.',
+      '  - changeType "gained": use quando o turno explicitamente estabelecer a aquisição do item, seja pela narrativa, seja por evidência mecânica explícita; não invente ganhos sem base canônica. Situações válidas: comprar/trocar em loja, saquear inimigo ou contêiner, receber recompensa/presente/pagamento, encontrar item abandonado, receber equipamento de facção/aliado.',
       '  - changeType "lost" ou "used": registre quando (a) o RESULTADO MECÂNICO tem evidência explícita ([item_lost], [item_used], [ammunition_consumed]), OU (b) sua narrativa NESTE turno descreve explicitamente o item sendo largado, destruído, confiscado, consumido, ou de alguma forma saindo da posse do jogador. Exemplo: se a narrativa diz "forçando você a soltá-lo" sobre um item, registre esse item com changeType "lost".',
       '  ⚠️ NÃO REGISTRAR UMA PERDA DE ITEM NARRADA É UM BUG: se sua narrativa diz que um item foi perdido mas você omite a entrada em itemChanges, o item permanece no inventário e turnos futuros vão contradizer a história.',
       '  - **Consumível vs durável — distinção obrigatória:** apenas itens de categoria "consumable" (itens de uso limitado) e "ammunition" são GASTOS ao serem usados e devem sair do inventário com changeType "used"/"lost". Itens DURÁVEIS — categorias "weapon", "armor", "vehicle", "property", "quest", "misc" — NÃO se gastam com o uso. Usar uma espada, vestir uma armadura, dirigir um veículo ou empunhar um artefato NÃO os remove do inventário.',
@@ -2317,14 +2311,10 @@ export class GeminiAdapter implements Narrator {
         ']',
         '```',
         '',
-        '### Ganho de Itens',
-        '- GANHO DE ITEM: use changeType "gained" quando o turno explicitamente estabelecer a aquisição do item, seja pela narrativa, seja por evidência mecânica explícita; não invente ganhos sem base canônica. Situações válidas incluem comprar/trocar em loja, saquear inimigo ou contêiner, receber recompensa/presente/pagamento, encontrar item abandonado ou receber equipamento de facção/aliado.',
-        '',
         '### Status Effects',
         '- statusChanges "applied": APENAS para efeitos narrativos não mecânicos (veneno ambiental, queimadura narrativa, um medo ou maldição guiados pela história). NUNCA registre estados do motor de combate via statusChanges — Abalado (Shaken), Ferido (Wounded), Fadiga e todas as condições mecânicas de combate são gerenciadas EXCLUSIVAMENTE pelo motor de regras. Se você os registrar aqui, serão descartados.',
-        '- statusChanges "removed": APENAS para efeitos já listados em EFEITOS ATIVOS. Use o effectId ou nome exatos. Não invente remoções para efeitos que não estão listados.',
+        '- statusChanges "removed": APENAS para efeitos já listados em EFEITOS ATIVOS — use o effectId/nome exatos e indique targetType "player" (jogador) ou "npc" + targetId (NPC afetado). Não invente remoções.',
         '- Se a ação ou narrativa estabelece descanso seguro, hospitalização, alta médica, ou a passagem de semanas/meses, remova em statusChanges os efeitos temporários que foram curados ou expiraram.',
-        '- Para remover um status temporário, use changeType "removed" com o effectId/nome exato do efeito ativo. Para status do jogador use targetType "player"; para status de NPC use targetType "npc" e o targetId do NPC afetado.',
         '- turnsRemaining representa apenas duração curta em turnos narrativos. Quando há um salto temporal longo, não confie em turnsRemaining: registre remoções explícitas em statusChanges.',
         '- Não remova status permanentes, complicações, sequelas ou condições de personagem sem evidência narrativa direta de cura ou resolução.',
         '- Em statusChanges, sempre indique targetType. Use targetType "npc" e o targetId do NPC afetado quando o efeito resulta de ataque, dano, veneno, queimadura, medo, ou condição aplicada ao inimigo. Use targetType "player" apenas para efeitos no personagem do jogador.',
@@ -2341,7 +2331,7 @@ export class GeminiAdapter implements Narrator {
       '',
       '## Instruções de Narração',
       '### Decisão de Sucesso ou Falha (Resolução Narrativa)',
-      '- Como as rolagens de dados automáticas estão temporariamente DESATIVADAS, VOCÊ (o Narrador) é o único responsável por decidir se a ação do jogador obteve sucesso ou falha.',
+      '- Como as rolagens de dados automáticas estão DESATIVADAS, VOCÊ (o Narrador) é o único responsável por decidir se a ação do jogador obteve sucesso ou falha.',
       '- Tome essa decisão de forma lógica, justa e baseando-se no contexto da história, nas perícias do personagem (listadas na seção "Perícias do Personagem") e no bom senso de RPG.',
       '- Se o personagem tem uma perícia com dado de nível alto (ex: d10 ou d12), ele é extremamente competente e deve ter sucesso em quase todas as tentativas normais. Se a perícia for de nível baixo (ex: d4) ou ele tentar algo sob circunstâncias extremamente perigosas ou difíceis, narre um fracasso condizente.',
       '- NUNCA decida por falhas ou sucessos arbitrários que ignorem as perícias dele ou que sirvam apenas para forçá-lo a um roteiro pré-escrito.',
@@ -2865,46 +2855,7 @@ export class GeminiAdapter implements Narrator {
     return { valid: true }
   }
 
-  private isStartAmnesiaConsistent(response: NarratorTurnResponse): { valid: true } | { valid: false; reason: string } {
-    const prose = response.segments
-      .filter((segment) => segment.type === 'narrator')
-      .map((segment) => segment.text)
-      .join(' ')
-      .toLowerCase()
 
-    if (!prose.trim()) return { valid: true }
-
-    if (/(você|voce)\s+(sabe|reconhece|identifica|lembra|conclui)/.test(prose)) {
-      return { valid: false, reason: 'narração atribuiu conhecimento explícito ao personagem amnésico' }
-    }
-
-    const forbiddenTerms = [
-      'cerco biológico',
-      'cerco biologico',
-      'protocolo de quarentena',
-      'base de contenção',
-      'base de contencao',
-      'abrigo em ruínas',
-      'abrigo em ruinas'
-    ]
-
-    const uncertaintyPattern = /(parece|talvez|pode ser|aparenta|como se|dá a impressão|da a impressao)/
-    const sentences = prose
-      .split(/(?<=[.!?…])\s+/)
-      .map((sentence) => sentence.trim())
-      .filter(Boolean)
-
-    for (const sentence of sentences) {
-      for (const term of forbiddenTerms) {
-        if (!sentence.includes(term)) continue
-        if (!uncertaintyPattern.test(sentence)) {
-          return { valid: false, reason: `narração de abertura usou rótulo assertivo incompatível com amnésia (${term})` }
-        }
-      }
-    }
-
-    return { valid: true }
-  }
 
   private buildNarratorRetrySystemPrompt(basePrompt: string): string {
     return [
@@ -3011,15 +2962,6 @@ export class GeminiAdapter implements Narrator {
           lastError = new Error('Resposta narrativa estruturalmente inválida')
           warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: sanitized response failed structural validation — ${validationResult.reason}`)
           continue
-        }
-
-        if (narratorMode === 'start') {
-          const amnesiaValidation = this.isStartAmnesiaConsistent(sanitized)
-          if (!amnesiaValidation.valid) {
-            lastError = new Error('Resposta de abertura violou regra de amnésia')
-            warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: start amnesia validation failed — ${amnesiaValidation.reason}`)
-            continue
-          }
         }
 
         if (parsed.source !== 'direct') {
@@ -3386,7 +3328,7 @@ export class GeminiAdapter implements Narrator {
       : req.narrativeStyle === 'balanced'
         ? 'LEMBRETE DE TAMANHO: sua narração DEVE ter entre 2 e 4 frases, em 1 ou 2 parágrafos. Uma narração de 1 frase única é INVÁLIDA.'
         : 'LEMBRETE DE TAMANHO: máximo 3 frases curtas, em 1 parágrafo.'
-    const optionsAnchoringReminder = 'LEMBRETE DE OPTIONS: as 4 opções devem nascer da consequência narrada NESTE turno e do Resultado Mecânico abaixo. Não use opções genéricas sem vínculo explícito com a cena atual. Todas as opções devem ser executáveis AGORA com o estado atual. As 4 opções devem ser categoricamente distintas entre si (direta/cautelosa/técnica/ousada como guia). Sem passos incrementais em ambiente vazio: avance em elipse até o próximo Ponto de Interesse.'
+    const optionsAnchoringReminder = 'LEMBRETE DE OPTIONS: as 4 opções devem nascer da consequência narrada NESTE turno e do Resultado Mecânico abaixo. Não use opções genéricas sem vínculo explícito com a cena atual. Todas as opções devem ser executáveis AGORA com o estado atual. As 4 opções devem ser categoricamente distintas entre si (direta/cautelosa/técnica/ousada como guia). Sem passos incrementais em ambiente vazio: avance em elipse até o próximo Ponto de Interesse. OBJETOS NAS OPÇÕES: uma opção só pode mencionar um objeto, estrutura ou detalhe de cenário se ele foi explicitamente descrito na narração DESTE turno — nunca de turnos anteriores, nunca inventado. Se não está no texto narrado agora, não pode aparecer numa opção.'
     const optionsSpatialReminder = req.playerAction.type === 'travel'
       ? 'LEMBRETE DE COERÊNCIA ESPACIAL: como este turno foi de deslocamento (travel), NÃO ofereça interação com objetos fixos da sala anterior (terminal, painel, porta, mobiliário). Use apenas elementos do local atual e inventário.'
       : null

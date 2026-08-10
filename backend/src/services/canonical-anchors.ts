@@ -241,7 +241,7 @@ const GENERIC_LOCATION_REFERENCES = new Set([
   'trilha'
 ])
 
-const ITEM_REFERENCE_PATTERN = /(?<![\p{L}\d])(?:usar|sacar|mostrar|entregar|beber|comer|consultar|ler|vestir|equipar|recarregar|acender|examinar|abrir|fechar|guardar|checar|verificar|limpar|consertar|reparar|empunhar|disparar|arremessar|lancar|lançar|ativar|segurar|segura|carregar|carrega|ostentar|ostenta|conferir|confere)\s+(?:o|a|os|as|um|uma|meu|minha|meus|minhas|seu|sua|seus|suas)\s+([\p{L}\d' -]{2,60})(?![\p{L}\d])/iu
+const ITEM_REFERENCE_PATTERN = /(?<![\.\p{L}\d])(?:usar|sacar|mostrar|entregar|beber|comer|consultar|ler|vestir|equipar|recarregar|acender|examinar|abrir|fechar|guardar|checar|verificar|limpar|consertar|reparar|empunhar|disparar|arremessar|lancar|lançar|ativar|segurar|segura|carregar|carrega|ostentar|ostenta|conferir|confere)\s+(?:o|a|os|as|um|uma|meu|minha|meus|minhas|seu|sua|seus|suas)\s+([\p{L}\d' -]{2,60})(?![\p{L}\d])/iu
 const NPC_REFERENCE_PATTERN = /(?<![\p{L}\d])(?:falar|conversar|interrogar|convencer|ameaçar|seguir|observar|enfrentar|atacar|ajudar|proteger|perseguir|espionar|abordar|chamar|encarar|vigiar)\s+(?:com\s+)?(?:o|a|os|as)\s+([\p{L}\d' -]{2,60})(?![\p{L}\d])/iu
 const LOCATION_REFERENCE_PATTERN = /(?<![\p{L}\d])(?:ir|seguir|voltar|correr|avancar|avançar|viajar|mover|andar|partir|rumar)\s+(?:para|ate|até|em direção a|na direcao de|na direção de|ao encontro de)\s+([\p{L}\d' -]{2,60})(?![\p{L}\d])/iu
 const PROPER_NAME_PATTERN = /(?<![\p{L}\d])[\p{Lu}][\p{L}\d'-]*(?:\s+(?:de|da|do|dos|das|e)\s+[\p{Lu}][\p{L}\d'-]*|\s+[\p{Lu}][\p{L}\d'-]*){0,4}(?![\p{L}\d])/gu

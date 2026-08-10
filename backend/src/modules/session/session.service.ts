@@ -99,21 +99,7 @@ function hasConcreteOptionAnchor(text: string, anchors?: CanonicalAnchors): bool
     .some((entry) => normalizedText.includes(entry))
 }
 
-function isLikelyNoImpactOption(text: string): boolean {
-  const normalized = normalizeLookupValue(text)
-  if (!normalized) return true
 
-  const patterns = [
-    /\bapontar\b.*\b(arma|rifle|pistola|revolver|espingarda)\b/,
-    /\bmanter\b.*\b(arma|rifle|pistola)\b.*\b(apontad|pront)/,
-    /\bobservar\b.*\b(arredores|ambiente|entorno|situacao)\b/,
-    /\bavaliar\b.*\b(situacao|ambiente|entorno)\b/,
-    /\bficar\b.*\b(atento|em guarda|de prontidao)\b/,
-    /\b(aguardar|esperar)\b.*\b(aqui|momento|situacao)?\b/
-  ]
-
-  return patterns.some((pattern) => pattern.test(normalized))
-}
 
 function normalizeAttributeName(attributeName: string | null | undefined): AttributeName | undefined {
   if (typeof attributeName !== 'string') return undefined
@@ -723,56 +709,9 @@ export class SessionService {
         break
     }
 
-    if (mode === 'turn' && action?.type === 'travel' && canonicalAnchors) {
-      const narrativeAnchors = extractSceneObjectsFromText(canonicalAnchors.currentNarrativeText ?? '')
-      const anchoredSceneObjects = (
-        canonicalAnchors.sceneObjectsCurrent.length
-          ? canonicalAnchors.sceneObjectsCurrent
-          : narrativeAnchors
-      ).map((name) => normalizeLookupValue(name))
-      const spatialAnchorText = normalizeLookupValue(canonicalAnchors.currentNarrativeText ?? '')
-      const optionText = normalizeLookupValue(`${option.text} ${(actionPayload.input as string | undefined) ?? ''}`)
-      const fixedSceneTokens = [
-        'terminal',
-        'painel',
-        'console',
-        'mesa',
-        'cadeira',
-        'armario',
-        'gaveta',
-        'interruptor',
-        'alavanca',
-        'maca'
-      ]
 
-      for (const token of fixedSceneTokens) {
-        const tokenMentionedInOption = optionText.includes(token)
-        const tokenAnchoredByObjects = anchoredSceneObjects.some((name) => name.includes(token) || token.includes(name))
-        const tokenAnchoredByNarrative = spatialAnchorText.includes(token)
-        if (tokenMentionedInOption && !tokenAnchoredByObjects && !tokenAnchoredByNarrative) {
-          warn(
-            'validateNarratorOption',
-            `spatial_coherence_violation: descartando opção pós-travel com objeto fixo fora da cena atual (${token}): "${option.text}"`
-          )
-          return null
-        }
-      }
-    }
 
-    if (mode === 'turn') {
-      const optionNarrativeText = `${option.text} ${(actionPayload.input as string | undefined) ?? ''}`
-      const hasAnchor = hasConcreteOptionAnchor(optionNarrativeText, canonicalAnchors)
-      const lowImpactNoOp = isLikelyNoImpactOption(optionNarrativeText)
-      const guaranteedImpactTypes = new Set<NarratorTurnResponse['options'][number]['actionType']>(['attack', 'travel', 'heal', 'flag'])
 
-      if (!guaranteedImpactTypes.has(option.actionType) && lowImpactNoOp && !hasAnchor) {
-        warn(
-          'validateNarratorOption',
-          `non_impact_option: descartando opção vaga sem ação concreta: "${option.text}"`
-        )
-        return null
-      }
-    }
 
     if (mode === 'turn' && option.actionType === 'attack' && !sceneNpcIds.has(String(actionPayload.targetId ?? ''))) {
       return null
