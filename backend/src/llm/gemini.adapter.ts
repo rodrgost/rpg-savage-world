@@ -142,6 +142,14 @@ function withMin(value: number, min: number): number {
   return value < min ? min : value
 }
 
+function truncateForPrompt(value: string | undefined, max = 280): string | undefined {
+  if (!value) return undefined
+  const normalized = value.trim()
+  if (!normalized) return undefined
+  if (normalized.length <= max) return normalized
+  return `${normalized.slice(0, max)}...`
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
@@ -660,10 +668,14 @@ function parseValidateActionResponse(
 
   let diceCheck: DiceCheck | null = null
   if (chanceCheckRaw) {
-    const required = chanceCheckRaw.required === true
+    let required = chanceCheckRaw.required === true
     const successChance = typeof chanceCheckRaw.successChance === 'number'
       ? Math.min(100, Math.max(0, Math.round(chanceCheckRaw.successChance)))
       : null
+    // Se required=true mas successChance inválido, força required=false
+    if (required && typeof successChance !== 'number') {
+      required = false
+    }
     diceCheck = {
       required,
       successChance: required ? successChance : null,
@@ -2213,14 +2225,21 @@ export class GeminiAdapter implements Narrator {
 
     // Injeta o contexto do universo (lore macro — fixo durante toda a sessão)
     if (world && (world.description || world.lore || world.narrativeStyleGuide)) {
+      const worldDescriptionForPrompt = mode === 'start'
+        ? truncateForPrompt(world.description, 260)
+        : world.description
+      const worldLoreForPrompt = mode === 'start'
+        ? undefined
+        : world.lore
+
       lines.push(
         '',
         '## Universo',
         'As seções abaixo são a bíblia canônica deste universo.',
         'Mesmo que o texto abaixo esteja em outro idioma, sua resposta (segments, options) DEVE ser sempre em português do Brasil — traduza mentalmente antes de narrar.',
         `Nome: ${world.name ?? 'Sem nome'}`,
-        ...(world.description ? [`Descrição: ${world.description}`] : []),
-        ...(world.lore ? ['', world.lore] : [])
+        ...(worldDescriptionForPrompt ? [`Descrição: ${worldDescriptionForPrompt}`] : []),
+        ...(worldLoreForPrompt ? ['', worldLoreForPrompt] : [])
       )
 
       lines.push('', ...buildUniverseStyleInferenceLines({
@@ -2231,12 +2250,16 @@ export class GeminiAdapter implements Narrator {
 
     // Injeta o contexto da campanha (história específica)
     if (campaign && campaign.storyDescription) {
+      const campaignStoryForPrompt = mode === 'start'
+        ? truncateForPrompt(campaign.storyDescription, 320)
+        : campaign.storyDescription
+
       lines.push(
         '',
         '## Campanha (Arco Planejado — Apenas Contexto de Fundo)',
         'Apenas temática e cor do mundo — não um roteiro (ver Hierarquia Canônica).',
         `Nome: ${campaign.name ?? 'Sem nome'}`,
-        `História: ${campaign.storyDescription ?? ''}`
+        `História: ${campaignStoryForPrompt ?? ''}`
       )
     }
 
@@ -2274,6 +2297,7 @@ export class GeminiAdapter implements Narrator {
         '## Regras de Início de Sessão',
         '- PREMISSA CANÔNICA: o personagem acorda SEM MEMÓRIA em um lugar desconhecido. Ele não sabe quem é, como chegou ali, nem qual é seu passado. A abertura DEVE começar nesse despertar amnésico e a perda de memória é o mistério central da aventura.',
         '- Não exponha ao jogador o histórico, a origem, os vínculos ou objetivos prévios do personagem. Trate profissão, raça, vantagens e itens como pistas que o personagem redescobre sobre si mesmo, não como conhecimento que ele já domina conscientemente.',
+        '- Foque em percepção imediata e concreta (o que vê, ouve, cheira, toca) sem diagnósticos prontos da situação. Evite afirmar como fato termos analíticos que pressupõem conhecimento prévio (ex.: "cerco biológico", "abrigo em ruínas", "protocolo de quarentena"). Quando necessário, trate como hipótese incerta do momento ("parece", "talvez", "pode ser").',
         '- Você DEVE preencher itemChanges com changeType "gained" para dar ao personagem seu kit inicial (4 a 8 itens coerentes com o personagem — mesma faixa exigida no prompt do usuário). Narre esses itens como pertences que o personagem descobre consigo ao acordar, sem lembrar de onde vieram.',
       )
     } else {
@@ -2396,10 +2420,14 @@ export class GeminiAdapter implements Narrator {
         ? o.chanceCheck as Record<string, unknown>
         : null
       if (rawChance) {
-        const required = rawChance.required === true
+        let required = rawChance.required === true
         const successChance = typeof rawChance.successChance === 'number'
           ? Math.min(100, Math.max(0, Math.round(rawChance.successChance)))
           : null
+        // Se required=true mas successChance inválido, força required=false
+        if (required && typeof successChance !== 'number') {
+          required = false
+        }
         diceCheck = {
           required,
           successChance: required ? successChance : null,
@@ -2837,6 +2865,47 @@ export class GeminiAdapter implements Narrator {
     return { valid: true }
   }
 
+  private isStartAmnesiaConsistent(response: NarratorTurnResponse): { valid: true } | { valid: false; reason: string } {
+    const prose = response.segments
+      .filter((segment) => segment.type === 'narrator')
+      .map((segment) => segment.text)
+      .join(' ')
+      .toLowerCase()
+
+    if (!prose.trim()) return { valid: true }
+
+    if (/(você|voce)\s+(sabe|reconhece|identifica|lembra|conclui)/.test(prose)) {
+      return { valid: false, reason: 'narração atribuiu conhecimento explícito ao personagem amnésico' }
+    }
+
+    const forbiddenTerms = [
+      'cerco biológico',
+      'cerco biologico',
+      'protocolo de quarentena',
+      'base de contenção',
+      'base de contencao',
+      'abrigo em ruínas',
+      'abrigo em ruinas'
+    ]
+
+    const uncertaintyPattern = /(parece|talvez|pode ser|aparenta|como se|dá a impressão|da a impressao)/
+    const sentences = prose
+      .split(/(?<=[.!?…])\s+/)
+      .map((sentence) => sentence.trim())
+      .filter(Boolean)
+
+    for (const sentence of sentences) {
+      for (const term of forbiddenTerms) {
+        if (!sentence.includes(term)) continue
+        if (!uncertaintyPattern.test(sentence)) {
+          return { valid: false, reason: `narração de abertura usou rótulo assertivo incompatível com amnésia (${term})` }
+        }
+      }
+    }
+
+    return { valid: true }
+  }
+
   private buildNarratorRetrySystemPrompt(basePrompt: string): string {
     return [
       basePrompt,
@@ -2942,6 +3011,15 @@ export class GeminiAdapter implements Narrator {
           lastError = new Error('Resposta narrativa estruturalmente inválida')
           warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: sanitized response failed structural validation — ${validationResult.reason}`)
           continue
+        }
+
+        if (narratorMode === 'start') {
+          const amnesiaValidation = this.isStartAmnesiaConsistent(sanitized)
+          if (!amnesiaValidation.valid) {
+            lastError = new Error('Resposta de abertura violou regra de amnésia')
+            warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: start amnesia validation failed — ${amnesiaValidation.reason}`)
+            continue
+          }
         }
 
         if (parsed.source !== 'direct') {
@@ -3127,8 +3205,7 @@ export class GeminiAdapter implements Narrator {
     const worldLines = world
       ? [
           world.name ? `- Nome: ${world.name}` : null,
-          world.description ? `- Descrição: ${world.description}` : null,
-          world.lore ? `- Lore: ${world.lore}` : null,
+          world.description ? `- Descrição: ${truncateForPrompt(world.description, 260)}` : null,
           world.narrativeStyleGuide ? `- Guia de estilo narrativo: ${world.narrativeStyleGuide}` : null
         ].filter((line): line is string => Boolean(line))
       : []
@@ -3136,7 +3213,7 @@ export class GeminiAdapter implements Narrator {
     const campaignLines = campaign
       ? [
           campaign.name ? `- Nome: ${campaign.name}` : null,
-          campaign.storyDescription ? `- História: ${campaign.storyDescription}` : null
+          campaign.storyDescription ? `- História: ${truncateForPrompt(campaign.storyDescription, 320)}` : null
         ].filter((line): line is string => Boolean(line))
       : []
 
@@ -3166,6 +3243,7 @@ export class GeminiAdapter implements Narrator {
       'PREMISSA DE ABERTURA (OBRIGATÓRIA): O personagem ACORDA SEM MEMÓRIA. Ele desperta em um lugar desconhecido e não se lembra de quem é, de como chegou ali, nem de seu passado. Não revele ao jogador o histórico, a missão prévia ou as conexões do personagem — a amnésia é o ponto de partida da história e o mistério a ser desvendado ao longo da aventura.',
       'Abra a cena no exato momento em que o personagem recobra a consciência: descreva as primeiras sensações confusas (a superfície onde está deitado, sons, cheiros, luz), a desorientação e o vazio de memória.',
       'Deixe claro, através da narração e não de forma expositiva, que o personagem não reconhece o ambiente e não consegue recordar seu nome ou sua história. Ele pode ter apenas fragmentos vagos ou nenhuma lembrança.',
+      'Não rotule a situação com explicações técnicas ou estratégicas como se fossem conhecimento estabelecido do personagem (ex.: "cerco biológico", "base de contenção", "abrigo em ruínas"). Mostre apenas indícios observáveis e deixe a interpretação em aberto neste primeiro momento.',
       'Trate os dados do personagem (profissão, raça, vantagens, itens) como coisas que ele DESCOBRE aos poucos sobre si mesmo — não como conhecimento consciente que ele já domina. Ele pode estranhar suas próprias roupas, ferramentas ou marcas no corpo sem entender de onde vieram.',
       'Apresente um gancho narrativo claro ligado ao mistério da amnésia: uma tensão palpável, uma ameaça imediata, uma pista intrigante ou uma decisão urgente que force o personagem a agir mesmo sem saber quem é.',
       'Estabeleça pelo menos 1 detalhe específico de worldbuilding (um nome de lugar, uma facção, um costume local, um objeto estranho) que o jogador possa explorar para começar a reconstruir sua identidade.',
