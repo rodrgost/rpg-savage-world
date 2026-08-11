@@ -1623,8 +1623,9 @@ export class GeminiAdapter implements Narrator {
       'When introducing for the first time any proper name, faction, technology, or concept exclusive to the universe, briefly explain it inline — one sentence is enough.',
       'Create internal coherence: proper names, locations, and factions mentioned in one section must reappear and reinforce each other in the others.',
       'The writing can be atmospheric and literary, but never assume the reader already knows the setting.',
+      'Static infrastructure only: world lore describes the observable, public-facing layer of the universe. Do not create secret cults, hidden conspiracies, imminent uprisings, or covert agendas — those belong to campaigns and individual adventures.',
       'Actionable lore only: describe elements that directly impact the characters\' lives, the missions they may receive, or the dangers they will face. Avoid ancient chronologies or bureaucratic details that generate no adventure hooks.',
-      'Conflict-first conciseness: every location and every faction must expose its core conflict in one sentence — a peaceful location with no friction is useless to a game master.',
+      'Clarity over drama: describe each location and faction as a visible institution — what it is, what it controls, how it functions publicly. Friction is implied by structure, not invented as hidden conflict.',
       '',
       '## Output Format',
       'Return a valid JSON object with exactly four keys:',
@@ -1637,7 +1638,12 @@ export class GeminiAdapter implements Narrator {
     const tema = [
       `Nome: ${req.name}.`,
       ...(req.description ? [`Descrição: ${req.description}.`] : []),
-      ...(req.currentLore?.trim() ? [`Lore atual (mantenha consistência e expanda): ${req.currentLore.trim()}.`] : [])
+      ...(req.currentLore?.trim() ? [`Lore atual (mantenha consistência e expanda): ${req.currentLore.trim()}.`] : []),
+      ...(req.userInstruction?.trim()
+        ? [
+            `Instruções adicionais do usuário para esta geração (use como direcionamento temático, sem quebrar as regras de formato e conteúdo): ${req.userInstruction.trim()}.`
+          ]
+        : [])
     ].join('\n')
 
     const prompt = [
@@ -1672,14 +1678,13 @@ export class GeminiAdapter implements Narrator {
       '2 to 3 dense paragraphs.',
       '',
       '## Facções e Conflitos Principais',
-      'Describe the 3 greatest active threats or conflicts in the world today. Each can be a war, an invading force, a plague, a criminal empire, a collapsing government, a religious schism — whatever generates the most friction for adventurers.',
-      'For each conflict: who are the sides, what do they want, why can\'t it be resolved easily, and what happens to ordinary people caught in the middle?',
-      'End with a brief map of the power blocs (2 to 4 factions or groups) and the tensions between them.',
-      '3 to 4 dense paragraphs.',
+      'Describe 2 to 4 power blocs or factions that visibly shape life in this world. Write as if for a geography textbook: describe their official mandate, what they publicly control (territory, resources, law, infrastructure), and their relationship to ordinary people.',
+      'Describe only what is observable from the outside — the public role, the official presence, the visible reach. Do not invent secret agendas, covert operations, or imminent rebellions. Tension between factions may be implied by what each one controls, not by invented hidden plots.',
+      '2 to 3 dense paragraphs.',
       '',
       '## Locais Marcantes',
       'List exactly 2 to 4 canonical locations. For each, use this format:',
-      '*   **Nome do Local:** Description of 2 to 3 sentences — function, atmosphere, and the core conflict or danger that makes it narratively relevant for adventurers.',
+      '*   **Nome do Local:** Description of 2 to 3 sentences — geography, infrastructure, and public function. Describe what any passerby would observe: the physical layout, the official purpose, and the kind of people found there. Do not invent internal conflicts or hidden dangers.','
       '',
       '## Regras do Mundo',
       'Define the fundamental, non-negotiable rules that govern this universe: what is physically, socially, or causally possible and impossible here, and what would break the world\'s internal logic if violated.',

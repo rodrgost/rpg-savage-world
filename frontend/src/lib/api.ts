@@ -487,9 +487,13 @@ export async function deleteWorld(worldId: string): Promise<void> {
   })
 }
 
-export async function generateWorldLore(worldId: string): Promise<{ lore: string; narrativeStyleGuide?: string }> {
+export async function generateWorldLore(
+  worldId: string,
+  params?: { userInstruction?: string }
+): Promise<{ lore: string; narrativeStyleGuide?: string }> {
   const response = await apiRequest<{ lore: string; narrativeStyleGuide?: string }>(`/worlds/${encodeURIComponent(worldId)}/generate-lore`, {
-    method: 'POST'
+    method: 'POST',
+    body: JSON.stringify({ userInstruction: params?.userInstruction ?? '' })
   })
   return response
 }

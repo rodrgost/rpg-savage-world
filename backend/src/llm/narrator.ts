@@ -46,6 +46,7 @@ export type ExpandWorldLoreRequest = {
   name: string
   description: string
   currentLore?: string
+  userInstruction?: string
 }
 
 export type SuggestCharacterFromWorldRequest = {

@@ -95,6 +95,12 @@ const WorldImagePreviewBody = z
   })
   .strict()
 
+const GenerateWorldLoreBody = z
+  .object({
+    userInstruction: z.string().max(1200).optional().default('')
+  })
+  .strict()
+
 // ─── (Adventure schemas removed — Campaign schemas defined above) ───
 
 // ─── Character ─────────────────────────────────────────────────
@@ -303,8 +309,9 @@ export class GameDataController {
   }
 
   @Post('/worlds/:worldId/generate-lore')
-  async generateWorldLore(@CurrentUser('uid') userId: string, @Param('worldId') worldId: string) {
-    return await this.gameData.generateWorldLore({ userId, worldId })
+  async generateWorldLore(@CurrentUser('uid') userId: string, @Param('worldId') worldId: string, @Body() body: unknown) {
+    const parsed = GenerateWorldLoreBody.parse(body ?? {})
+    return await this.gameData.generateWorldLore({ userId, worldId, ...parsed })
   }
 
   // ── Characters ───────────────────────────────

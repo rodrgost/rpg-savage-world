@@ -29,6 +29,7 @@ export function CreateWorldPage({ uid }: Props) {
 
   const [name, setName] = useState('')
   const [lore, setLore] = useState('')
+  const [loreUserInstruction, setLoreUserInstruction] = useState('')
   const [narrativeStyleGuide, setNarrativeStyleGuide] = useState('')
   const [ownerId, setOwnerId] = useState('')
   const [visibility, setVisibility] = useState<Visibility>('private')
@@ -92,7 +93,9 @@ export function CreateWorldPage({ uid }: Props) {
       setError('')
       setLoreLoading(true)
       try {
-        const generated = await generateWorldLore(worldId)
+        const generated = await generateWorldLore(worldId, {
+          userInstruction: loreUserInstruction
+        })
         setLore(generated.lore)
         setNarrativeStyleGuide(generated.narrativeStyleGuide ?? '')
       } catch (loadError) {
@@ -204,6 +207,24 @@ export function CreateWorldPage({ uid }: Props) {
           </div>
         )}
 
+        <label>
+          Instrução do usuário para criar a lore
+          <textarea
+            value={loreUserInstruction}
+            onChange={(event) => setLoreUserInstruction(event.target.value)}
+            placeholder="Ex: Quero um mundo com foco em intriga política, tecnologia rara e magia perigosa."
+            rows={4}
+            disabled={!isOwner || loreLoading || imageLoading || loading}
+          />
+          <span className="muted">Este campo não é salvo. Ele serve apenas para orientar a próxima geração de lore com IA.</span>
+        </label>
+
+        {isOwner && (
+          <button className="btn-ai-gen" disabled={loreLoading || imageLoading || loading} onClick={handleGenerateLore} type="button">
+            {loreLoading ? <><span className="btn-ai-spinner" /> Gerando lore…</> : '✨ Gerar lore com IA'}
+          </button>
+        )}
+
         <div className="lore-section">
           <div className="lore-section-header">
             <span className="lore-section-title">Lore do universo</span>
@@ -243,12 +264,6 @@ export function CreateWorldPage({ uid }: Props) {
                 <p className="muted">Nenhuma lore ainda. Gere com IA ou edite manualmente.</p>
               )}
             </div>
-          )}
-
-          {isOwner && (
-            <button className="btn-ai-gen" disabled={loreLoading || imageLoading || loading} onClick={handleGenerateLore} type="button">
-              {loreLoading ? <><span className="btn-ai-spinner" /> Gerando lore…</> : '✨ Gerar lore com IA'}
-            </button>
           )}
         </div>
 

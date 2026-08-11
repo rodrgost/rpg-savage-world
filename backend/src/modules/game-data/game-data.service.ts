@@ -498,14 +498,15 @@ export class GameDataService {
     return { image: normalized }
   }
 
-  async generateWorldLore(params: { userId: string; worldId: string }) {
+  async generateWorldLore(params: { userId: string; worldId: string; userInstruction?: string }) {
     const world = await this.worlds.get(params.worldId)
     if (!world) throw new NotFoundException('Mundo não encontrado')
     if (world.ownerId !== params.userId) throw new ForbiddenException('Sem permissão para este mundo')
 
     const result = await this.narrator.expandWorldLore({
       name: world.name,
-      description: world.description
+      description: world.description,
+      userInstruction: params.userInstruction?.trim() || undefined
     })
 
     await this.worlds.updateLore(world.id, result.lore, result.lorePtBrief, result.loreEn, result.narrativeStyleGuide)
