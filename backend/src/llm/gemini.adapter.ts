@@ -724,9 +724,9 @@ const NAME_INITIAL_POOL = 'ABCDEFGHIJLMNOPRSTV'
 function buildNameDiversityLine(conditional = false): string {
   const letter = NAME_INITIAL_POOL[Math.floor(Math.random() * NAME_INITIAL_POOL.length)]
   const prefix = conditional
-    ? `If the player did not specify a name, the character's given name MUST start with the letter "${letter}"`
-    : `Naming constraint: the character's given name MUST start with the letter "${letter}"`
-  return `${prefix}. Never use any of these overused names: ${OVERUSED_SUGGESTION_NAMES.join(', ')}.`
+    ? `Se o jogador não especificou um nome, o primeiro nome do personagem DEVE começar com a letra "${letter}"`
+    : `Restrição de nomeação: o primeiro nome do personagem DEVE começar com a letra "${letter}"`
+  return `${prefix}. Nunca use nenhum destes nomes muito repetidos: ${OVERUSED_SUGGESTION_NAMES.join(', ')}.`
 }
 
 function buildUniverseStyleInferenceLines(opts: {
@@ -741,13 +741,13 @@ function buildUniverseStyleInferenceLines(opts: {
     return [
       ...(guide
         ? [
-            `Use this explicit universe tone-and-mood guide as the primary direction: ${guide}`,
-            'Treat this guide as higher priority than automatic inference. Use the world name, lore, and adventure story only to complement missing details and keep coherence.'
+            `Use esta diretriz explícita de tom e clima do universo como direção principal: ${guide}`,
+            'Trate esta diretriz como prioridade mais alta do que inferência automática. Use nome do mundo, lore e história da aventura apenas para complementar lacunas e manter coerência.'
           ]
         : []),
-      'Before choosing the character details, infer from the world name, lore, and adventure story a brief tonal direction for this universe: mood, humor, emotional temperature, social texture, vocabulary, and the kinds of concrete professions and conflicts that belong here.',
-      'Do not output this tonal direction explicitly. Apply it internally so the profession, description, and campaign role feel native to this universe rather than generic fantasy/sci-fi RPG filler.',
-      'If the universe suggests melancholy, dry humor, pulp swagger, cosmic dread, tragic irony, paranoia, tenderness, brutality, or wonder, let that shape the character choices concretely.'
+      'Antes de escolher os detalhes do personagem, infira a partir do nome do mundo, lore e história da aventura uma diretriz breve de tom para este universo: clima, humor, temperatura emocional, textura social, vocabulário e os tipos de profissões e conflitos concretos que pertencem a ele.',
+      'Não exiba essa diretriz explicitamente. Aplique-a internamente para que profissão, descrição e papel na campanha soem nativos deste universo, e não como preenchimento genérico de fantasia/ficção científica.',
+      'Se o universo sugerir melancolia, humor seco, pulpa aventureira, horror cósmico, ironia trágica, paranoia, ternura, brutalidade ou assombro, deixe isso moldar concretamente as escolhas do personagem.'
     ]
   }
 
@@ -1531,35 +1531,35 @@ export class GeminiAdapter implements Narrator {
 
   async expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult> {
     const sysPrompt = [
-      'You are an adventure builder.',
-      'Objective: create from scratch a complete story from minimal context.',
+      'Você é um criador de aventuras.',
+      'Objetivo: criar do zero uma história completa a partir de contexto mínimo.',
       '',
-      '## Expected Output',
-      'A valid JSON with the following fields:',
-      '- "name": short and evocative title for the story (3-8 words) — in Brazilian Portuguese.',
-      '- "nameEn": same title translated to English.',
-      '- "storyDescription": 3-6 paragraphs with context, conflicts, factions, locations, and 2-4 adventure hooks — in Brazilian Portuguese.',
-      '- "storyDescriptionEn": same storyDescription translated to English.',
-      '- "storyCharacters": array of 3 to 7 world NPCs relevant to the narrative, each with:',
-      '  - "name": character name',
-      '  - "role": role in the story (e.g.: antagonista, mentor, aliado, líder de facção, neutro) — in Brazilian Portuguese',
-      '  - "roleEn": same role in English (e.g.: antagonist, mentor, ally, faction leader, neutral)',
-      '  - "description": brief character description (1-2 sentences) — in Brazilian Portuguese',
-      '  - "descriptionEn": same description in English',
-      '  - "status": current situation in the story (e.g.: ativo, foragido, morto, desconhecido) — in Brazilian Portuguese',
-      '  - "statusEn": same status in English (e.g.: active, fugitive, dead, unknown)',
+      '## Saída Esperada',
+      'Um JSON válido com os seguintes campos:',
+      '- "name": título curto e evocativo da história (3-8 palavras) — em português do Brasil.',
+      '- "nameEn": mesmo título traduzido para inglês.',
+      '- "storyDescription": 3-6 parágrafos com contexto, conflitos, facções, locais e 2-4 ganchos de aventura — em português do Brasil.',
+      '- "storyDescriptionEn": mesmo conteúdo de "storyDescription" traduzido para inglês.',
+      '- "storyCharacters": array com 3 a 7 NPCs relevantes para a narrativa, cada um com:',
+      '  - "name": nome do personagem',
+      '  - "role": papel na história (ex.: antagonista, mentor, aliado, líder de facção, neutro) — em português do Brasil',
+      '  - "roleEn": mesmo papel em inglês (ex.: antagonist, mentor, ally, faction leader, neutral)',
+      '  - "description": descrição breve do personagem (1-2 frases) — em português do Brasil',
+      '  - "descriptionEn": mesma descrição em inglês',
+      '  - "status": situação atual na história (ex.: ativo, foragido, morto, desconhecido) — em português do Brasil',
+      '  - "statusEn": mesmo status em inglês (ex.: active, fugitive, dead, unknown)',
       '',
-      '## Constraints',
-      '- Return ONLY the JSON, without preamble, greeting, comments, or separators.',
-      '- Start directly with { and end with }.'
+      '## Restrições',
+      '- Retorne APENAS o JSON, sem preâmbulo, saudação, comentários ou separadores.',
+      '- Comece diretamente com { e termine com }.'
     ].join('\n')
 
     const worldContext = sanitizeInlineText(req.worldDescriptionEn).slice(0, 2400)
     const prompt = [
-      `Campaign name/context: ${req.campaignName || 'free'}.`,
+      `Nome/contexto da campanha: ${req.campaignName || 'livre'}.`,
       worldContext
-        ? `World setting (use as the foundation; keep names, factions, tone, and geography consistent with it): ${worldContext}`
-        : 'World setting: none provided; invent a fresh, distinctive setting and avoid generic cliches (e.g., do not default to "twilight"/"crepusculo" motifs).'
+        ? `Cenário do mundo (use como base; mantenha nomes, facções, tom e geografia consistentes com ele): ${worldContext}`
+        : 'Cenário do mundo: não informado; invente um cenário novo e distinto e evite clichês genéricos (ex.: não cair em motivos de "twilight"/"crepúsculo").'
     ].join('\n')
 
     try {
@@ -1616,23 +1616,23 @@ export class GeminiAdapter implements Narrator {
 
   async expandWorldLore(req: ExpandWorldLoreRequest): Promise<{ lore: string; narrativeStyleGuide?: string; lorePtBrief?: string; loreEn?: string }> {
     const sysPrompt = [
-      'You are a senior worldbuilder specialized in tabletop RPG settings.',
+      'Você é um worldbuilder sênior especializado em cenários de RPG de mesa.',
       '',
-      '## Writing Style',
-      'Write with clarity and precision — the text serves both those who have never heard of this universe and those who will play in it.',
-      'When introducing for the first time any proper name, faction, technology, or concept exclusive to the universe, briefly explain it inline — one sentence is enough.',
-      'Create internal coherence: proper names, locations, and factions mentioned in one section must reappear and reinforce each other in the others.',
-      'The writing can be atmospheric and literary, but never assume the reader already knows the setting.',
-      'Static infrastructure only: world lore describes the observable, public-facing layer of the universe. Do not create secret cults, hidden conspiracies, imminent uprisings, or covert agendas — those belong to campaigns and individual adventures.',
-      'Actionable lore only: describe elements that directly impact the characters\' lives, the missions they may receive, or the dangers they will face. Avoid ancient chronologies or bureaucratic details that generate no adventure hooks.',
-      'Clarity over drama: describe each location and faction as a visible institution — what it is, what it controls, how it functions publicly. Friction is implied by structure, not invented as hidden conflict.',
+      '## Estilo de Escrita',
+      'Escreva com clareza e precisão — o texto deve servir tanto para quem nunca ouviu falar deste universo quanto para quem vai jogar nele.',
+      'Ao introduzir pela primeira vez qualquer nome próprio, facção, tecnologia ou conceito exclusivo do universo, explique brevemente no próprio trecho — uma frase basta.',
+      'Crie coerência interna: nomes próprios, locais e facções citados em uma seção devem reaparecer e se reforçar nas demais.',
+      'A escrita pode ser atmosférica e literária, mas nunca presuma que o leitor já conhece o cenário.',
+      'Apenas infraestrutura estática: o lore do mundo descreve a camada observável e pública do universo. Não crie cultos secretos, conspirações ocultas, levantes iminentes ou agendas clandestinas — isso pertence às campanhas e aventuras individuais.',
+      'Apenas lore acionável: descreva elementos que impactam diretamente a vida dos personagens, as missões que podem receber ou os perigos que enfrentarão. Evite cronologias antigas ou detalhes burocráticos que não geram gancho de aventura.',
+      'Clareza acima de drama: descreva cada local e facção como instituição visível — o que é, o que controla, como funciona publicamente. Atritos devem ser sugeridos pela estrutura, não inventados como conflito oculto.',
       '',
-      '## Output Format',
-      'Return a valid JSON object with exactly four keys:',
-      '- "lore": the full lore written in Brazilian Portuguese, using the section headings as instructed.',
-      '- "narrativeStyleGuide": a short Brazilian Portuguese tone-and-mood guide (80-220 words) explaining the narrator\'s humor, emotional climate, irony level, dramatic weight, vocabulary, and what to avoid in this universe. Write as direct instructions for narration, not as lore summary.',
-      '- "lorePtBrief": a condensed Brazilian Portuguese narration brief (500-900 words) covering the world\'s core identity, key factions, main locations, magic/technology rules, and the most important narrative tensions — optimized for a game master who needs a quick mental model of the setting. No section headings; flowing prose.',
-      '- "loreEn": a condensed English narration brief (500-900 words) covering the world\'s core identity, key factions, main locations, magic/technology rules, and the most important narrative tensions — optimized for a game master who needs a quick mental model of the setting. No section headings; flowing prose.'
+      '## Formato de Saída',
+      'Retorne um objeto JSON válido com exatamente quatro chaves:',
+      '- "lore": o lore completo em português do Brasil, usando os títulos de seção conforme instruído.',
+      '- "narrativeStyleGuide": um guia curto de tom e clima em português do Brasil (80-220 palavras), explicando humor do narrador, clima emocional, nível de ironia, peso dramático, vocabulário e o que evitar neste universo. Escreva como instruções diretas de narração, não como resumo de lore.',
+      '- "lorePtBrief": um brief condensado de narração em português do Brasil (500-900 palavras), cobrindo identidade central do mundo, facções-chave, locais principais, regras de magia/tecnologia e tensões narrativas mais importantes — otimizado para um mestre que precisa de um modelo mental rápido do cenário. Sem títulos de seção; prosa contínua.',
+      '- "loreEn": um brief condensado de narração em inglês (500-900 palavras), cobrindo identidade central do mundo, facções-chave, locais principais, regras de magia/tecnologia e tensões narrativas mais importantes — otimizado para um mestre que precisa de um modelo mental rápido do cenário. Sem títulos de seção; prosa contínua.'
     ].join('\n')
 
     const tema = [
@@ -1649,49 +1649,49 @@ export class GeminiAdapter implements Narrator {
     const prompt = [
       `Tema: ${tema}`,
       '',
-      'Build the complete lore of this universe. ALL sections below are MANDATORY — never omit any of them. Reproduce each heading text exactly as written.',
+      'Construa o lore completo deste universo. TODAS as seções abaixo são OBRIGATÓRIAS — nunca omita nenhuma. Reproduza cada título exatamente como escrito.',
       '',
       '## Em Poucas Palavras',
-      'Explain this universe to someone who has never heard of it. Use direct language, without jargon.',
-      'Answer in 5 to 7 sentences:',
-      '  • What is this world? (an anchor sentence: "It is a world where...", "Imagine X, but Y")',
-      '  • What distinguishes it from other universes of the same genre? (the real differentiator, not the obvious)',
-      '  • What does any player see, hear, and feel on the first day in this world? (concrete everyday reality)',
+      'Explique este universo para alguém que nunca ouviu falar dele. Use linguagem direta, sem jargão.',
+      'Responda em 5 a 7 frases:',
+      '  • O que é este mundo? (uma frase-âncora: "É um mundo onde...", "Imagine X, mas Y")',
+      '  • O que o distingue de outros universos do mesmo gênero? (o diferencial real, não o óbvio)',
+      '  • O que qualquer jogador vê, ouve e sente no primeiro dia neste mundo? (realidade cotidiana concreta)',
       '',
       '## Passado Recente',
-      'Focus on the last 50 to 100 years only — the events, upheavals, or turning points that directly shaped the world as it exists today. Skip mythological origins unless they are the active premise of the setting.',
-      'Answer: What happened? Who was affected? What scars or opportunities did it leave behind?',
+      'Foque apenas nos últimos 50 a 100 anos — eventos, rupturas ou pontos de virada que moldaram diretamente o mundo como ele existe hoje. Ignore origens mitológicas, a menos que sejam a premissa ativa do cenário.',
+      'Responda: o que aconteceu? Quem foi afetado? Que cicatrizes ou oportunidades isso deixou?',
       '2 to 3 dense paragraphs.',
       '',
       '## O Cotidiano e a Sociedade',
-      'Describe how ordinary people live in this world. The game master needs a concrete mental model to know what NPCs do, what they fear, what they trade, and how they move.',
-      'Cover: means of transport, food and survival, social structure (who holds power over the common folk), dominant beliefs or taboos, and the texture of an average day.',
+      'Descreva como pessoas comuns vivem neste mundo. O mestre precisa de um modelo mental concreto para saber o que os NPCs fazem, o que temem, o que negociam e como se deslocam.',
+      'Cubra: meios de transporte, alimentação e sobrevivência, estrutura social (quem exerce poder sobre a população), crenças ou tabus dominantes e a textura de um dia comum.',
       '2 dense paragraphs.',
       '',
       '## Nível de Poder, Magia e Tecnologia',
-      'Define the power scale of this world. This section is MANDATORY even if neither magic nor advanced technology exists — in that case, state it explicitly (e.g., "Magic does not exist. Technology is analogous to the 19th century.").',
-      'If powers, magic, or advanced technology do exist, define:',
-      '- **Origem:** birth, accident, ritual, technology, infection, divine choice, or other.',
-      '- **Custo e limitações:** physical exhaustion, sanity loss, resource dependence, or other concrete constraints.',
-      '- **Escala de poder:** what is the ceiling? Can individuals reshape reality, or are effects small and rare?',
-      '- **Impacto social:** are power-users revered, persecuted, forcibly recruited, or hidden?',
+      'Defina a escala de poder deste mundo. Esta seção é OBRIGATÓRIA mesmo se não existirem magia nem tecnologia avançada — nesse caso, declare explicitamente (ex.: "Magia não existe. A tecnologia é análoga ao século XIX.").',
+      'Se poderes, magia ou tecnologia avançada existirem, defina:',
+      '- **Origem:** nascimento, acidente, ritual, tecnologia, infecção, escolha divina ou outra.',
+      '- **Custo e limitações:** exaustão física, perda de sanidade, dependência de recursos ou outras restrições concretas.',
+      '- **Escala de poder:** qual é o teto? Indivíduos podem remodelar a realidade ou os efeitos são pequenos e raros?',
+      '- **Impacto social:** usuários de poder são reverenciados, perseguidos, recrutados à força ou ocultos?',
       '2 to 3 dense paragraphs.',
       '',
       '## Facções e Conflitos Principais',
-      'Describe 2 to 4 power blocs or factions that visibly shape life in this world. Write as if for a geography textbook: describe their official mandate, what they publicly control (territory, resources, law, infrastructure), and their relationship to ordinary people.',
-      'Describe only what is observable from the outside — the public role, the official presence, the visible reach. Do not invent secret agendas, covert operations, or imminent rebellions. Tension between factions may be implied by what each one controls, not by invented hidden plots.',
+      'Descreva de 2 a 4 blocos de poder ou facções que moldam visivelmente a vida neste mundo. Escreva como em um livro de geografia: descreva mandato oficial, o que controlam publicamente (território, recursos, leis, infraestrutura) e a relação com pessoas comuns.',
+      'Descreva apenas o que é observável por fora — papel público, presença oficial, alcance visível. Não invente agendas secretas, operações clandestinas ou rebeliões iminentes. A tensão entre facções pode ser sugerida pelo que cada uma controla, não por tramas ocultas inventadas.',
       '2 to 3 dense paragraphs.',
       '',
       '## Locais Marcantes',
-      'List exactly 2 to 4 canonical locations. For each, use this format:',
-      '*   **Nome do Local:** Description of 2 to 3 sentences — geography, infrastructure, and public function. Describe what any passerby would observe: the physical layout, the official purpose, and the kind of people found there. Do not invent internal conflicts or hidden dangers.',
+      'Liste exatamente 2 a 4 locais canônicos. Para cada um, use este formato:',
+      '*   **Nome do Local:** descrição de 2 a 3 frases — geografia, infraestrutura e função pública. Descreva o que qualquer transeunte observaria: organização física, propósito oficial e o tipo de pessoas que circulam ali. Não invente conflitos internos ou perigos ocultos.',
       '',
       '## Regras do Mundo',
-      'Define the fundamental, non-negotiable rules that govern this universe: what is physically, socially, or causally possible and impossible here, and what would break the world\'s internal logic if violated.',
-      'Include how these rules create moral dilemmas or hard constraints for those who live in this world.',
+      'Defina as regras fundamentais e inegociáveis que governam este universo: o que é física, social ou causalmente possível e impossível aqui, e o que quebraria a lógica interna do mundo se fosse violado.',
+      'Inclua como essas regras criam dilemas morais ou restrições duras para quem vive neste mundo.',
       '3 dense paragraphs.',
       '',
-      'Absolute constraints: no comments outside the lore, no greeting, praise, preamble, or separator (***). All seven sections are mandatory and must appear in the order listed. Start immediately with ## Em Poucas Palavras.'
+      'Restrições absolutas: sem comentários fora do lore, sem saudação, elogio, preâmbulo ou separador (***). As sete seções são obrigatórias e devem aparecer na ordem listada. Comece imediatamente com ## Em Poucas Palavras.'
     ].join('\n')
 
     try {
@@ -1735,39 +1735,39 @@ export class GeminiAdapter implements Narrator {
 
   async generateImageDescription(req: GenerateImageDescriptionRequest): Promise<string> {
     const sysPrompt = [
-      'You create short visual descriptions for photographic image generation.',
-      'Expected output: a single short paragraph, with 1 or 2 sentences, focused on atmosphere, composition, setting, and memorable visual details.',
-      'If the title refers to a well-known film, series, game, comic, or book, draw inspiration from the aesthetic of that work\'s official cover art or poster: predominant color palette, composition, framing, and visual atmosphere — but without reproducing protected characters, real actors, recognizable faces, logos, titles, or brands.',
-      'If the title does not refer to any known work, describe an epic and original scene coherent with the name.',
-      'Deliver only the final visual description, without lists, markdown, comments about the request, or negative instructions.'
+      'Você cria descrições visuais curtas para geração de imagem fotográfica.',
+      'Saída esperada: um único parágrafo curto, com 1 ou 2 frases, focado em atmosfera, composição, cenário e detalhes visuais memoráveis.',
+      'Se o título remeter a filme, série, jogo, quadrinho ou livro conhecido, inspire-se na estética da capa/pôster oficial da obra: paleta predominante, composição, enquadramento e atmosfera visual — sem reproduzir personagens protegidos, atores reais, rostos reconhecíveis, logos, títulos ou marcas.',
+      'Se o título não remeter a nenhuma obra conhecida, descreva uma cena épica e original coerente com o nome.',
+      'Entregue apenas a descrição visual final, sem listas, markdown, comentários sobre o pedido ou instruções negativas.'
     ].join('\n')
 
     let prompt = ''
 
     if (req.entityType === 'world') {
       prompt = [
-        `Universe title: ${req.title}.`,
-        'If this title refers to a famous film, series, game, comic, or book, base THE ENTIRE description on the characteristic visual aesthetic of that work: color palette, composition, atmosphere, lighting, and visual style — without copying protected characters, real actors, logos, or brands. The reference theme must guide every visual element of the image.',
-        'Otherwise, describe an epic and original scene with strong visual identity coherent with the name and theme of the universe, capturing the thematic essence so that the entire image reflects that universe.',
+        `Título do universo: ${req.title}.`,
+        'Se este título remeter a uma obra famosa (filme, série, jogo, quadrinho ou livro), baseie TODA a descrição na estética visual característica dessa obra: paleta de cores, composição, atmosfera, iluminação e estilo visual — sem copiar personagens protegidos, atores reais, logos ou marcas. O tema de referência deve guiar todos os elementos visuais da imagem.',
+        'Caso contrário, descreva uma cena épica e original com identidade visual forte, coerente com o nome e o tema do universo, capturando sua essência para que a imagem inteira reflita esse universo.',
       ].join('\n')
     } else if (req.entityType === 'campaign') {
       const storyContext = sanitizeInlineText(req.storyDescription).slice(0, 1200)
       prompt = [
-        `Campaign title: ${req.title}.`,
+        `Título da campanha: ${req.title}.`,
         ...(storyContext
-          ? [`Campaign story (translate its mood, setting, factions, and key visual elements into the art): ${storyContext}`]
+          ? [`História da campanha (traduza seu clima, cenário, facções e elementos visuais principais para a arte): ${storyContext}`]
           : []),
-        'Describe a wide image that translates the campaign\'s atmosphere as striking and cinematic illustrated art.'
+        'Descreva uma imagem ampla que traduza a atmosfera da campanha como uma arte ilustrada marcante e cinematográfica.'
       ].join('\n')
     } else {
       prompt = [
-        `World: ${req.worldName}.`,
-        `Campaign: ${req.campaignTitle}.`,
-        ...(req.gender?.trim() ? [`Gender: ${req.gender}.`] : []),
-        ...(req.race?.trim() ? [`Race or species: ${req.race}.`] : []),
-        `Profession: ${req.profession}.`,
-        ...(req.additionalDescription?.trim() ? [`Provided details: ${req.additionalDescription}.`] : []),
-        'Describe a character portrait coherent with this context, highlighting silhouette, clothing, expression, posture, and striking visual traits.'
+        `Mundo: ${req.worldName}.`,
+        `Campanha: ${req.campaignTitle}.`,
+        ...(req.gender?.trim() ? [`Gênero: ${req.gender}.`] : []),
+        ...(req.race?.trim() ? [`Raça ou espécie: ${req.race}.`] : []),
+        `Profissão: ${req.profession}.`,
+        ...(req.additionalDescription?.trim() ? [`Detalhes fornecidos: ${req.additionalDescription}.`] : []),
+        'Descreva um retrato de personagem coerente com esse contexto, destacando silhueta, vestimenta, expressão, postura e traços visuais marcantes.'
       ].join('\n')
     }
 
@@ -1798,7 +1798,7 @@ export class GeminiAdapter implements Narrator {
     const existingLines: string[] = []
     if (hasExisting) {
       existingLines.push(
-        'The player has already filled in the following fields — KEEP these values exactly as they are and fill in only the missing fields:'
+        'O jogador já preencheu os campos abaixo — MANTENHA esses valores exatamente como estão e preencha apenas os campos faltantes:'
       )
       if (existing.name) existingLines.push(`  name: "${existing.name}"`)
       if (existing.gender) existingLines.push(`  gender: "${existing.gender}"`)
@@ -1809,39 +1809,39 @@ export class GeminiAdapter implements Narrator {
     }
 
     const sysPrompt = [
-      'You are a character designer.',
-      'Read the world name, universe lore, and adventure story. Create a character whose role and profession emerge NATURALLY from that data, without using pre-defined archetypes from the system.',
+      'Você é um designer de personagens.',
+      'Leia o nome do mundo, o lore do universo e a história da aventura. Crie um personagem cujo papel e profissão surjam NATURALMENTE desses dados, sem usar arquétipos pré-definidos do sistema.',
       ...buildUniverseStyleInferenceLines({ forCharacterSuggestion: true, explicitGuide: worldNarrativeStyleGuide }),
-      'Respond ONLY in valid JSON, without markdown or comments.',
-      'Always return all 11 keys; gender, race, genderPt, and racePt can be empty string when the context does not support an inference.',
+      'Responda APENAS em JSON válido, sem markdown ou comentários.',
+      'Sempre retorne as 11 chaves; gender, race, genderPt e racePt podem ser string vazia quando o contexto não permitir inferência.',
       '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
       '',
-      'Field instructions:',
-      '  name: name coherent with the context; if the player provided a name, preserve that value exactly and treat it only as an identity anchor',
-      '  gender: Masculine, Feminine, or Other only when there is a contextual clue; otherwise empty string',
-      '  race: race/species only when there is a contextual clue; otherwise empty string',
-      '  profession: trade or social role derived exclusively from the world name, lore, and story; max 60 chars',
-      '  description: 2-3 sentences derived primarily from the adventure story and lore, describing physical appearance (hair, eyes, build, or notable scar), clothing or equipment coherent with the profession, and personality trait with motivation. Min 80 chars, max 280 chars.',
-      '  campaignRole: what this character is doing in this specific adventure, their mission, or how they connect to the plot. Derive from story/lore, be concrete and not generic. Max 600 chars.',
-      '  genderPt: Brazilian Portuguese translation of gender (Masculino, Feminino, or Outro); empty string if gender is empty',
-      '  racePt: Brazilian Portuguese translation of race/species; empty string if race is empty',
-      '  professionPt: Brazilian Portuguese translation of profession; max 60 chars',
-      '  descriptionPt: Brazilian Portuguese translation of description; same length constraints (min 80, max 280 chars)',
-      '  campaignRolePt: Brazilian Portuguese translation of campaignRole; max 600 chars',
-      'If a name is provided, do not invent the description from the sound of the name; use the name only to preserve identity and derive everything else from the adventure story and lore.',
-      'In repeated calls for the same plot, vary the name, profession, narrative function, motivation, appearance, and entry point into the adventure.',
+      'Instruções de campo:',
+      '  name: nome coerente com o contexto; se o jogador forneceu um nome, preserve exatamente esse valor e trate-o apenas como âncora de identidade',
+      '  gender: Masculine, Feminine ou Other apenas quando houver pista contextual; caso contrário, string vazia',
+      '  race: raça/espécie apenas quando houver pista contextual; caso contrário, string vazia',
+      '  profession: ofício ou papel social derivado exclusivamente do nome do mundo, lore e história; máximo 60 caracteres',
+      '  description: 2-3 frases derivadas principalmente da história e do lore, descrevendo aparência física (cabelo, olhos, porte ou cicatriz marcante), roupa ou equipamento coerente com a profissão e traço de personalidade com motivação. Mínimo 80, máximo 280 caracteres.',
+      '  campaignRole: o que este personagem faz nesta aventura específica, sua missão, ou como se conecta à trama. Derive de história/lore, seja concreto e não genérico. Máximo 600 caracteres.',
+      '  genderPt: tradução para português do Brasil de gender (Masculino, Feminino ou Outro); string vazia se gender estiver vazio',
+      '  racePt: tradução para português do Brasil de race/espécie; string vazia se race estiver vazio',
+      '  professionPt: tradução para português do Brasil de profession; máximo 60 caracteres',
+      '  descriptionPt: tradução para português do Brasil de description; mesmos limites de tamanho (mínimo 80, máximo 280 caracteres)',
+      '  campaignRolePt: tradução para português do Brasil de campaignRole; máximo 600 caracteres',
+      'Se um nome for fornecido, não invente a descrição pelo som do nome; use o nome apenas para preservar identidade e derive todo o restante da história da aventura e do lore.',
+      'Em chamadas repetidas para a mesma trama, varie nome, profissão, função narrativa, motivação, aparência e ponto de entrada na aventura.',
     ].join('\n')
 
     const buildPrompt = (attempt: number): string => {
       return [
         ...(existingLines.length > 0 ? [...existingLines, ''] : []),
         ...(creativeIdentityLocked ? [] : [buildNameDiversityLine(), '']),
-        `Variation attempt: ${attempt}.`,
+        `Tentativa de variação: ${attempt}.`,
         '',
-        ...(worldName ? [`World/universe name: ${worldName}.`] : []),
-        ...(promptWorldLore ? [`Universe lore: ${promptWorldLore}.`, ''] : []),
-        ...(promptStoryDescription ? [`Adventure story: ${promptStoryDescription}.`, ''] : []),
-        'Derive the profession and role solely from the world/universe and its lore.'
+        ...(worldName ? [`Nome do mundo/universo: ${worldName}.`] : []),
+        ...(promptWorldLore ? [`Lore do universo: ${promptWorldLore}.`, ''] : []),
+        ...(promptStoryDescription ? [`História da aventura: ${promptStoryDescription}.`, ''] : []),
+        'Derive profissão e papel apenas do mundo/universo e de seu lore.'
       ].join('\n')
     }
 
@@ -1914,38 +1914,38 @@ export class GeminiAdapter implements Narrator {
     const promptStory = storyDescription.length > 2000 ? `${storyDescription.slice(0, 2000)}...` : storyDescription
 
     const sysPrompt = [
-      'You are a character designer for a tabletop RPG.',
-      'The player has written a free-form concept describing the character they want to create.',
-      'Your task is to expand that concept into a complete character profile that fits the world and campaign context.',
+      'Você é um designer de personagens para RPG de mesa.',
+      'O jogador escreveu um conceito livre descrevendo o personagem que deseja criar.',
+      'Sua tarefa é expandir esse conceito em um perfil completo de personagem que se encaixe no contexto de mundo e campanha.',
       ...buildUniverseStyleInferenceLines({ forCharacterSuggestion: true, explicitGuide: worldNarrativeStyleGuide }),
-      'Respond ONLY in valid JSON, without markdown or comments.',
-      'Always return all 11 keys; gender, race, genderPt, and racePt can be empty string when not mentioned or inferable.',
+      'Responda APENAS em JSON válido, sem markdown ou comentários.',
+      'Sempre retorne as 11 chaves; gender, race, genderPt e racePt podem ser string vazia quando não forem mencionados nem inferíveis.',
       '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
       '',
-      'Field instructions:',
-      '  name: an appropriate name consistent with the concept and world; if the player mentioned a name, use it',
-      '  gender: Masculine, Feminine, or Other only when mentioned or clearly implied; otherwise empty string',
-      '  race: race/species only when mentioned or inferable from the concept; otherwise empty string',
-      '  profession: trade or social role derived from the player concept; max 60 chars',
-      '  description: 2-3 sentences expanding the concept with physical appearance (hair, eyes, build, or notable scar), clothing or equipment coherent with the profession, and personality trait with motivation. Min 80 chars, max 280 chars.',
-      '  campaignRole: what this character does in the world, their mission, or how they connect to the setting. Concrete and specific, not generic. Max 600 chars.',
-      '  genderPt: Brazilian Portuguese translation of gender (Masculino, Feminino, or Outro); empty string if gender is empty',
-      '  racePt: Brazilian Portuguese translation of race/species; empty string if race is empty',
-      '  professionPt: Brazilian Portuguese translation of profession; max 60 chars',
-      '  descriptionPt: Brazilian Portuguese translation of description; same length constraints (min 80, max 280 chars)',
-      '  campaignRolePt: Brazilian Portuguese translation of campaignRole; max 600 chars',
+      'Instruções de campo:',
+      '  name: nome apropriado e coerente com o conceito e o mundo; se o jogador mencionou um nome, use-o',
+      '  gender: Masculine, Feminine ou Other apenas quando mencionado ou claramente implícito; caso contrário, string vazia',
+      '  race: raça/espécie apenas quando mencionada ou inferível do conceito; caso contrário, string vazia',
+      '  profession: ofício ou papel social derivado do conceito do jogador; máximo 60 caracteres',
+      '  description: 2-3 frases expandindo o conceito com aparência física (cabelo, olhos, porte ou cicatriz marcante), roupa ou equipamento coerente com a profissão e traço de personalidade com motivação. Mínimo 80, máximo 280 caracteres.',
+      '  campaignRole: o que este personagem faz no mundo, sua missão, ou como se conecta ao cenário. Concreto e específico, não genérico. Máximo 600 caracteres.',
+      '  genderPt: tradução para português do Brasil de gender (Masculino, Feminino ou Outro); string vazia se gender estiver vazio',
+      '  racePt: tradução para português do Brasil de race/espécie; string vazia se race estiver vazio',
+      '  professionPt: tradução para português do Brasil de profession; máximo 60 caracteres',
+      '  descriptionPt: tradução para português do Brasil de description; mesmos limites de tamanho (mínimo 80, máximo 280 caracteres)',
+      '  campaignRolePt: tradução para português do Brasil de campaignRole; máximo 600 caracteres',
     ].join('\n')
 
     const userPrompt = [
-      `Player concept: ${characterConcept}`,
+      `Conceito do jogador: ${characterConcept}`,
       '',
-      ...(worldName ? [`World/universe: ${worldName}.`] : []),
-      ...(campaignThematic ? [`Campaign thematic: ${campaignThematic}.`] : []),
-      ...(promptStory ? [`Adventure story: ${promptStory}`] : []),
-      ...(promptWorldLore ? [`Universe lore: ${promptWorldLore}.`] : []),
+      ...(worldName ? [`Mundo/universo: ${worldName}.`] : []),
+      ...(campaignThematic ? [`Temática da campanha: ${campaignThematic}.`] : []),
+      ...(promptStory ? [`História da aventura: ${promptStory}`] : []),
+      ...(promptWorldLore ? [`Lore do universo: ${promptWorldLore}.`] : []),
       '',
       buildNameDiversityLine(true),
-      'Expand the player concept into a full character profile following the JSON schema above.',
+      'Expanda o conceito do jogador em um perfil completo de personagem seguindo o schema JSON acima.',
     ].join('\n')
 
     try {

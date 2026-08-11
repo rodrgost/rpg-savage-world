@@ -20,15 +20,15 @@ function sanitizeInlineText(value: string | undefined): string {
 function buildWorldImagePrompt(params: { campaignName?: string; visualDescription?: string }): string {
   const campaignName = sanitizeInlineText(params.campaignName)
   const visualDescription = sanitizeInlineText(params.visualDescription)
-  const title = campaignName || 'Untitled campaign'
+  const title = campaignName || 'Campanha sem titulo'
 
   return [
-    'Create a illustrated key art.',
-    `Campaign title anchor: "${title}".`,
-    ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
-    'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, mood and visual storytelling driven by the setting itself.',
-    `Title integration: render ONLY the exact campaign name "${title}" as readable cover/poster typography inside the artwork. Keep all letters within the central 80% safe zone, with no subtitles, taglines, logos, watermarks, UI, or extra words.`,
-    'Restrictions: no UI, no characters as the main subject.'
+    'Crie uma key art ilustrada.',
+    `Ancora de titulo da campanha: "${title}".`,
+    ...(visualDescription ? [`Direcao visual: ${visualDescription}.`] : []),
+    'Objetivos de composicao: paisagem epica ou vista de assentamento, sensacao clara de escala, profundidade em camadas, clima e narrativa visual guiados pelo proprio cenario.',
+    `Integracao de titulo: renderize APENAS o nome exato da campanha "${title}" como tipografia legivel de capa/poster dentro da arte. Mantenha todas as letras dentro da zona segura central de 80%, sem subtitulos, slogans, logos, marcas-d\'agua, UI ou palavras extras.`,
+    'Restricoes: sem UI, sem personagens como assunto principal.'
   ].join('\n')
 }
 
@@ -37,13 +37,13 @@ function buildUniverseImagePrompt(params: { name: string; visualDescription?: st
   const visualDescription = sanitizeInlineText(params.visualDescription)
 
   return [
-    'Create a cinematic illustrated key art.',
-    `Setting anchor: world name "${worldName || 'Unnamed world'}".`,
-    ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
-    'Composition goals: epic landscape or settlement vista, clear sense of scale, layered depth, mood and visual storytelling — the ENTIRE image must be driven by the theme and aesthetic of this setting.',
-    'Cover art reference: if the world name evokes a well-known film, TV series, game, comic, or book franchise, base the ENTIRE image — palette, atmosphere, lighting, composition, and visual style — on the aesthetic of its official cover art or poster. The thematic reference defines everything: color grading, environmental design, mood, and art direction.',
-    `Title integration: render ONLY the exact name "${worldName}" — no subtitles, no taglines, no extra words. Style it as a book cover or movie poster title: typography, placement, size, and decorative elements must match the setting's visual identity and theme. Keep ALL title text strictly within the central 80% of the image (safe zone), never touching or crossing any edge.`,
-    'Restrictions: no logos, no watermarks, no UI, no close-up faces, no characters as the main subject, no external trademarks or copyright marks.'
+    'Crie uma key art ilustrada cinematografica.',
+    `Ancora de cenario: nome do mundo "${worldName || 'Mundo sem nome'}".`,
+    ...(visualDescription ? [`Direcao visual: ${visualDescription}.`] : []),
+    'Objetivos de composicao: paisagem epica ou vista de assentamento, sensacao clara de escala, profundidade em camadas, clima e narrativa visual — a imagem INTEIRA deve ser guiada pelo tema e pela estetica deste cenario.',
+    'Referencia de capa: se o nome do mundo evocar uma franquia conhecida de filme, serie, jogo, quadrinho ou livro, baseie a imagem INTEIRA — paleta, atmosfera, iluminacao, composicao e estilo visual — na estetica da capa ou poster oficial. A referencia tematica define tudo: color grading, design ambiental, clima e direcao de arte.',
+    `Integracao de titulo: renderize APENAS o nome exato "${worldName}" — sem subtitulos, sem slogans, sem palavras extras. Estilize como titulo de capa de livro ou poster de filme: tipografia, posicionamento, tamanho e elementos decorativos devem corresponder a identidade visual e ao tema do cenario. Mantenha TODO o texto do titulo estritamente dentro da zona segura central de 80% da imagem, sem tocar ou ultrapassar qualquer borda.`,
+    'Restricoes: sem logos, sem marcas-d\'agua, sem UI, sem rostos em close, sem personagens como assunto principal, sem marcas registradas externas ou avisos de copyright.'
   ].join('\n')
 }
 
@@ -65,16 +65,16 @@ function buildCharacterImagePrompt(params: {
   const visualDescription = sanitizeInlineText(params.visualDescription)
 
   return [
-    'Create a RPG character portrait illustration.',
-    'Style: high quality, portrait bust shot.',
-    'Rules: no watermarks, no typography, safe for all audiences.',
-    `Setting: ${worldName || 'Unknown world'}${campaignName ? `, ${campaignName}` : ''}.`,
-    ...(gender ? [`Gender: ${gender}.`] : []),
-    ...(race ? [`Race/Species: ${race}.`] : []),
-    `Profession: ${profession || 'Traveler'}.`,
-    ...(additional ? [`Visual details: ${additional}.`] : []),
-    ...(visualDescription ? [`Visual direction: ${visualDescription}.`] : []),
-    'Composition: centered character, warm lighting, fully clothed.'
+    'Crie uma ilustracao de retrato de personagem de RPG.',
+    'Estilo: alta qualidade, enquadramento de busto.',
+    'Regras: sem marcas-d\'agua, sem tipografia, seguro para todos os publicos.',
+    `Cenario: ${worldName || 'Mundo desconhecido'}${campaignName ? `, ${campaignName}` : ''}.`,
+    ...(gender ? [`Genero: ${gender}.`] : []),
+    ...(race ? [`Raca/Especie: ${race}.`] : []),
+    `Profissao: ${profession || 'Viajante'}.`,
+    ...(additional ? [`Detalhes visuais: ${additional}.`] : []),
+    ...(visualDescription ? [`Direcao visual: ${visualDescription}.`] : []),
+    'Composicao: personagem centralizado, iluminacao quente, totalmente vestido.'
   ].join('\n')
 }
 
