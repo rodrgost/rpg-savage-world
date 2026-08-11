@@ -1684,7 +1684,7 @@ export class GeminiAdapter implements Narrator {
       '',
       '## Locais Marcantes',
       'List exactly 2 to 4 canonical locations. For each, use this format:',
-      '*   **Nome do Local:** Description of 2 to 3 sentences — geography, infrastructure, and public function. Describe what any passerby would observe: the physical layout, the official purpose, and the kind of people found there. Do not invent internal conflicts or hidden dangers.','
+      '*   **Nome do Local:** Description of 2 to 3 sentences — geography, infrastructure, and public function. Describe what any passerby would observe: the physical layout, the official purpose, and the kind of people found there. Do not invent internal conflicts or hidden dangers.',
       '',
       '## Regras do Mundo',
       'Define the fundamental, non-negotiable rules that govern this universe: what is physically, socially, or causally possible and impossible here, and what would break the world\'s internal logic if violated.',
