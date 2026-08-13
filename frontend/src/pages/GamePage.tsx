@@ -480,7 +480,11 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
             </div>
           ) : (
             <div key={`${message.messageId}-segment-${segmentIndex}`} className="narrative-segment narrator-segment">
-              <strong className="narrator-label">📖 Narrador</strong>
+              <strong className="narrator-label">
+                📖 Narrador
+                {/* ~4 chars/token — mesma heurística do backend */}
+                <span className="narrator-token-badge">~{Math.ceil(segment.text.length / 4)}t</span>
+              </strong>
               <div className="narrative-text">
                 {splitNarrativeParagraphs(segment.text).map((paragraph, i) => (
                   <p key={i}>{paragraph}</p>

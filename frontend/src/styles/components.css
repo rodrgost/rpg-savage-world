@@ -884,6 +884,15 @@ button:disabled {
   margin-bottom: var(--space-2);
 }
 
+.narrator-token-badge {
+  font-size: 0.75em;
+  font-weight: 400;
+  font-variant: normal;
+  opacity: 0.5;
+  font-family: monospace;
+  letter-spacing: 0.02em;
+}
+
 .msg.narrator .narrative-text,
 .markdown-view {
   font-family: var(--font-serif);
