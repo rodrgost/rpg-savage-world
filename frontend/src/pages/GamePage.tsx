@@ -366,7 +366,7 @@ function formatState(state: GameState): string {
 
 // ─── Components ───
 
-const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerImage, npcs = [], knownNpcs = [] }: {
+const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPerTick = 3, playerName, playerImage, npcs = [], knownNpcs = [], cumulativeTokens }: {
   message: ChatMessage
   isNew?: boolean
   charsPerTick?: number
@@ -374,6 +374,7 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
   playerImage?: { mimeType: string; base64: string } | null
   npcs?: NonNullable<GameState['npcs']>
   knownNpcs?: KnownNpc[]
+  cumulativeTokens?: number
 }) {
   const segments = getNarrativeSegments(message)
   const fullText = joinNarrativeSegments(segments)
@@ -482,8 +483,10 @@ const NarrativeBubble = memo(function NarrativeBubble({ message, isNew, charsPer
             <div key={`${message.messageId}-segment-${segmentIndex}`} className="narrative-segment narrator-segment">
               <strong className="narrator-label">
                 📖 Narrador
-                {/* ~4 chars/token — mesma heurística do backend */}
-                <span className="narrator-token-badge">~{Math.ceil(segment.text.length / 4)}t</span>
+                {/* acumulado de tokens até esta msg — mesma heurística do backend (~4 chars/token) */}
+                {cumulativeTokens !== undefined && (
+                  <span className="narrator-token-badge">~{cumulativeTokens < 1000 ? `${cumulativeTokens}t` : `${(cumulativeTokens / 1000).toFixed(1)}kt`}</span>
+                )}
               </strong>
               <div className="narrative-text">
                 {splitNarrativeParagraphs(segment.text).map((paragraph, i) => (
@@ -2868,20 +2871,27 @@ export function GamePage() {
               <p className="chat-empty-text">A história ainda não começou. Escolha uma ação ou descreva o que seu personagem faz.</p>
             </div>
           )}
-          {displayMessages.map((msg, i) => {
-            const prev = displayMessages[i - 1]
-            const showSeparator = prev && msg.turn > 0 && prev.turn > 0 && msg.turn !== prev.turn
-            return (
-              <div key={msg.messageId ?? `msg-${i}`}>
-                {showSeparator && (
-                  <div className="turn-separator">
-                    <span className="turn-separator-label">Turno {msg.turn} · Cap. {state?.meta.chapter ?? 1}</span>
-                  </div>
-                )}
-                <NarrativeBubble message={msg} isNew={msg.messageId === latestNarratorId} charsPerTick={typewriterSpeed} playerName={playerName ?? state?.player.name} playerImage={playerImage} npcs={state?.npcs ?? []} knownNpcs={knownNpcs} />
-              </div>
-            )
-          })}
+          {(() => {
+            let cumulativeTokens = 0
+            return displayMessages.map((msg, i) => {
+              const msgText = msg.role === 'player'
+                ? (msg.playerInput ?? '')
+                : (msg.segments ?? []).map((s) => s.text ?? '').join(' ')
+              cumulativeTokens += Math.ceil(msgText.length / 4)
+              const prev = displayMessages[i - 1]
+              const showSeparator = prev && msg.turn > 0 && prev.turn > 0 && msg.turn !== prev.turn
+              return (
+                <div key={msg.messageId ?? `msg-${i}`}>
+                  {showSeparator && (
+                    <div className="turn-separator">
+                      <span className="turn-separator-label">Turno {msg.turn} · Cap. {state?.meta.chapter ?? 1}</span>
+                    </div>
+                  )}
+                  <NarrativeBubble message={msg} isNew={msg.messageId === latestNarratorId} charsPerTick={typewriterSpeed} playerName={playerName ?? state?.player.name} playerImage={playerImage} npcs={state?.npcs ?? []} knownNpcs={knownNpcs} cumulativeTokens={msg.role === 'narrator' ? cumulativeTokens : undefined} />
+                </div>
+              )
+            })
+          })()}
           {loading && (
             <div className="msg narrator loading">
               <strong>📖 Narrador</strong>
