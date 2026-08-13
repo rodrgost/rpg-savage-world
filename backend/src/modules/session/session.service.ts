@@ -588,13 +588,6 @@ export class SessionService {
       completed.push(option)
     }
 
-    if (completed.length < 4) {
-      warn(
-        'completeValidatedOptions',
-        `Opções válidas abaixo de 4 após validação (${completed.length}). Mantendo apenas opções coerentes em vez de fallback genérico.`
-      )
-    }
-
     return completed
   }
 
@@ -670,11 +663,7 @@ export class SessionService {
       }
       case 'travel': {
         const destination = typeof actionPayload.to === 'string' ? actionPayload.to.trim() : ''
-        if (!destination || normalizeLookupValue(destination) === 'desconhecido') {
-          warn('validateNarratorOption', `Descartando travel sem destino válido: "${option.text}"`)
-          return null
-        }
-        if (normalizeLookupValue(destination) === normalizeLookupValue(state.worldState.activeLocation)) {
+        if (destination && normalizeLookupValue(destination) === normalizeLookupValue(state.worldState.activeLocation)) {
           warn('validateNarratorOption', `Convertendo travel com destino igual ao local atual para custom: "${destination}"`)
           option.actionType = 'custom'
           delete actionPayload.to
@@ -682,7 +671,9 @@ export class SessionService {
           if (diceCheck) { diceCheck.required = false; diceCheck.successChance = null }
           break
         }
-        actionPayload.to = destination
+        if (destination) {
+          actionPayload.to = destination
+        }
         break
       }
       case 'custom': {

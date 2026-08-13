@@ -1881,6 +1881,8 @@ button:disabled {
 
 .subheader-status .location-tag {
   color: var(--accent);
+  word-break: break-word;
+  white-space: normal;
 }
 
 .hud-icon {
