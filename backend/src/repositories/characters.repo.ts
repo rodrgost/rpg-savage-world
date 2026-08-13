@@ -32,6 +32,7 @@ export type CharacterDoc = {
   sheetValues?: Record<string, unknown>
   createdAt: unknown
   updatedAt?: unknown
+  lastPlayedAt?: unknown
 }
 
 export class CharactersRepo {
@@ -130,7 +131,10 @@ export class CharactersRepo {
     const qs = await characterQuery.get()
     const rows = qs.docs.map((doc) => ({ id: doc.id, ...(doc.data() as CharacterDoc) }))
 
-    rows.sort((a, b) => this.toMillis(b.createdAt) - this.toMillis(a.createdAt))
+    rows.sort((a, b) => {
+      const diff = this.toMillis(b.lastPlayedAt) - this.toMillis(a.lastPlayedAt)
+      return diff !== 0 ? diff : this.toMillis(b.createdAt) - this.toMillis(a.createdAt)
+    })
     return rows
   }
 
@@ -151,14 +155,20 @@ export class CharactersRepo {
     }
 
     const rows = Array.from(merged.values())
-    rows.sort((a, b) => this.toMillis(b.createdAt) - this.toMillis(a.createdAt))
+    rows.sort((a, b) => {
+      const diff = this.toMillis(b.lastPlayedAt) - this.toMillis(a.lastPlayedAt)
+      return diff !== 0 ? diff : this.toMillis(b.createdAt) - this.toMillis(a.createdAt)
+    })
     return rows
   }
 
   async listByCampaign(campaignId: string): Promise<Array<CharacterDoc & { id: string }>> {
     const snapshot = await firestore.collection('characters').where('campaignId', '==', campaignId).get()
     const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as CharacterDoc) }))
-    rows.sort((a, b) => this.toMillis(b.createdAt) - this.toMillis(a.createdAt))
+    rows.sort((a, b) => {
+      const diff = this.toMillis(b.lastPlayedAt) - this.toMillis(a.lastPlayedAt)
+      return diff !== 0 ? diff : this.toMillis(b.createdAt) - this.toMillis(a.createdAt)
+    })
     return rows
   }
 
@@ -166,7 +176,10 @@ export class CharactersRepo {
   async listByWorld(worldId: string): Promise<Array<CharacterDoc & { id: string }>> {
     const snapshot = await firestore.collection('characters').where('worldId', '==', worldId).get()
     const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as CharacterDoc) }))
-    rows.sort((a, b) => this.toMillis(b.createdAt) - this.toMillis(a.createdAt))
+    rows.sort((a, b) => {
+      const diff = this.toMillis(b.lastPlayedAt) - this.toMillis(a.lastPlayedAt)
+      return diff !== 0 ? diff : this.toMillis(b.createdAt) - this.toMillis(a.createdAt)
+    })
     return rows
   }
 
@@ -206,6 +219,13 @@ export class CharactersRepo {
         updatedAt: FieldValue.serverTimestamp(),
         ...(image ? { image } : {})
       },
+      { merge: true }
+    )
+  }
+
+  async setLastPlayedAt(characterId: string): Promise<void> {
+    await firestore.collection('characters').doc(characterId).set(
+      { lastPlayedAt: FieldValue.serverTimestamp() },
       { merge: true }
     )
   }

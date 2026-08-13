@@ -1088,6 +1088,7 @@ export class SessionService {
     const reusableSessionId = await this.findReusableSessionId(resumeParams)
     if (reusableSessionId) {
       log('createSession', `Retomando sessão existente ${reusableSessionId} para ${resumeKey}`)
+      await this.characters.setLastPlayedAt(params.characterId)
       const payload = await this.buildSessionPayload(reusableSessionId)
       return { sessionId: reusableSessionId, ...payload }
     }
@@ -1112,6 +1113,8 @@ export class SessionService {
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       })
+
+    await this.characters.setLastPlayedAt(params.characterId)
 
     // Parse character attributes as DieType
     const rawAttrs = (character.attributes ?? {}) as Record<string, unknown>

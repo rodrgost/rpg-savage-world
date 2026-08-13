@@ -40,10 +40,15 @@ export function logLlmRequest(tag: string, opts: {
   model?: string
   maxOutputTokens?: number
   temperature?: number
+  cachedContent?: string
+  cachedContentSource?: 'request' | 'env'
 }): void {
   const sep = '═'.repeat(80)
   writeLine(sep)
   writeLine(`▶ LLM REQUEST  [${tag}]  model=${opts.model ?? '?'}  maxTokens=${opts.maxOutputTokens ?? '?'}  temp=${opts.temperature ?? '?'}`)
+  if (opts.cachedContent) {
+    writeLine(`── CACHE ── cachedContent=${opts.cachedContent} source=${opts.cachedContentSource ?? '?'}`)
+  }
   if (opts.systemPrompt) {
     writeLine('── SYSTEM PROMPT ──')
     for (const line of opts.systemPrompt.split('\n')) {

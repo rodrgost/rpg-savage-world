@@ -1123,6 +1123,7 @@ export class GeminiAdapter implements Narrator {
   private readonly openAiSupportsCustomTemperature = this.provider === 'openai'
     ? readBool('OPENAI_SUPPORTS_TEMPERATURE', !openAiModelOnlySupportsDefaultTemperature(this.model))
     : true
+  private hasWarnedMissingExplicitCacheConfig = false
 
   private generateTextCallId = 0
 
@@ -1170,8 +1171,24 @@ export class GeminiAdapter implements Narrator {
     const requestCachedContent = normalizeGeminiCachedContentName(options.cachedContent)
     const configuredCachedContent = this.geminiEnableExplicitCache ? this.geminiCachedContent : undefined
     const cachedContent = requestCachedContent ?? configuredCachedContent
+    const cachedContentSource: 'request' | 'env' | undefined = requestCachedContent
+      ? 'request'
+      : configuredCachedContent
+        ? 'env'
+        : undefined
     const thinkingBudget = options.thinkingBudget
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+    if (
+      this.provider === 'gemini'
+      && this.geminiEnableExplicitCache
+      && !requestCachedContent
+      && !this.geminiCachedContent
+      && !this.hasWarnedMissingExplicitCacheConfig
+    ) {
+      this.hasWarnedMissingExplicitCacheConfig = true
+      warn(this.logTag, 'GEMINI_ENABLE_EXPLICIT_CACHE=true, mas GEMINI_CACHED_CONTENT não está definido; chamadas seguirão sem cache explícito até configurar o nome do cache ou enviar options.cachedContent')
+    }
 
     // Montar contents conforme tipo do input
     const isMultiTurn = Array.isArray(promptOrContents)
@@ -1186,7 +1203,9 @@ export class GeminiAdapter implements Narrator {
       userPrompt: logPrompt,
       model: this.model,
       maxOutputTokens,
-      temperature
+      temperature,
+      cachedContent,
+      cachedContentSource
     })
     if (cachedContent) {
       log(this.logTag, `${callTag} usando cachedContent=${cachedContent}`)
