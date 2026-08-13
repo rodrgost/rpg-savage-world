@@ -85,6 +85,8 @@ type GenerateTextOptions = {
   temperature?: number
   /** Quando presente, enviado como campo separado systemInstruction na API Gemini */
   systemInstruction?: string
+  /** Referência de cache explícito do Gemini (ex.: cachedContents/abc123). */
+  cachedContent?: string
   /** Limita tokens gastos no raciocínio interno (thinking) do modelo. Default: 0 (desativado). */
   thinkingBudget?: number
 }
@@ -158,6 +160,17 @@ function readBool(name: string, fallback: boolean): boolean {
   const raw = readEnv(name).toLowerCase()
   if (raw === '') return fallback
   return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on'
+}
+
+function normalizeGeminiCachedContentName(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const normalized = value.trim()
+  if (!normalized) return undefined
+  if (normalized.startsWith('cachedContents/') || normalized.startsWith('projects/')) {
+    return normalized
+  }
+  if (normalized.includes('/')) return normalized
+  return `cachedContents/${normalized}`
 }
 
 // Alguns modelos OpenAI (família de raciocínio: gpt-5, o1, o3, o4, ...) só aceitam
@@ -1094,6 +1107,12 @@ export class GeminiAdapter implements Narrator {
     toNumber(readEnv('GEMINI_CHARACTER_SUGGEST_THINKING_BUDGET', '0'), 0),
     0
   )
+  private readonly geminiEnableExplicitCache = this.provider === 'gemini'
+    ? readBool('GEMINI_ENABLE_EXPLICIT_CACHE', false)
+    : false
+  private readonly geminiCachedContent = this.provider === 'gemini'
+    ? normalizeGeminiCachedContentName(readEnv('GEMINI_CACHED_CONTENT'))
+    : undefined
   // Reaproveita a temperatura base do provider para descrições visuais.
   private readonly imageDescriptionTemperature = this.temperature
   private readonly normalizedBaseUrl = this.baseUrl.replace(/\/+$/, '')
@@ -1148,6 +1167,9 @@ export class GeminiAdapter implements Narrator {
     const responseSchema = options.responseSchema
     const temperature = options.temperature ?? this.temperature
     const systemInstruction = options.systemInstruction
+    const requestCachedContent = normalizeGeminiCachedContentName(options.cachedContent)
+    const configuredCachedContent = this.geminiEnableExplicitCache ? this.geminiCachedContent : undefined
+    const cachedContent = requestCachedContent ?? configuredCachedContent
     const thinkingBudget = options.thinkingBudget
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -1166,6 +1188,9 @@ export class GeminiAdapter implements Narrator {
       maxOutputTokens,
       temperature
     })
+    if (cachedContent) {
+      log(this.logTag, `${callTag} usando cachedContent=${cachedContent}`)
+    }
 
     const startMs = Date.now()
 
@@ -1177,6 +1202,7 @@ export class GeminiAdapter implements Narrator {
           ...(systemInstruction
             ? { systemInstruction: { parts: [{ text: systemInstruction }] } }
             : {}),
+          ...(cachedContent ? { cachedContent } : {}),
           contents,
           generationConfig: {
             temperature,
