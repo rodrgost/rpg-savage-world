@@ -669,7 +669,7 @@ function parseValidateActionResponse(
   let diceCheck: DiceCheck | null = null
   if (chanceCheckRaw) {
     let required = chanceCheckRaw.required === true
-    const successChance = typeof chanceCheckRaw.successChance === 'number'
+    const successChance = typeof chanceCheckRaw.successChance === 'number' && Number.isFinite(chanceCheckRaw.successChance)
       ? Math.min(100, Math.max(0, Math.round(chanceCheckRaw.successChance)))
       : null
     // Se required=true mas successChance inválido, força required=false
@@ -2323,7 +2323,15 @@ export class GeminiAdapter implements Narrator {
 
       // attack sempre exige resolução por chanceCheck
       if (candidate.actionType === 'attack' && diceCheck) {
-        diceCheck = { ...diceCheck, required: true }
+        const normalizedChance = typeof diceCheck.successChance === 'number' && Number.isFinite(diceCheck.successChance)
+          ? Math.min(100, Math.max(0, Math.round(diceCheck.successChance)))
+          : null
+        diceCheck = {
+          ...diceCheck,
+          required: true,
+          successChance: normalizedChance ?? 50,
+          reason: diceCheck.reason.trim() || 'Ataque com desfecho incerto'
+        }
       }
 
       const signature = buildOptionSignature({
@@ -2357,7 +2365,7 @@ export class GeminiAdapter implements Narrator {
         : null
       if (rawChance) {
         let required = rawChance.required === true
-        const successChance = typeof rawChance.successChance === 'number'
+        const successChance = typeof rawChance.successChance === 'number' && Number.isFinite(rawChance.successChance)
           ? Math.min(100, Math.max(0, Math.round(rawChance.successChance)))
           : null
         // Se required=true mas successChance inválido, força required=false
@@ -2402,6 +2410,22 @@ export class GeminiAdapter implements Narrator {
     // Pós-processamento: garantir coerência de chanceCheck em todas as opções
     for (const option of options) {
       if (!option.diceCheck) continue
+
+      // Ataque sempre requer chanceCheck válido para evitar inconsistência estrutural.
+      if (option.actionType === 'attack') {
+        const normalizedChance = typeof option.diceCheck.successChance === 'number' && Number.isFinite(option.diceCheck.successChance)
+          ? Math.min(100, Math.max(0, Math.round(option.diceCheck.successChance)))
+          : null
+        if (!option.diceCheck.required || normalizedChance === null || !option.diceCheck.reason.trim()) {
+          warn('sanitizeNarratorResponse', `Ataque com chanceCheck inválido reparado: "${option.text}"`)
+        }
+        option.diceCheck = {
+          required: true,
+          successChance: normalizedChance ?? 50,
+          reason: option.diceCheck.reason.trim() || 'Ataque com desfecho incerto'
+        }
+        continue
+      }
 
       // Travel nunca requer chance de sucesso — é ação narrativa automática
       if (option.actionType === 'travel' && option.diceCheck.required) {
@@ -2774,7 +2798,7 @@ export class GeminiAdapter implements Narrator {
       // Se required=true, deve ter successChance entre 0 e 100
       if (option.diceCheck.required) {
         const sc = option.diceCheck.successChance
-        if (typeof sc !== 'number' || sc < 0 || sc > 100) {
+        if (typeof sc !== 'number' || !Number.isFinite(sc) || sc < 0 || sc > 100) {
           return { valid: false, reason: `option[${i}] chanceCheck.required=true but successChance invalid (${sc})` }
         }
       }
@@ -2902,13 +2926,6 @@ export class GeminiAdapter implements Narrator {
           narrativeStyle: systemPromptOpts.narrativeStyle,
           presentNpcs: sanitizeContext.presentNpcs
         })
-
-        const validationResult = this.isNarratorResponseStructurallyValid(sanitized)
-        if (!validationResult.valid) {
-          lastError = new Error('Resposta narrativa estruturalmente inválida')
-          warn('narratorResponse', `Attempt ${index + 1}/${attempts.length}: sanitized response failed structural validation — ${validationResult.reason}`)
-          continue
-        }
 
         if (parsed.source !== 'direct') {
           warn('narratorResponse', `Structured output recovered via ${parsed.source}`)

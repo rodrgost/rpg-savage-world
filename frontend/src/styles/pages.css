@@ -1934,6 +1934,35 @@
     justify-content: flex-start;
   }
 
+  .page-game .manual-quick-actions {
+    gap: 6px;
+  }
+
+  .page-game .manual-toggle-btn,
+  .page-game .manual-items-btn,
+  .page-game .weapon-quick-btn {
+    min-height: 40px;
+  }
+
+  .page-game .manual-toggle-btn,
+  .page-game .manual-items-btn {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+  }
+
+  .page-game .weapon-quick-actions {
+    width: 100%;
+  }
+
+  .page-game .weapon-quick-btn {
+    flex: 1 1 calc(50% - 6px);
+    text-align: center;
+  }
+
+  .page-game .weapon-equipped-label {
+    width: 100%;
+  }
+
   .options-grid {
     grid-template-columns: 1fr;
   }
@@ -2570,6 +2599,66 @@
   border-color: #3B82F6;
   color: #bfdbfe;
   box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+.page-game .manual-quick-actions {
+  margin-top: var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--glass-border);
+}
+
+.page-game .manual-toggle-btn.active {
+  border-color: #3B82F6;
+  color: #bfdbfe;
+  background: rgba(59, 130, 246, 0.16);
+}
+
+.page-game .weapon-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-game .weapon-quick-btn {
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  background: var(--bg-field);
+  font-size: 0.82rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.page-game .weapon-quick-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.page-game .weapon-quick-btn.equipped {
+  border-color: #3B82F6;
+  color: #bfdbfe;
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.page-game .weapon-quick-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.page-game .weapon-quick-empty {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.page-game .weapon-equipped-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .page-game .scroll-top-btn {

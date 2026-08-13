@@ -1410,6 +1410,8 @@ const SIDEBAR_TABS: { key: SidebarTab; label: string; icon: string }[] = [
 function CharacterSidebar({
   state,
   open,
+  activeTab,
+  onTabChange,
   onClose,
   onReset,
   resetting,
@@ -1430,6 +1432,8 @@ function CharacterSidebar({
 }: {
   state: GameState | null
   open: boolean
+  activeTab: SidebarTab
+  onTabChange: (tab: SidebarTab) => void
   onClose: () => void
   onReset: () => void
   resetting: boolean
@@ -1448,7 +1452,6 @@ function CharacterSidebar({
   knownNpcs?: KnownNpc[]
   onUpdateKnownNpc?: (npcId: string, patch: { relationalStatus?: Exclude<RelationalStatus, 'desconhecido'>; notes?: string; resetToAuto?: boolean }) => Promise<void>
 }) {
-  const [tab, setTab] = useState<SidebarTab>('status')
   const [confirmReset, setConfirmReset] = useState(false)
 
   if (!open) return null
@@ -1469,8 +1472,8 @@ function CharacterSidebar({
             <button
               key={t.key}
               type="button"
-              className={`sidebar-tab${tab === t.key ? ' active' : ''}`}
-              onClick={() => setTab(t.key)}
+              className={`sidebar-tab${activeTab === t.key ? ' active' : ''}`}
+              onClick={() => onTabChange(t.key)}
               title={t.label}
             >
               <span className="tab-icon">{t.icon}</span>
@@ -1481,7 +1484,7 @@ function CharacterSidebar({
 
         {/* Conteúdo da aba */}
         <div className="sidebar-content">
-          {tab === 'narration' ? (
+          {activeTab === 'narration' ? (
             <SidebarNarration
               narrativeStyle={narrativeStyle}
               simpleVocabulary={simpleVocabulary}
@@ -1493,7 +1496,7 @@ function CharacterSidebar({
             <p className="muted">Carregando...</p>
           ) : (
             <>
-              {tab === 'status' && (
+              {activeTab === 'status' && (
                 <SidebarOverview
                   player={p}
                   location={state?.worldState.activeLocation ?? '?'}
@@ -1501,7 +1504,7 @@ function CharacterSidebar({
                   chapter={state?.meta.chapter ?? 0}
                 />
               )}
-              {tab === 'inventory' && (
+              {activeTab === 'inventory' && (
                 <SidebarInventory
                   items={p.inventory}
                   onRemove={onRemoveItem}
@@ -1516,7 +1519,7 @@ function CharacterSidebar({
                   onUnequipShield={onUnequipShield}
                 />
               )}
-              {tab === 'known' && (
+              {activeTab === 'known' && (
                 <SidebarKnownNpcs
                   knownNpcs={knownNpcs}
                   activeLocation={state?.worldState.activeLocation}
@@ -2039,7 +2042,9 @@ export function GamePage() {
   const [selectedSkill, setSelectedSkill] = useState('')
   const [selectedAttribute, setSelectedAttribute] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showManualComposer, setShowManualComposer] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('status')
   const [resetting, setResetting] = useState(false)
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null)
   const [worldInfo, setWorldInfo] = useState<{ campaignName: string; worldName: string } | null>(null)
@@ -2071,6 +2076,21 @@ export function GamePage() {
     el.style.height = 'auto'
     el.style.height = `${el.scrollHeight}px`
   }, [input])
+
+  useEffect(() => {
+    if (!showManualComposer) {
+      setMention(null)
+      return
+    }
+
+    const el = inputRef.current
+    if (!el) return
+    requestAnimationFrame(() => {
+      el.focus()
+      el.style.height = 'auto'
+      el.style.height = `${el.scrollHeight}px`
+    })
+  }, [showManualComposer])
 
   type MentionNpc = NonNullable<GameState['npcs']>[number]
 
@@ -2489,6 +2509,7 @@ export function GamePage() {
         result = await executeCustomAction(sessionId, text, handleEnginePhase, signal)
       }
       handlePayload(result)
+      setShowManualComposer(false)
     } catch (err) {
       if ((err as { name?: string }).name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Falha ao enviar ação')
@@ -2709,8 +2730,20 @@ export function GamePage() {
   const bennies = state?.player.bennies ?? 0
   const isShaken = state?.player.isShaken ?? false
   const inventory = state?.player.inventory ?? []
+  const weaponItems = inventory.filter((item) => item.category === 'weapon' && item.quantity > 0)
+  const equippedAttackItemId = state?.player.equippedAttackItemId
+  const equippedWeaponName = weaponItems.find((item) => item.id === equippedAttackItemId)?.name
   const statusEffects = state?.player.statusEffects ?? []
   const npcEffects = (state?.npcs ?? []).filter((n) => (!n.location || n.location === state?.worldState.activeLocation) && n.status !== 'left')
+
+  function openInventorySidebar() {
+    setSidebarTab('inventory')
+    setSidebarOpen(true)
+  }
+
+  function toggleManualComposer() {
+    setShowManualComposer((prev) => !prev)
+  }
 
   return (
     <section className="page-game">
@@ -2755,7 +2788,14 @@ export function GamePage() {
               <button
                 type="button"
                 className="subheader-btn pill-ficha"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
+                onClick={() => {
+                  if (sidebarOpen) {
+                    setSidebarOpen(false)
+                    return
+                  }
+                  setSidebarTab('status')
+                  setSidebarOpen(true)
+                }}
                 title="Ficha do Personagem"
               >
                 📋 {state.player.name ?? 'Ficha'}
@@ -2788,6 +2828,8 @@ export function GamePage() {
       <CharacterSidebar
         state={state}
         open={sidebarOpen}
+        activeTab={sidebarTab}
+        onTabChange={setSidebarTab}
         onClose={() => setSidebarOpen(false)}
         onReset={handleReset}
         resetting={resetting}
@@ -2855,6 +2897,54 @@ export function GamePage() {
             disabled={loading}
           />
         )}
+
+        <div className="manual-quick-actions" role="group" aria-label="Ações manuais e inventário">
+          <button
+            type="button"
+            className={`subheader-btn pill-actions manual-toggle-btn${showManualComposer ? ' active' : ''}`}
+            aria-expanded={showManualComposer}
+            onClick={toggleManualComposer}
+            disabled={loading || validating || !sessionId}
+            title="Abrir ação manual"
+          >
+            {showManualComposer ? '✍️ Fechar ação manual' : '✍️ Ação manual'}
+          </button>
+          <button
+            type="button"
+            className="subheader-btn pill-ficha manual-items-btn"
+            onClick={openInventorySidebar}
+            disabled={!sessionId}
+            title="Abrir mochila"
+          >
+            🎒 Ver meus itens
+          </button>
+          <div className="weapon-quick-actions" aria-label="Troca rápida de arma">
+            {weaponItems.length > 0 ? (
+              weaponItems.map((item) => {
+                const isEquipped = item.id === equippedAttackItemId
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`weapon-quick-btn${isEquipped ? ' equipped' : ''}`}
+                    onClick={() => handleEquipAttack(item.id)}
+                    disabled={loading || !sessionId || isEquipped}
+                    title={isEquipped ? `${item.name} equipada` : `Equipar ${item.name}`}
+                  >
+                    ⚔️ {item.name}
+                  </button>
+                )
+              })
+            ) : (
+              <span className="weapon-quick-empty">Sem armas no inventário</span>
+            )}
+          </div>
+          {equippedWeaponName && (
+            <span className="weapon-equipped-label" title="Arma equipada no momento">
+              Equipada: {equippedWeaponName}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── Dice Check Confirm Modal ── */}
@@ -2970,77 +3060,79 @@ export function GamePage() {
       )}
 
       {/* ── Chat livre ── */}
-      <form className="form-grid" onSubmit={handleCustomSubmit}>
-        <div className="input-row">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => {
-              const value = e.target.value
-              setInput(value)
-              const caret = e.target.selectionStart ?? value.length
-              setMention(detectMention(value, caret))
-            }}
-            onKeyDown={(e) => {
-              if (mention && mentionMatches.length > 0) {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault()
-                  setMentionIndex((i) => (i + 1) % mentionMatches.length)
-                  return
+      {showManualComposer && (
+        <form className="form-grid" onSubmit={handleCustomSubmit}>
+          <div className="input-row">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => {
+                const value = e.target.value
+                setInput(value)
+                const caret = e.target.selectionStart ?? value.length
+                setMention(detectMention(value, caret))
+              }}
+              onKeyDown={(e) => {
+                if (mention && mentionMatches.length > 0) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    setMentionIndex((i) => (i + 1) % mentionMatches.length)
+                    return
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length)
+                    return
+                  }
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault()
+                    selectMention(mentionMatches[mentionIndex])
+                    return
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    setMention(null)
+                    return
+                  }
                 }
-                if (e.key === 'ArrowUp') {
+                if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
-                  setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length)
-                  return
+                  handleCustomSubmit()
                 }
-                if (e.key === 'Enter' || e.key === 'Tab') {
-                  e.preventDefault()
-                  selectMention(mentionMatches[mentionIndex])
-                  return
-                }
-                if (e.key === 'Escape') {
-                  e.preventDefault()
-                  setMention(null)
-                  return
-                }
-              }
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleCustomSubmit()
-              }
-            }}
-            onBlur={() => setTimeout(() => setMention(null), 120)}
-            placeholder="Descreva sua ação... (@ menciona NPCs, Enter envia, Shift+Enter nova linha)"
-            rows={1}
-          />
-          {mention && mentionMatches.length > 0 && (
-            <ul className="npc-mention-dropdown" role="listbox">
-              {mentionMatches.map((npc, i) => (
-                <li
-                  key={npc.id}
-                  role="option"
-                  aria-selected={i === mentionIndex}
-                  className={`npc-mention-item ${npc.disposition ?? 'neutral'} ${i === mentionIndex ? 'active' : ''}`}
-                  onMouseDown={(ev) => {
-                    ev.preventDefault()
-                    selectMention(npc)
-                  }}
-                  onMouseEnter={() => setMentionIndex(i)}
-                >
-                  <span className="npc-mention-dot" />
-                  <span className="npc-mention-name">{npc.displayName ?? npc.name}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="input-actions">
-            <button disabled={loading || validating || !sessionId || !input.trim()} type="submit">
-              {validating ? 'Validando...' : loading ? '...' : 'Enviar'}
-            </button>
+              }}
+              onBlur={() => setTimeout(() => setMention(null), 120)}
+              placeholder="Descreva sua ação... (@ menciona NPCs, Enter envia, Shift+Enter nova linha)"
+              rows={1}
+            />
+            {mention && mentionMatches.length > 0 && (
+              <ul className="npc-mention-dropdown" role="listbox">
+                {mentionMatches.map((npc, i) => (
+                  <li
+                    key={npc.id}
+                    role="option"
+                    aria-selected={i === mentionIndex}
+                    className={`npc-mention-item ${npc.disposition ?? 'neutral'} ${i === mentionIndex ? 'active' : ''}`}
+                    onMouseDown={(ev) => {
+                      ev.preventDefault()
+                      selectMention(npc)
+                    }}
+                    onMouseEnter={() => setMentionIndex(i)}
+                  >
+                    <span className="npc-mention-dot" />
+                    <span className="npc-mention-name">{npc.displayName ?? npc.name}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="input-actions">
+              <button disabled={loading || validating || !sessionId || !input.trim()} type="submit">
+                {validating ? 'Validando...' : loading ? '...' : 'Enviar'}
+              </button>
+            </div>
           </div>
-        </div>
-        {error && <p className="error">{error}</p>}
-      </form>
+        </form>
+      )}
+      {error && <p className="error">{error}</p>}
     </section>
   )
 }
