@@ -108,6 +108,14 @@ test('travel move apenas NPC com followsPlayer=true', () => {
   assert.equal(stayed?.status, 'left')
 })
 
+test('travel sanitiza nome de local vindo do LLM com underscores e inicial minúscula', () => {
+  const state = makeBaseState()
+
+  const result = applyAction(state, { type: 'travel', to: 'rua_do_portao_da_cidade' })
+
+  assert.equal(result.nextState.worldState.activeLocation, 'Rua do Portao da Cidade')
+})
+
 test('travel nao altera NPC indisponivel (incapacitado/derrotado/morto)', () => {
   const state = makeBaseState()
   state.npcs = [

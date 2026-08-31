@@ -663,6 +663,21 @@ export class SessionService {
       }
       case 'travel': {
         const destination = typeof actionPayload.to === 'string' ? actionPayload.to.trim() : ''
+        const normalizedDestination = destination
+          .replace(/[_-]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .split(' ')
+          .filter(Boolean)
+          .map((word, index) => {
+            const lower = word.toLowerCase()
+            const smallWords = new Set(['da', 'das', 'de', 'do', 'dos', 'e', 'em', 'na', 'nas', 'no', 'nos', 'a', 'as', 'o', 'os'])
+            if (index === 0 || !smallWords.has(lower) || lower.length === 1) {
+              return lower.charAt(0).toUpperCase() + lower.slice(1)
+            }
+            return lower
+          })
+          .join(' ')
+
         if (destination && normalizeLookupValue(destination) === normalizeLookupValue(state.worldState.activeLocation)) {
           warn('validateNarratorOption', `Convertendo travel com destino igual ao local atual para custom: "${destination}"`)
           option.actionType = 'custom'
@@ -672,7 +687,7 @@ export class SessionService {
           break
         }
         if (destination) {
-          actionPayload.to = destination
+          actionPayload.to = normalizedDestination || destination
         }
         break
       }

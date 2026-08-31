@@ -50,6 +50,28 @@ function resolvePlayerWeapon(state: GameState, isRanged: boolean): { damageFormu
   return { damageFormula: 'str', ap: 0 }
 }
 
+function normalizeLocationName(value: string): string {
+  const cleaned = value
+    .trim()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+
+  if (!cleaned) return ''
+
+  const smallWords = new Set(['da', 'das', 'de', 'do', 'dos', 'e', 'em', 'na', 'nas', 'no', 'nos', 'a', 'as', 'o', 'os'])
+  return cleaned
+    .split(' ')
+    .filter(Boolean)
+    .map((word, index) => {
+      const lowered = word.toLowerCase()
+      if (index === 0 || !smallWords.has(lowered) || lowered.length === 1) {
+        return lowered.charAt(0).toUpperCase() + lowered.slice(1)
+      }
+      return lowered
+    })
+    .join(' ')
+}
+
 function getSkillDie(state: GameState, skillName: string): DieType {
   return resolveSkillDie(state.player.skills, skillName) ?? 4
 }
@@ -521,7 +543,8 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
     // ─── Travel ───
     case 'travel': {
       const from = nextState.worldState.activeLocation
-      nextState.worldState.activeLocation = action.to
+      const to = normalizeLocationName(action.to) || action.to
+      nextState.worldState.activeLocation = to
       // Só acompanha o jogador quem estiver com followsPlayer=true.
       // Quem ficar para trás é marcado como "left" na cena anterior.
       nextState.npcs = nextState.npcs.map((npc) => {
@@ -532,12 +555,12 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
         if (isUnavailable) return npc
 
         if (npc.followsPlayer) {
-          return { ...npc, location: action.to, status: status === 'left' ? 'active' : status }
+          return { ...npc, location: to, status: status === 'left' ? 'active' : status }
         }
 
         return { ...npc, location: from, status: 'left' }
       })
-      emittedEvents.push({ type: 'location_change', payload: { from, to: action.to } })
+      emittedEvents.push({ type: 'location_change', payload: { from, to } })
       break
     }
 
