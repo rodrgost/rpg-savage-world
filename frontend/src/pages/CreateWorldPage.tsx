@@ -7,11 +7,12 @@ import {
   createWorld,
   deleteWorld,
   generateWorldImagePreview,
-  generateWorldLore,
+  generateWorldGuide,
   getWorld,
   updateWorld
 } from '../lib/api'
-import type { Visibility } from '../types'
+import type { Visibility, WorldGuide } from '../types'
+import { renderWorldGuideMarkdown } from '../types'
 
 type StoredImage = {
   mimeType: string
@@ -28,18 +29,18 @@ export function CreateWorldPage({ uid }: Props) {
   const isEditMode = !!worldId
 
   const [name, setName] = useState('')
-  const [lore, setLore] = useState('')
+  const [description, setDescription] = useState('')
+  const [worldGuide, setWorldGuide] = useState<WorldGuide | undefined>()
   const [loreUserInstruction, setLoreUserInstruction] = useState('')
-  const [narrativeStyleGuide, setNarrativeStyleGuide] = useState('')
   const [ownerId, setOwnerId] = useState('')
   const [visibility, setVisibility] = useState<Visibility>('private')
   const [imagePreview, setImagePreview] = useState<StoredImage | null>(null)
   const [loading, setLoading] = useState(false)
   const [loreLoading, setLoreLoading] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
-  const [loreTab, setLoreTab] = useState<'preview' | 'edit'>('preview')
   const [error, setError] = useState('')
   const isOwner = !isEditMode || !ownerId || ownerId === uid
+  const worldGuideMarkdown = renderWorldGuideMarkdown(worldGuide)
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -53,8 +54,8 @@ export function CreateWorldPage({ uid }: Props) {
           setOwnerId(world.ownerId)
           setVisibility(world.visibility)
           setName(world.name)
-          setLore(world.lore ?? '')
-          setNarrativeStyleGuide(world.narrativeStyleGuide ?? '')
+          setDescription(world.description ?? '')
+          setWorldGuide(world.worldGuide)
           setImagePreview(world.image ?? null)
         }
       } catch (loadError) {
@@ -93,20 +94,19 @@ export function CreateWorldPage({ uid }: Props) {
       setError('')
       setLoreLoading(true)
       try {
-        const generated = await generateWorldLore(worldId, {
+        const generated = await generateWorldGuide(worldId, {
           userInstruction: loreUserInstruction
         })
-        setLore(generated.lore)
-        setNarrativeStyleGuide(generated.narrativeStyleGuide ?? '')
+        setWorldGuide(generated.worldGuide)
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : 'Falha ao gerar lore do universo')
+        setError(loadError instanceof Error ? loadError.message : 'Falha ao gerar guia do universo')
       } finally {
         setLoreLoading(false)
       }
     } else {
       // No modo de criação, salva o universo primeiro e redireciona para edição
       if (!name.trim()) {
-        setError('Informe o nome do universo antes de gerar lore.')
+        setError('Informe o nome do universo antes de gerar guia.')
         return
       }
       setError('')
@@ -114,10 +114,13 @@ export function CreateWorldPage({ uid }: Props) {
       try {
         const newWorldId = await createWorld({
           name,
-          lore,
-          narrativeStyleGuide,
+          description,
+          worldGuide,
           visibility,
           image: imagePreview ?? undefined
+        })
+        await generateWorldGuide(newWorldId, {
+          userInstruction: loreUserInstruction
         })
         navigate(`/worlds/${newWorldId}/edit`)
       } catch (saveError) {
@@ -137,9 +140,9 @@ export function CreateWorldPage({ uid }: Props) {
 
     try {
       if (isEditMode && worldId) {
-        await updateWorld(worldId, { name, lore, narrativeStyleGuide, visibility, image: imagePreview ?? undefined })
+        await updateWorld(worldId, { name, description, worldGuide, visibility, image: imagePreview ?? undefined })
       } else {
-        await createWorld({ name, lore, narrativeStyleGuide, visibility, image: imagePreview ?? undefined })
+        await createWorld({ name, description, worldGuide, visibility, image: imagePreview ?? undefined })
       }
       navigate('/worlds')
     } catch (submitError) {
@@ -186,6 +189,17 @@ export function CreateWorldPage({ uid }: Props) {
           />
         </label>
 
+        <label>
+          Descrição do universo
+          <textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Ex: Uma cidade-estado suspensa onde magia industrial é regulada por guildas rivais."
+            rows={3}
+            disabled={isEditMode && !isOwner}
+          />
+        </label>
+
         {(!isEditMode || isOwner) && (
           <button
             className="btn-ai-gen"
@@ -208,7 +222,7 @@ export function CreateWorldPage({ uid }: Props) {
         )}
 
         <label>
-          Instrução do usuário para criar a lore
+          Instrução do usuário para criar o guia
           <textarea
             value={loreUserInstruction}
             onChange={(event) => setLoreUserInstruction(event.target.value)}
@@ -216,68 +230,28 @@ export function CreateWorldPage({ uid }: Props) {
             rows={4}
             disabled={!isOwner || loreLoading || imageLoading || loading}
           />
-          <span className="muted">Este campo não é salvo. Ele serve apenas para orientar a próxima geração de lore com IA.</span>
+          <span className="muted">Este campo não é salvo. Ele serve apenas para orientar a próxima geração do guia de universo com IA.</span>
         </label>
 
         {isOwner && (
           <button className="btn-ai-gen" disabled={loreLoading || imageLoading || loading} onClick={handleGenerateLore} type="button">
-            {loreLoading ? <><span className="btn-ai-spinner" /> Gerando lore…</> : '✨ Gerar lore com IA'}
+            {loreLoading ? <><span className="btn-ai-spinner" /> Gerando guia…</> : '✨ Gerar guia com IA'}
           </button>
         )}
 
         <div className="lore-section">
           <div className="lore-section-header">
-            <span className="lore-section-title">Lore do universo</span>
-            {(!isEditMode || isOwner) && (
-              <div className="lore-tabs">
-                <button
-                  type="button"
-                  className={`lore-tab${loreTab === 'preview' ? ' active' : ''}`}
-                  onClick={() => setLoreTab('preview')}
-                >
-                  📖 Visualizar
-                </button>
-                <button
-                  type="button"
-                  className={`lore-tab${loreTab === 'edit' ? ' active' : ''}`}
-                  onClick={() => setLoreTab('edit')}
-                >
-                  ✏️ Editar
-                </button>
-              </div>
-            )}
+            <span className="lore-section-title">Guia do universo</span>
           </div>
 
-          {loreTab === 'edit' && (!isEditMode || isOwner) ? (
-            <textarea
-              className="lore-textarea"
-              value={lore}
-              onChange={(event) => setLore(event.target.value)}
-              placeholder="Clique no botão abaixo para gerar lore com IA"
-              rows={20}
-            />
-          ) : (
-            <div className="lore-preview markdown-view">
-              {lore.trim() ? (
-                <Markdown remarkPlugins={[remarkGfm]}>{lore}</Markdown>
-              ) : (
-                <p className="muted">Nenhuma lore ainda. Gere com IA ou edite manualmente.</p>
-              )}
-            </div>
-          )}
+          <div className="lore-preview markdown-view">
+            {worldGuideMarkdown.trim() ? (
+              <Markdown remarkPlugins={[remarkGfm]}>{worldGuideMarkdown}</Markdown>
+            ) : (
+              <p className="muted">Nenhum guia ainda. Gere com IA para preencher os campos canônicos do universo.</p>
+            )}
+          </div>
         </div>
-
-        <label>
-          Tom e humor do universo
-          <textarea
-            value={narrativeStyleGuide}
-            onChange={(event) => setNarrativeStyleGuide(event.target.value)}
-            placeholder="Ex: Humor seco e tensão constante; pouco lirismo, ironia amarga, sensação de desgaste social e ameaça sempre próxima."
-            rows={5}
-            disabled={isEditMode && !isOwner}
-          />
-          <span className="muted">Opcional. Se preenchido, isso orienta o tom, o humor e o clima emocional da narração e das sugestões de personagem deste universo.</span>
-        </label>
 
         <p className="muted">As regras do jogo são baseadas em Savage Worlds.</p>
 

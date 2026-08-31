@@ -190,8 +190,7 @@ function mapWorldRecord(item: {
   visibility?: Visibility
   name?: string
   description?: string
-  lore?: string
-  narrativeStyleGuide?: string
+  worldGuide?: World['worldGuide']
   ruleSetId?: string
   image?: { mimeType?: string; base64?: string }
 }): World {
@@ -202,8 +201,7 @@ function mapWorldRecord(item: {
     visibility: normalizeVisibility(item.visibility),
     name: item.name ?? '',
     description: item.description ?? '',
-    lore: item.lore ?? '',
-    narrativeStyleGuide: item.narrativeStyleGuide ?? '',
+    worldGuide: item.worldGuide,
     ruleSetId: item.ruleSetId ?? 'savage-worlds',
     image: mapStoredImage(item.image)
   }
@@ -420,8 +418,8 @@ export async function generateCampaignImagePreview(params: {
 
 export async function createWorld(params: {
   name: string
-  lore?: string
-  narrativeStyleGuide?: string
+  description?: string
+  worldGuide?: World['worldGuide']
   ruleSetId?: string
   visibility?: Visibility
   image?: StoredImage
@@ -442,8 +440,7 @@ export async function listWorlds(): Promise<World[]> {
       visibility?: Visibility
       name: string
       description?: string
-      lore?: string
-      narrativeStyleGuide?: string
+      worldGuide?: World['worldGuide']
       ruleSetId?: string
       image?: { mimeType?: string; base64?: string }
     }>
@@ -461,8 +458,7 @@ export async function getWorld(worldId: string): Promise<World> {
       visibility?: Visibility
       name: string
       description?: string
-      lore?: string
-      narrativeStyleGuide?: string
+      worldGuide?: World['worldGuide']
       ruleSetId?: string
       image?: { mimeType?: string; base64?: string }
     }
@@ -473,7 +469,7 @@ export async function getWorld(worldId: string): Promise<World> {
 
 export async function updateWorld(
   worldId: string,
-  params: { name?: string; description?: string; lore?: string; narrativeStyleGuide?: string; ruleSetId?: string; visibility?: Visibility; image?: StoredImage }
+  params: { name?: string; description?: string; worldGuide?: World['worldGuide']; ruleSetId?: string; visibility?: Visibility; image?: StoredImage }
 ): Promise<void> {
   await apiRequest<{ ok: true }>(`/worlds/${encodeURIComponent(worldId)}`, {
     method: 'PUT',
@@ -487,11 +483,11 @@ export async function deleteWorld(worldId: string): Promise<void> {
   })
 }
 
-export async function generateWorldLore(
+export async function generateWorldGuide(
   worldId: string,
   params?: { userInstruction?: string }
-): Promise<{ lore: string; narrativeStyleGuide?: string }> {
-  const response = await apiRequest<{ lore: string; narrativeStyleGuide?: string }>(`/worlds/${encodeURIComponent(worldId)}/generate-lore`, {
+): Promise<{ worldGuide: World['worldGuide'] }> {
+  const response = await apiRequest<{ worldGuide: World['worldGuide'] }>(`/worlds/${encodeURIComponent(worldId)}/generate-lore`, {
     method: 'POST',
     body: JSON.stringify({ userInstruction: params?.userInstruction ?? '' })
   })

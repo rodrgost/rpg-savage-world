@@ -8,7 +8,7 @@ const actions = [
   {
     icon: '🌍',
     title: 'Universos',
-    description: 'Crie cenários, lore e imagens-base para sustentar novas campanhas.',
+    description: 'Crie cenários, guias canônicos e imagens-base para sustentar novas campanhas.',
     to: '/worlds',
     action: 'Abrir universos'
   },
@@ -43,7 +43,7 @@ const actions = [
 ]
 
 const flowSteps = [
-  { num: '01', icon: '🌍', label: 'Universo',    text: 'Crie um universo com imagem e lore para definir o cenário base.' },
+  { num: '01', icon: '🌍', label: 'Universo',    text: 'Crie um universo com imagem e guia canônico para definir o cenário base.' },
   { num: '02', icon: '⚔️', label: 'Campanha',    text: 'Abra uma campanha dentro desse universo e refine a temática.' },
   { num: '03', icon: '🧙', label: 'Personagem',  text: 'Monte a ficha vinculada à campanha e ajuste atributos e perícias.' },
   { num: '04', icon: '🎲', label: 'Sessão',       text: 'Inicie a sessão e interaja pelo chat com o estado persistido por turno.' },

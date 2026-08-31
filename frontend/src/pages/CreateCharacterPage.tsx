@@ -141,7 +141,7 @@ export function CreateCharacterPage({ uid }: Props) {
   const skillPointsUsed = useMemo(() => countSkillSteps(skills), [skills])
   const skillPointsLeft = skillPointsTotal - skillPointsUsed
   const selectedWorld = worlds.find((world) => world.id === selectedWorldId)
-  const selectedWorldHasLore = Boolean(selectedWorld?.lore?.trim())
+  const selectedWorldHasGuide = Boolean(selectedWorld?.worldGuide)
   const isOwner = !isEditMode || !ownerId || ownerId === uid
   const isReadOnly = isEditMode && !isOwner
 
@@ -268,8 +268,8 @@ export function CreateCharacterPage({ uid }: Props) {
 
   async function handleSuggest() {
     if (!selectedWorldId) return
-    if (!selectedWorldHasLore) {
-      setError('Este mundo ainda não possui lore para gerar personagem.')
+    if (!selectedWorldHasGuide) {
+      setError('Este mundo ainda não possui guia para gerar personagem.')
       return
     }
     setSuggestLoading(true)
@@ -495,10 +495,10 @@ export function CreateCharacterPage({ uid }: Props) {
               <div className="form-row-2">
                 <button
                   className="btn-ai-gen"
-                  disabled={suggestLoading || !selectedWorldHasLore}
+                  disabled={suggestLoading || !selectedWorldHasGuide}
                   onClick={handleSuggest}
                   type="button"
-                  title={selectedWorldHasLore ? 'Sugerir personagem pela IA' : 'O mundo precisa ter lore antes de sugerir personagem'}
+                  title={selectedWorldHasGuide ? 'Sugerir personagem pela IA' : 'O mundo precisa ter guia antes de sugerir personagem'}
                 >
                   {suggestLoading ? <><span className="btn-ai-spinner" /> Gerando sugestão…</> : '✨ Sugerir pela IA'}
                 </button>
@@ -518,9 +518,9 @@ export function CreateCharacterPage({ uid }: Props) {
               </div>
             )}
 
-            {selectedWorldId && !selectedWorldHasLore && (
+            {selectedWorldId && !selectedWorldHasGuide && (
               <p className="error" style={{ margin: 0 }}>
-                Este mundo ainda não possui lore para gerar personagem.
+                Este mundo ainda não possui guia para gerar personagem.
               </p>
             )}
 
