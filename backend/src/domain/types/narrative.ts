@@ -3,6 +3,7 @@
 // Cada resposta da LLM segue o formato NarratorTurnResponse.
 
 import type { NarrativeStyle, PlayerAction } from './gameState.js'
+import type { WorldGuide } from './world-guide.js'
 
 // ─── Inventário ───
 
@@ -246,8 +247,7 @@ export type NarrateStartRequest = {
   world?: {
     name?: string
     description?: string
-    lore?: string
-    narrativeStyleGuide?: string
+    worldGuide?: WorldGuide
   }
   campaign?: {
     storyDescription: string
@@ -279,8 +279,7 @@ export type NarrateTurnRequest = {
   world?: {
     name?: string
     description?: string
-    lore?: string
-    narrativeStyleGuide?: string
+    worldGuide?: WorldGuide
   }
   /** Dados da campanha (história) — injetados no systemInstruction */
   campaign?: {

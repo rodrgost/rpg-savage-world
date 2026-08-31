@@ -15,6 +15,56 @@ const StoredImageBody = z
 
 const VisibilityBody = z.enum(['private', 'public']).default('private')
 
+const WorldGuideBody = z.object({
+  llmPersona: z.object({
+    role: z.string().default(''),
+    perspective: z.string().default(''),
+    knowledgeLimits: z.string().default('')
+  }),
+  universeRules: z.object({
+    magicAndPowers: z.array(z.string()).default([]),
+    technology: z.array(z.string()).default([]),
+    impossibilities: z.array(z.string()).default([]),
+    costsAndLimits: z.array(z.string()).default([])
+  }),
+  glossary: z.object({
+    terms: z.array(z.object({
+      term: z.string().default(''),
+      definition: z.string().default(''),
+      preferredUsage: z.string().optional(),
+      avoidTerms: z.array(z.string()).optional().default([])
+    })).default([]),
+    forbiddenGenericTerms: z.array(z.string()).default([])
+  }),
+  factionsAndPower: z.object({
+    groups: z.array(z.object({
+      name: z.string().default(''),
+      role: z.string().default(''),
+      publicFace: z.string().default(''),
+      powerBase: z.string().default(''),
+      relationships: z.array(z.string()).default([])
+    })).default([]),
+    socialTensions: z.array(z.string()).default([]),
+    speciesAndCultures: z.array(z.string()).default([])
+  }),
+  knowledgeHorizon: z.object({
+    currentMoment: z.string().default(''),
+    knownFacts: z.array(z.string()).default([]),
+    unknownOrSpoilerFacts: z.array(z.string()).default([])
+  }),
+  geography: z.object({
+    immediateSetting: z.string().default(''),
+    keyLocations: z.array(z.string()).default([]),
+    sensoryTexture: z.string().default('')
+  }),
+  mood: z.object({
+    tone: z.string().default(''),
+    emotionalPalette: z.string().default(''),
+    languageStyle: z.string().default(''),
+    avoidStyle: z.string().default('')
+  })
+})
+
 const HindranceBody = z.object({
   name: z.string().min(1),
   severity: z.enum(['minor', 'major'])
@@ -72,8 +122,7 @@ const CampaignImagePreviewBody = z
 const CreateWorldBody = z.object({
   name: z.string().min(1),
   description: z.string().optional().default(''),
-  lore: z.string().optional().default(''),
-  narrativeStyleGuide: z.string().optional().default(''),
+  worldGuide: WorldGuideBody.optional(),
   ruleSetId: z.string().optional(),
   visibility: VisibilityBody.optional(),
   image: StoredImageBody.optional()
@@ -82,8 +131,7 @@ const CreateWorldBody = z.object({
 const UpdateWorldBody = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
-  lore: z.string().optional(),
-  narrativeStyleGuide: z.string().optional(),
+  worldGuide: WorldGuideBody.optional(),
   ruleSetId: z.string().optional(),
   visibility: VisibilityBody.optional(),
   image: StoredImageBody.optional()
@@ -95,7 +143,7 @@ const WorldImagePreviewBody = z
   })
   .strict()
 
-const GenerateWorldLoreBody = z
+const GenerateWorldGuideBody = z
   .object({
     userInstruction: z.string().max(1200).optional().default('')
   })
@@ -309,9 +357,9 @@ export class GameDataController {
   }
 
   @Post('/worlds/:worldId/generate-lore')
-  async generateWorldLore(@CurrentUser('uid') userId: string, @Param('worldId') worldId: string, @Body() body: unknown) {
-    const parsed = GenerateWorldLoreBody.parse(body ?? {})
-    return await this.gameData.generateWorldLore({ userId, worldId, ...parsed })
+  async generateWorldGuide(@CurrentUser('uid') userId: string, @Param('worldId') worldId: string, @Body() body: unknown) {
+    const parsed = GenerateWorldGuideBody.parse(body ?? {})
+    return await this.gameData.generateWorldGuide({ userId, worldId, ...parsed })
   }
 
   // ── Characters ───────────────────────────────

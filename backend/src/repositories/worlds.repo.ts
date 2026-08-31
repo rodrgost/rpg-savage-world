@@ -1,5 +1,6 @@
 import { FieldValue, firestore } from '../infrastructure/firebase.js'
 import type { NpcDefinition } from '../domain/types/gameState.js'
+import type { WorldGuide } from '../domain/types/world-guide.js'
 
 export type Visibility = 'private' | 'public'
 
@@ -9,10 +10,7 @@ export type WorldDoc = {
   ruleSetId: string
   name: string
   description: string
-  lore: string
-  narrativeStyleGuide?: string
-  lorePtBrief?: string
-  loreEn?: string
+  worldGuide?: WorldGuide
   image?: {
     mimeType: string
     base64: string
@@ -51,8 +49,7 @@ export class WorldsRepo {
     ruleSetId: string
     name: string
     description: string
-    lore?: string
-    narrativeStyleGuide?: string
+    worldGuide?: WorldGuide
     image?: { mimeType: string; base64: string }
   }): Promise<void> {
     const image = params.image
@@ -65,8 +62,7 @@ export class WorldsRepo {
         ruleSetId: params.ruleSetId,
         name: params.name,
         description: params.description,
-        lore: params.lore ?? '',
-        ...(params.narrativeStyleGuide?.trim() ? { narrativeStyleGuide: params.narrativeStyleGuide.trim() } : {}),
+        ...(params.worldGuide ? { worldGuide: params.worldGuide } : {}),
         ...(image ? { image } : {}),
         status: 'active',
         createdAt: FieldValue.serverTimestamp(),
@@ -104,13 +100,10 @@ export class WorldsRepo {
     await firestore.collection('worlds').doc(worldId).delete()
   }
 
-  async updateLore(worldId: string, lore: string, lorePtBrief?: string, loreEn?: string, narrativeStyleGuide?: string): Promise<void> {
+  async updateWorldGuide(worldId: string, worldGuide: WorldGuide): Promise<void> {
     await firestore.collection('worlds').doc(worldId).set(
       {
-        lore,
-        ...(lorePtBrief ? { lorePtBrief } : {}),
-        ...(loreEn ? { loreEn } : {}),
-        ...(narrativeStyleGuide !== undefined ? { narrativeStyleGuide } : {}),
+        worldGuide,
         updatedAt: FieldValue.serverTimestamp()
       },
       { merge: true }
@@ -128,8 +121,7 @@ export class WorldsRepo {
     worldId: string
     name?: string
     description?: string
-    lore?: string
-    narrativeStyleGuide?: string
+    worldGuide?: WorldGuide
     ruleSetId?: string
     visibility?: Visibility
     image?: { mimeType: string; base64: string }
@@ -140,8 +132,7 @@ export class WorldsRepo {
     }
     if (params.name !== undefined) data.name = params.name
     if (params.description !== undefined) data.description = params.description
-    if (params.lore !== undefined) data.lore = params.lore
-    if (params.narrativeStyleGuide !== undefined) data.narrativeStyleGuide = params.narrativeStyleGuide
+    if (params.worldGuide !== undefined) data.worldGuide = params.worldGuide
     if (params.ruleSetId !== undefined) data.ruleSetId = params.ruleSetId
     if (params.visibility !== undefined) data.visibility = params.visibility
     if (image) data.image = image

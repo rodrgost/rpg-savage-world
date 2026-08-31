@@ -1,4 +1,5 @@
 import type { GameState } from '../domain/types/gameState.js'
+import type { WorldGuide } from '../domain/types/world-guide.js'
 import type {
   NarrateStartRequest,
   NarrateTurnRequest,
@@ -20,8 +21,8 @@ export type SummarizeHistoryRequest = {
 export type ExpandWorldRequest = {
   campaignName: string
   currentDescription?: string
-  /** Lore do mundo em inglês (loreEn) usado como contexto para diferenciar campanhas */
-  worldDescriptionEn?: string
+  /** Guia canônico do mundo renderizado como contexto para diferenciar campanhas */
+  worldGuideContext?: string
 }
 
 export type StoryCharacter = {
@@ -42,18 +43,17 @@ export type ExpandAdventureStoryResult = {
   nameEn?: string
 }
 
-export type ExpandWorldLoreRequest = {
+export type GenerateWorldGuideRequest = {
   name: string
   description: string
-  currentLore?: string
+  currentGuide?: WorldGuide
   userInstruction?: string
 }
 
 export type SuggestCharacterFromWorldRequest = {
   worldName: string
   storyDescription: string
-  worldLore?: string
-  worldNarrativeStyleGuide?: string
+  worldGuide?: WorldGuide
   /** Campos já preenchidos pelo usuário — a IA não deve substituí-los */
   existingFields?: {
     name?: string
@@ -68,8 +68,7 @@ export type SuggestCharacterFromWorldRequest = {
 export type SuggestCharacterFromDescriptionRequest = {
   characterConcept: string
   worldName?: string
-  worldLore?: string
-  worldNarrativeStyleGuide?: string
+  worldGuide?: WorldGuide
   campaignThematic?: string
   storyDescription?: string
 }
@@ -95,7 +94,7 @@ export type GenerateImageDescriptionRequest =
   | {
       entityType: 'campaign'
       title: string
-      /** História da campanha (ou loreEn como fallback) usada como contexto visual */
+      /** História da campanha ou guia de mundo renderizado usado como contexto visual */
       storyDescription?: string
     }
   | {
@@ -111,7 +110,7 @@ export type GenerateImageDescriptionRequest =
 export interface Narrator {
   summarizeHistory(req: SummarizeHistoryRequest): Promise<StructuredSummary>
   expandAdventureStory(req: ExpandWorldRequest): Promise<ExpandAdventureStoryResult>
-  expandWorldLore(req: ExpandWorldLoreRequest): Promise<{ lore: string; narrativeStyleGuide?: string; lorePtBrief?: string; loreEn?: string }>
+  generateWorldGuide(req: GenerateWorldGuideRequest): Promise<{ worldGuide: WorldGuide }>
   generateImageDescription(req: GenerateImageDescriptionRequest): Promise<string>
   suggestCharacterFromWorld(req: SuggestCharacterFromWorldRequest): Promise<SuggestedCharacter>
   suggestCharacterFromDescription(req: SuggestCharacterFromDescriptionRequest): Promise<SuggestedCharacter>

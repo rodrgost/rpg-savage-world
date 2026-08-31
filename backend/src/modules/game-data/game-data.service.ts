@@ -9,6 +9,8 @@ import { GeminiImageGenerator } from '../../llm/gemini-image.generator.js'
 import { normalizeToWebp, type StoredImage } from '../../utils/image-normalize.js'
 import { isDieType, CHARACTER_CREATION, ATTRIBUTE_KEYS } from '../../domain/savage-worlds/constants.js'
 import type { DieType, Hindrance, NpcDefinition, RelationalStatus } from '../../domain/types/gameState.js'
+import type { WorldGuide } from '../../domain/types/world-guide.js'
+import { renderWorldGuideMarkdown } from '../../domain/types/world-guide.js'
 import { KnownNpcsRepo } from '../../repositories/knownNpcs.repo.js'
 import { firebaseAuth, firestore } from '../../infrastructure/firebase.js'
 import { log, warn } from '../../utils/file-logger.js'
@@ -382,8 +384,7 @@ export class GameDataService {
     userId: string
     name: string
     description: string
-    lore?: string
-    narrativeStyleGuide?: string
+    worldGuide?: WorldGuide
     ruleSetId?: string
     visibility?: Visibility
     image?: StoredImage
@@ -400,8 +401,7 @@ export class GameDataService {
       ruleSetId: params.ruleSetId ?? 'savage-worlds',
       name: params.name,
       description: params.description?.trim() ?? '',
-      lore: params.lore?.trim() ?? '',
-      narrativeStyleGuide: params.narrativeStyleGuide?.trim() ?? '',
+      worldGuide: params.worldGuide,
       image: normalizedImage
     })
 
@@ -443,8 +443,7 @@ export class GameDataService {
     worldId: string
     name?: string
     description?: string
-    lore?: string
-    narrativeStyleGuide?: string
+    worldGuide?: WorldGuide
     ruleSetId?: string
     visibility?: Visibility
     image?: StoredImage
@@ -470,8 +469,7 @@ export class GameDataService {
       worldId: params.worldId,
       name: params.name,
       description: params.description?.trim(),
-      lore: params.lore?.trim(),
-      narrativeStyleGuide: params.narrativeStyleGuide?.trim(),
+      worldGuide: params.worldGuide,
       ruleSetId: params.ruleSetId,
       visibility: params.visibility ? normalizeVisibility(params.visibility) : undefined,
       image: normalizedImage
@@ -498,19 +496,20 @@ export class GameDataService {
     return { image: normalized }
   }
 
-  async generateWorldLore(params: { userId: string; worldId: string; userInstruction?: string }) {
+  async generateWorldGuide(params: { userId: string; worldId: string; userInstruction?: string }) {
     const world = await this.worlds.get(params.worldId)
     if (!world) throw new NotFoundException('Mundo não encontrado')
     if (world.ownerId !== params.userId) throw new ForbiddenException('Sem permissão para este mundo')
 
-    const result = await this.narrator.expandWorldLore({
+    const result = await this.narrator.generateWorldGuide({
       name: world.name,
       description: world.description,
+      currentGuide: world.worldGuide,
       userInstruction: params.userInstruction?.trim() || undefined
     })
 
-    await this.worlds.updateLore(world.id, result.lore, result.lorePtBrief, result.loreEn, result.narrativeStyleGuide)
-    return { lore: result.lore, narrativeStyleGuide: result.narrativeStyleGuide ?? '' }
+    await this.worlds.updateWorldGuide(world.id, result.worldGuide)
+    return { worldGuide: result.worldGuide }
   }
 
   // ─── Campaign (campanha dentro de um mundo) ───
@@ -555,14 +554,14 @@ export class GameDataService {
   }
 
   async generateCampaignStoryPreview(params: { userId: string; worldName: string; worldId?: string }) {
-    let worldDescriptionEn: string | undefined
+    let worldGuideContext: string | undefined
     if (params.worldId) {
       const world = await this.worlds.get(params.worldId)
-      worldDescriptionEn = world?.loreEn?.trim() || undefined
+      worldGuideContext = renderWorldGuideMarkdown(world?.worldGuide) || undefined
     }
     const result = await this.narrator.expandAdventureStory({
       campaignName: params.worldName,
-      worldDescriptionEn
+      worldGuideContext
     })
 
     return {
@@ -660,7 +659,7 @@ export class GameDataService {
     let storyContext = params.storyDescription?.trim() || undefined
     if (!storyContext && params.worldId) {
       const world = await this.worlds.get(params.worldId)
-      storyContext = world?.loreEn?.trim() || undefined
+      storyContext = renderWorldGuideMarkdown(world?.worldGuide) || undefined
     }
 
     const visualDescription = await this.buildVisualDescription({ entityType: 'campaign', title: campaignName || 'Unnamed campaign', storyDescription: storyContext })
@@ -686,7 +685,7 @@ export class GameDataService {
 
     const result = await this.narrator.expandAdventureStory({
       campaignName: campaign.name?.trim() || worldName,
-      worldDescriptionEn: world?.loreEn?.trim() || undefined
+      worldGuideContext: renderWorldGuideMarkdown(world?.worldGuide) || undefined
     })
 
     await this.campaigns.updateStoryDescription(campaign.id, result.storyDescription, result.storyCharacters, result.storyDescriptionEn)
@@ -866,11 +865,9 @@ export class GameDataService {
     }
 
     const worldName = world.name?.trim() ?? ''
-    const worldLore = (world.loreEn ?? world.lore ?? '').trim()
-    const worldNarrativeStyleGuide = world.narrativeStyleGuide?.trim() ?? ''
-    if (!worldLore) {
-      warn('suggestCharacterFromWorld', `Mundo sem lore para worldId=${params.worldId}`)
-      throw new BadRequestException('Este mundo ainda não possui lore para gerar personagem.')
+    if (!world.worldGuide) {
+      warn('suggestCharacterFromWorld', `Mundo sem worldGuide para worldId=${params.worldId}`)
+      throw new BadRequestException('Este mundo ainda não possui guia para gerar personagem.')
     }
     // N:M: a sugestão usa apenas o lore do Mundo como contexto.
     // storyDescription fica vazio para não duplicar o lore no prompt (Universe lore == Adventure story).
@@ -880,15 +877,14 @@ export class GameDataService {
       worldId: params.worldId,
       worldName,
       storyLength: storyDescription.length,
-      worldLoreLength: worldLore.length
+      hasWorldGuide: Boolean(world.worldGuide)
     })
 
     try {
       const suggestion = await this.narrator.suggestCharacterFromWorld({
         worldName,
         storyDescription,
-        worldLore,
-        worldNarrativeStyleGuide,
+        worldGuide: world.worldGuide,
         existingFields
       })
 
@@ -947,8 +943,6 @@ export class GameDataService {
     }
 
     const worldName = world.name?.trim() ?? ''
-    const worldLore = (world.loreEn ?? world.lore ?? '').trim()
-    const worldNarrativeStyleGuide = world.narrativeStyleGuide?.trim() ?? ''
     const campaignName = ''
     const storyDescription = ''
 
@@ -956,8 +950,7 @@ export class GameDataService {
       const suggestion = await this.narrator.suggestCharacterFromDescription({
         characterConcept: params.characterConcept.trim(),
         worldName,
-        worldLore,
-        worldNarrativeStyleGuide,
+        worldGuide: world.worldGuide,
         campaignThematic: campaignName,
         storyDescription
       })

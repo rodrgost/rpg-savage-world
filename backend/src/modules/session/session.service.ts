@@ -1169,8 +1169,7 @@ export class SessionService {
           ? {
               name: world.name,
               description: world.description,
-              lore: world.lorePtBrief ?? world.lore ?? world.loreEn,
-              narrativeStyleGuide: world.narrativeStyleGuide
+              worldGuide: world.worldGuide
             }
           : undefined,
         campaign: campaign
@@ -1353,8 +1352,7 @@ export class SessionService {
           ? {
               name: world.name,
               description: world.description,
-              lore: world.lorePtBrief ?? world.lore ?? world.loreEn,
-              narrativeStyleGuide: world.narrativeStyleGuide
+              worldGuide: world.worldGuide
             }
           : undefined,
         campaign: campaign
@@ -1599,8 +1597,7 @@ export class SessionService {
           ? {
               name: worldDoc.name,
               description: worldDoc.description,
-              lore: worldDoc.lorePtBrief ?? worldDoc.lore ?? worldDoc.loreEn,
-              narrativeStyleGuide: worldDoc.narrativeStyleGuide
+              worldGuide: worldDoc.worldGuide
             }
           : undefined,
         campaign: campaignDoc

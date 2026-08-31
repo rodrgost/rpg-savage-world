@@ -1,6 +1,6 @@
 import type {
   ExpandWorldRequest,
-  ExpandWorldLoreRequest,
+  GenerateWorldGuideRequest,
   ExpandAdventureStoryResult,
   StoryCharacter,
   GenerateImageDescriptionRequest,
@@ -34,6 +34,8 @@ import { SUMMARY_RESPONSE_SCHEMA } from './schemas/summary-response.schema.js'
 // dice-rules.ts — importações removidas (DICE_ROLL_PRINCIPLE_PT, DICE_TRACO_FIELD_EXPLANATION_PT não utilizadas)
 import type { StructuredSummary, SummaryLocationBlock, SummaryCurrentBlock } from './summary-format.js'
 import { emptyStructuredSummary } from './summary-format.js'
+import type { WorldGuide, WorldGuideFaction, WorldGuideGlossaryTerm } from '../domain/types/world-guide.js'
+import { renderWorldGuideMarkdown } from '../domain/types/world-guide.js'
 // findSkillDefinition e getCanonicalSkillLabel — não mais utilizados após migração chanceCheck
 import { logLlmRequest, logLlmResponse, logLlmError, log, warn, error as logErr } from '../utils/file-logger.js'
 import { buildOpenAiJsonSchemaResponseFormat } from './schemas/openai-strict-schema.js'
@@ -632,6 +634,112 @@ function sanitizeStringList(value: unknown): string[] {
   return value
     .map((entry) => sanitizeInlineText(entry, ''))
     .filter(Boolean)
+}
+
+function sanitizeLimitedStringList(value: unknown, maxItems: number, maxLength: number): string[] {
+  return sanitizeStringList(value)
+    .map((entry) => entry.slice(0, maxLength))
+    .slice(0, maxItems)
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function sanitizeGuideText(value: unknown, fallback = 'Não definido.', max = 600): string {
+  return sanitizeInlineText(value, fallback).slice(0, max) || fallback
+}
+
+function sanitizeWorldGuideFromRecord(source: Record<string, unknown>, fallback: { name: string; description?: string }): WorldGuide {
+  const root = source.worldGuide && typeof source.worldGuide === 'object' && !Array.isArray(source.worldGuide)
+    ? source.worldGuide as Record<string, unknown>
+    : source
+  const llmPersona = asRecord(root.llmPersona)
+  const universeRules = asRecord(root.universeRules)
+  const glossary = asRecord(root.glossary)
+  const factionsAndPower = asRecord(root.factionsAndPower)
+  const knowledgeHorizon = asRecord(root.knowledgeHorizon)
+  const geography = asRecord(root.geography)
+  const mood = asRecord(root.mood)
+
+  const terms: WorldGuideGlossaryTerm[] = (Array.isArray(glossary.terms) ? glossary.terms : [])
+    .slice(0, 24)
+    .map((entry) => {
+      const term = asRecord(entry)
+      return {
+        term: sanitizeGuideText(term.term, '', 80),
+        definition: sanitizeGuideText(term.definition, '', 360),
+        preferredUsage: sanitizeGuideText(term.preferredUsage, '', 180) || undefined,
+        avoidTerms: sanitizeLimitedStringList(term.avoidTerms, 8, 80)
+      }
+    })
+    .filter((entry) => entry.term && entry.definition)
+
+  const groups: WorldGuideFaction[] = (Array.isArray(factionsAndPower.groups) ? factionsAndPower.groups : [])
+    .slice(0, 12)
+    .map((entry) => {
+      const group = asRecord(entry)
+      return {
+        name: sanitizeGuideText(group.name, '', 100),
+        role: sanitizeGuideText(group.role, '', 240),
+        publicFace: sanitizeGuideText(group.publicFace, '', 360),
+        powerBase: sanitizeGuideText(group.powerBase, '', 260),
+        relationships: sanitizeLimitedStringList(group.relationships, 10, 180)
+      }
+    })
+    .filter((group) => group.name && group.role)
+
+  const description = sanitizeInlineText(fallback.description, '')
+  const name = sanitizeInlineText(fallback.name, 'este universo')
+
+  return {
+    llmPersona: {
+      role: sanitizeGuideText(llmPersona.role, `Observador interno de ${name}`, 220),
+      perspective: sanitizeGuideText(llmPersona.perspective, description || `Perspectiva nativa de ${name}.`, 500),
+      knowledgeLimits: sanitizeGuideText(llmPersona.knowledgeLimits, 'Sabe apenas o que seria conhecido no momento atual do cenário; não antecipa segredos futuros.', 500)
+    },
+    universeRules: {
+      magicAndPowers: sanitizeLimitedStringList(universeRules.magicAndPowers, 12, 260),
+      technology: sanitizeLimitedStringList(universeRules.technology, 12, 260),
+      impossibilities: sanitizeLimitedStringList(universeRules.impossibilities, 12, 260),
+      costsAndLimits: sanitizeLimitedStringList(universeRules.costsAndLimits, 12, 260)
+    },
+    glossary: {
+      terms,
+      forbiddenGenericTerms: sanitizeLimitedStringList(glossary.forbiddenGenericTerms, 16, 80)
+    },
+    factionsAndPower: {
+      groups,
+      socialTensions: sanitizeLimitedStringList(factionsAndPower.socialTensions, 12, 260),
+      speciesAndCultures: sanitizeLimitedStringList(factionsAndPower.speciesAndCultures, 12, 220)
+    },
+    knowledgeHorizon: {
+      currentMoment: sanitizeGuideText(knowledgeHorizon.currentMoment, 'Momento atual não definido.', 260),
+      knownFacts: sanitizeLimitedStringList(knowledgeHorizon.knownFacts, 16, 260),
+      unknownOrSpoilerFacts: sanitizeLimitedStringList(knowledgeHorizon.unknownOrSpoilerFacts, 16, 260)
+    },
+    geography: {
+      immediateSetting: sanitizeGuideText(geography.immediateSetting, 'Cenário imediato não definido.', 500),
+      keyLocations: sanitizeLimitedStringList(geography.keyLocations, 12, 260),
+      sensoryTexture: sanitizeGuideText(geography.sensoryTexture, 'Textura sensorial não definida.', 420)
+    },
+    mood: {
+      tone: sanitizeGuideText(mood.tone, 'Tom de aventura de RPG coerente com o cenário.', 260),
+      emotionalPalette: sanitizeGuideText(mood.emotionalPalette, 'Paleta emocional não definida.', 260),
+      languageStyle: sanitizeGuideText(mood.languageStyle, 'Português do Brasil claro e concreto.', 260),
+      avoidStyle: sanitizeGuideText(mood.avoidStyle, 'Evite termos genéricos que quebrem a identidade do universo.', 260)
+    }
+  }
+}
+
+function buildWorldGuideStyleGuide(worldGuide?: WorldGuide): string {
+  if (!worldGuide) return ''
+  return [
+    worldGuide.mood.tone,
+    worldGuide.mood.emotionalPalette,
+    worldGuide.mood.languageStyle,
+    `Evite: ${worldGuide.mood.avoidStyle}`
+  ].filter(Boolean).join(' ')
 }
 
 function isActionType(value: unknown): value is ActionOption['actionType'] {
@@ -1613,7 +1721,7 @@ export class GeminiAdapter implements Narrator {
       '- Comece diretamente com { e termine com }.'
     ].join('\n')
 
-    const worldContext = sanitizeInlineText(req.worldDescriptionEn).slice(0, 2400)
+    const worldContext = sanitizeInlineText(req.worldGuideContext).slice(0, 3000)
     const prompt = [
       `Nome/contexto da campanha: ${req.campaignName || 'livre'}.`,
       worldContext
@@ -1673,34 +1781,30 @@ export class GeminiAdapter implements Narrator {
     }
   }
 
-  async expandWorldLore(req: ExpandWorldLoreRequest): Promise<{ lore: string; narrativeStyleGuide?: string; lorePtBrief?: string; loreEn?: string }> {
+  async generateWorldGuide(req: GenerateWorldGuideRequest): Promise<{ worldGuide: WorldGuide }> {
     const sysPrompt = [
-      'Você é um worldbuilder sênior especializado em cenários de RPG de mesa.',
+      'Você é um designer de universos para RPG de mesa.',
       '',
-      '## Estilo de Escrita',
-      'Escreva com clareza e precisão — o texto deve servir tanto para quem nunca ouviu falar deste universo quanto para quem vai jogar nele.',
-      'Ao introduzir pela primeira vez qualquer nome próprio, facção, tecnologia ou conceito exclusivo do universo, explique brevemente no próprio trecho — uma frase basta.',
-      'Crie coerência interna: nomes próprios, locais e facções citados em uma seção devem reaparecer e se reforçar nas demais.',
-      'A escrita pode ser atmosférica e literária, mas nunca presuma que o leitor já conhece o cenário.',
-      'Apenas infraestrutura estática: o lore do mundo descreve a camada observável e pública do universo. Não crie cultos secretos, conspirações ocultas, levantes iminentes ou agendas clandestinas — isso pertence às campanhas e aventuras individuais.',
-      'Apenas lore acionável: descreva elementos que impactam diretamente a vida dos personagens, as missões que podem receber ou os perigos que enfrentarão. Evite cronologias antigas ou detalhes burocráticos que não geram gancho de aventura.',
-      'Clareza acima de drama: descreva cada local e facção como instituição visível — o que é, o que controla, como funciona publicamente. Atritos devem ser sugeridos pela estrutura, não inventados como conflito oculto.',
+      '## Objetivo',
+      'Crie um guia canônico estruturado para orientar narradores, campanhas e personagens.',
+      'O guia substitui lore em prosa: seja específico, operacional e consistente. Não escreva ensaio, conto, cronologia extensa ou markdown.',
+      'Não invente segredos de campanha, conspirações ocultas ou revelações futuras como fatos conhecidos. Se algo for mistério, registre em unknownOrSpoilerFacts.',
+      'Use apenas português do Brasil.',
       '',
       '## Formato de Saída',
-      'Retorne um objeto JSON válido com exatamente quatro chaves:',
-      '- "lore": o lore completo em português do Brasil, usando os títulos de seção conforme instruído.',
-      '- "narrativeStyleGuide": um guia curto de tom e clima em português do Brasil (80-220 palavras), explicando humor do narrador, clima emocional, nível de ironia, peso dramático, vocabulário e o que evitar neste universo. Escreva como instruções diretas de narração, não como resumo de lore.',
-      '- "lorePtBrief": um brief condensado de narração em português do Brasil (500-900 palavras), cobrindo identidade central do mundo, facções-chave, locais principais, regras de magia/tecnologia e tensões narrativas mais importantes — otimizado para um mestre que precisa de um modelo mental rápido do cenário. Sem títulos de seção; prosa contínua.',
-      '- "loreEn": um brief condensado de narração em inglês (500-900 palavras), cobrindo identidade central do mundo, facções-chave, locais principais, regras de magia/tecnologia e tensões narrativas mais importantes — otimizado para um mestre que precisa de um modelo mental rápido do cenário. Sem títulos de seção; prosa contínua.'
+      'Retorne APENAS um objeto JSON válido com exatamente esta chave raiz: "worldGuide".',
+      'O objeto worldGuide DEVE seguir exatamente esta forma:',
+      '{"worldGuide":{"llmPersona":{"role":"...","perspective":"...","knowledgeLimits":"..."},"universeRules":{"magicAndPowers":["..."],"technology":["..."],"impossibilities":["..."],"costsAndLimits":["..."]},"glossary":{"terms":[{"term":"...","definition":"...","preferredUsage":"...","avoidTerms":["..."]}],"forbiddenGenericTerms":["..."]},"factionsAndPower":{"groups":[{"name":"...","role":"...","publicFace":"...","powerBase":"...","relationships":["..."]}],"socialTensions":["..."],"speciesAndCultures":["..."]},"knowledgeHorizon":{"currentMoment":"...","knownFacts":["..."],"unknownOrSpoilerFacts":["..."]},"geography":{"immediateSetting":"...","keyLocations":["..."],"sensoryTexture":"..."},"mood":{"tone":"...","emotionalPalette":"...","languageStyle":"...","avoidStyle":"..."}}}'
     ].join('\n')
 
+    const currentGuideText = req.currentGuide ? renderWorldGuideMarkdown(req.currentGuide) : ''
     const tema = [
       `Nome: ${req.name}.`,
       ...(req.description ? [`Descrição: ${req.description}.`] : []),
-      ...(req.currentLore?.trim() ? [`Lore atual (mantenha consistência e expanda): ${req.currentLore.trim()}.`] : []),
+      ...(currentGuideText ? [`Guia atual (mantenha consistência e refine sem perder dados úteis):\n${currentGuideText}`] : []),
       ...(req.userInstruction?.trim()
         ? [
-            `Instruções adicionais do usuário para esta geração (use como direcionamento temático, sem quebrar as regras de formato e conteúdo): ${req.userInstruction.trim()}.`
+            `Instruções adicionais do usuário para esta geração (use como direcionamento temático sem quebrar o JSON): ${req.userInstruction.trim()}.`
           ]
         : [])
     ].join('\n')
@@ -1708,49 +1812,17 @@ export class GeminiAdapter implements Narrator {
     const prompt = [
       `Tema: ${tema}`,
       '',
-      'Construa o lore completo deste universo. TODAS as seções abaixo são OBRIGATÓRIAS — nunca omita nenhuma. Reproduza cada título exatamente como escrito.',
+      'Gere o WorldGuide canônico deste universo com os 7 blocos obrigatórios:',
+      '1. llmPersona: quem é a voz interna autorizada do universo, qual perspectiva usa e o que ela não sabe.',
+      '2. universeRules: o que magia/poderes/tecnologia permitem, o que é impossível e quais custos/limites existem.',
+      '3. glossary: termos próprios, jargões locais, substituições preferidas e termos genéricos proibidos.',
+      '4. factionsAndPower: facções, raças/espécies/culturas e tensões sociais/políticas visíveis.',
+      '5. knowledgeHorizon: momento atual, fatos conhecidos e fatos que NÃO devem ser revelados ainda.',
+      '6. geography: cenário imediato, locais-chave e textura sensorial concreta.',
+      '7. mood: tom, atmosfera emocional, estilo de linguagem e o que evitar.',
       '',
-      '## Em Poucas Palavras',
-      'Explique este universo para alguém que nunca ouviu falar dele. Use linguagem direta, sem jargão.',
-      'Responda em 5 a 7 frases:',
-      '  • O que é este mundo? (uma frase-âncora: "É um mundo onde...", "Imagine X, mas Y")',
-      '  • O que o distingue de outros universos do mesmo gênero? (o diferencial real, não o óbvio)',
-      '  • O que qualquer jogador vê, ouve e sente no primeiro dia neste mundo? (realidade cotidiana concreta)',
-      '',
-      '## Passado Recente',
-      'Foque apenas nos últimos 50 a 100 anos — eventos, rupturas ou pontos de virada que moldaram diretamente o mundo como ele existe hoje. Ignore origens mitológicas, a menos que sejam a premissa ativa do cenário.',
-      'Responda: o que aconteceu? Quem foi afetado? Que cicatrizes ou oportunidades isso deixou?',
-      '2 to 3 dense paragraphs.',
-      '',
-      '## O Cotidiano e a Sociedade',
-      'Descreva como pessoas comuns vivem neste mundo. O mestre precisa de um modelo mental concreto para saber o que os NPCs fazem, o que temem, o que negociam e como se deslocam.',
-      'Cubra: meios de transporte, alimentação e sobrevivência, estrutura social (quem exerce poder sobre a população), crenças ou tabus dominantes e a textura de um dia comum.',
-      '2 dense paragraphs.',
-      '',
-      '## Nível de Poder, Magia e Tecnologia',
-      'Defina a escala de poder deste mundo. Esta seção é OBRIGATÓRIA mesmo se não existirem magia nem tecnologia avançada — nesse caso, declare explicitamente (ex.: "Magia não existe. A tecnologia é análoga ao século XIX.").',
-      'Se poderes, magia ou tecnologia avançada existirem, defina:',
-      '- **Origem:** nascimento, acidente, ritual, tecnologia, infecção, escolha divina ou outra.',
-      '- **Custo e limitações:** exaustão física, perda de sanidade, dependência de recursos ou outras restrições concretas.',
-      '- **Escala de poder:** qual é o teto? Indivíduos podem remodelar a realidade ou os efeitos são pequenos e raros?',
-      '- **Impacto social:** usuários de poder são reverenciados, perseguidos, recrutados à força ou ocultos?',
-      '2 to 3 dense paragraphs.',
-      '',
-      '## Facções e Conflitos Principais',
-      'Descreva de 2 a 4 blocos de poder ou facções que moldam visivelmente a vida neste mundo. Escreva como em um livro de geografia: descreva mandato oficial, o que controlam publicamente (território, recursos, leis, infraestrutura) e a relação com pessoas comuns.',
-      'Descreva apenas o que é observável por fora — papel público, presença oficial, alcance visível. Não invente agendas secretas, operações clandestinas ou rebeliões iminentes. A tensão entre facções pode ser sugerida pelo que cada uma controla, não por tramas ocultas inventadas.',
-      '2 to 3 dense paragraphs.',
-      '',
-      '## Locais Marcantes',
-      'Liste exatamente 2 a 4 locais canônicos. Para cada um, use este formato:',
-      '*   **Nome do Local:** descrição de 2 a 3 frases — geografia, infraestrutura e função pública. Descreva o que qualquer transeunte observaria: organização física, propósito oficial e o tipo de pessoas que circulam ali. Não invente conflitos internos ou perigos ocultos.',
-      '',
-      '## Regras do Mundo',
-      'Defina as regras fundamentais e inegociáveis que governam este universo: o que é física, social ou causalmente possível e impossível aqui, e o que quebraria a lógica interna do mundo se fosse violado.',
-      'Inclua como essas regras criam dilemas morais ou restrições duras para quem vive neste mundo.',
-      '3 dense paragraphs.',
-      '',
-      'Restrições absolutas: sem comentários fora do lore, sem saudação, elogio, preâmbulo ou separador (***). As sete seções são obrigatórias e devem aparecer na ordem listada. Comece imediatamente com ## Em Poucas Palavras.'
+      'Todos os arrays devem ter conteúdo útil, sem preencher com generalidades como "diversas facções" ou "magia poderosa".',
+      'Responda somente o JSON.'
     ].join('\n')
 
     try {
@@ -1761,34 +1833,18 @@ export class GeminiAdapter implements Narrator {
       })
 
       try {
-        const cleaned = generated.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
-        const firstBrace = cleaned.indexOf('{')
-        const lastBrace = cleaned.lastIndexOf('}')
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-          const parsed = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1)) as Record<string, unknown>
-          const lore = typeof parsed.lore === 'string' && parsed.lore.trim()
-            ? sanitizeNarrativeOutput(parsed.lore)
-            : sanitizeNarrativeOutput(generated)
-          const narrativeStyleGuide = typeof parsed.narrativeStyleGuide === 'string' && parsed.narrativeStyleGuide.trim()
-            ? sanitizeNarrativeOutput(parsed.narrativeStyleGuide)
-            : undefined
-          const lorePtBrief = typeof parsed.lorePtBrief === 'string' && parsed.lorePtBrief.trim()
-            ? sanitizeNarrativeOutput(parsed.lorePtBrief)
-            : lore
-          const loreEn = typeof parsed.loreEn === 'string' && parsed.loreEn.trim()
-            ? parsed.loreEn.trim()
-            : undefined
-          return { lore, narrativeStyleGuide, lorePtBrief, loreEn }
+        const parsed = parseJsonObjectDetailed(generated)
+        if (parsed) {
+          return { worldGuide: sanitizeWorldGuideFromRecord(parsed.value, { name: req.name, description: req.description }) }
         }
       } catch {
-        // fall through to plain text fallback
+        // fall through to error below
       }
 
-      const fallbackLore = sanitizeNarrativeOutput(generated)
-      return { lore: fallbackLore, lorePtBrief: fallbackLore }
+      throw new Error('Resposta sem JSON válido de worldGuide')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
-      throw new Error(`Falha ao gerar lore com ${this.providerLabel}: ${message}`)
+      throw new Error(`Falha ao gerar guia de universo com ${this.providerLabel}: ${message}`)
     }
   }
 
@@ -1848,10 +1904,10 @@ export class GeminiAdapter implements Narrator {
     const existing = req.existingFields ?? {}
     const hasExisting = Object.values(existing).some(v => v?.trim())
     const worldName = req.worldName?.trim() ?? ''
-    const worldLore = req.worldLore?.trim() ?? ''
-    const worldNarrativeStyleGuide = req.worldNarrativeStyleGuide?.trim() ?? ''
+    const worldGuideText = renderWorldGuideMarkdown(req.worldGuide)
+    const worldStyleGuide = buildWorldGuideStyleGuide(req.worldGuide)
     const storyDescription = req.storyDescription?.trim() ?? ''
-    const promptWorldLore = worldLore.length > 6000 ? `${worldLore.slice(0, 6000)}...` : worldLore
+    const promptWorldGuide = worldGuideText.length > 6000 ? `${worldGuideText.slice(0, 6000)}...` : worldGuideText
     const promptStoryDescription = storyDescription.length > 2800 ? `${storyDescription.slice(0, 2800)}...` : storyDescription
     const creativeIdentityLocked = Boolean(existing.name?.trim())
     const existingLines: string[] = []
@@ -1870,7 +1926,7 @@ export class GeminiAdapter implements Narrator {
     const sysPrompt = [
       'Você é um designer de personagens.',
       'Leia o nome do mundo, o lore do universo e a história da aventura. Crie um personagem cujo papel e profissão surjam NATURALMENTE desses dados, sem usar arquétipos pré-definidos do sistema.',
-      ...buildUniverseStyleInferenceLines({ forCharacterSuggestion: true, explicitGuide: worldNarrativeStyleGuide }),
+      ...buildUniverseStyleInferenceLines({ forCharacterSuggestion: true, explicitGuide: worldStyleGuide }),
       'Responda APENAS em JSON válido, sem markdown ou comentários.',
       'Sempre retorne as 11 chaves; gender, race, genderPt e racePt podem ser string vazia quando o contexto não permitir inferência.',
       '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
@@ -1898,9 +1954,9 @@ export class GeminiAdapter implements Narrator {
         `Tentativa de variação: ${attempt}.`,
         '',
         ...(worldName ? [`Nome do mundo/universo: ${worldName}.`] : []),
-        ...(promptWorldLore ? [`Lore do universo: ${promptWorldLore}.`, ''] : []),
+        ...(promptWorldGuide ? [`Guia canônico do universo:\n${promptWorldGuide}`, ''] : []),
         ...(promptStoryDescription ? [`História da aventura: ${promptStoryDescription}.`, ''] : []),
-        'Derive profissão e papel apenas do mundo/universo e de seu lore.'
+        'Derive profissão e papel apenas do guia canônico do universo.'
       ].join('\n')
     }
 
@@ -1965,18 +2021,18 @@ export class GeminiAdapter implements Narrator {
   async suggestCharacterFromDescription(req: SuggestCharacterFromDescriptionRequest): Promise<SuggestedCharacter> {
     const characterConcept = req.characterConcept?.trim() ?? ''
     const worldName = req.worldName?.trim() ?? ''
-    const worldLore = req.worldLore?.trim() ?? ''
-    const worldNarrativeStyleGuide = req.worldNarrativeStyleGuide?.trim() ?? ''
+    const worldGuideText = renderWorldGuideMarkdown(req.worldGuide)
+    const worldStyleGuide = buildWorldGuideStyleGuide(req.worldGuide)
     const campaignThematic = req.campaignThematic?.trim() ?? ''
     const storyDescription = req.storyDescription?.trim() ?? ''
-    const promptWorldLore = worldLore.length > 4000 ? `${worldLore.slice(0, 4000)}...` : worldLore
+    const promptWorldGuide = worldGuideText.length > 4000 ? `${worldGuideText.slice(0, 4000)}...` : worldGuideText
     const promptStory = storyDescription.length > 2000 ? `${storyDescription.slice(0, 2000)}...` : storyDescription
 
     const sysPrompt = [
       'Você é um designer de personagens para RPG de mesa.',
       'O jogador escreveu um conceito livre descrevendo o personagem que deseja criar.',
       'Sua tarefa é expandir esse conceito em um perfil completo de personagem que se encaixe no contexto de mundo e campanha.',
-      ...buildUniverseStyleInferenceLines({ forCharacterSuggestion: true, explicitGuide: worldNarrativeStyleGuide }),
+      ...buildUniverseStyleInferenceLines({ forCharacterSuggestion: true, explicitGuide: worldStyleGuide }),
       'Responda APENAS em JSON válido, sem markdown ou comentários.',
       'Sempre retorne as 11 chaves; gender, race, genderPt e racePt podem ser string vazia quando não forem mencionados nem inferíveis.',
       '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
@@ -2001,7 +2057,7 @@ export class GeminiAdapter implements Narrator {
       ...(worldName ? [`Mundo/universo: ${worldName}.`] : []),
       ...(campaignThematic ? [`Temática da campanha: ${campaignThematic}.`] : []),
       ...(promptStory ? [`História da aventura: ${promptStory}`] : []),
-      ...(promptWorldLore ? [`Lore do universo: ${promptWorldLore}.`] : []),
+      ...(promptWorldGuide ? [`Guia canônico do universo:\n${promptWorldGuide}`] : []),
       '',
       buildNameDiversityLine(true),
       'Expanda o conceito do jogador em um perfil completo de personagem seguindo o schema JSON acima.',
@@ -2052,7 +2108,7 @@ export class GeminiAdapter implements Narrator {
   // ─── Narrative Chat Methods ───
 
   private getCachedNarratorSystemPrompt(opts: {
-    world?: { name?: string; description?: string; lore?: string; narrativeStyleGuide?: string }
+    world?: { name?: string; description?: string; worldGuide?: WorldGuide }
     campaign?: { name?: string; storyDescription?: string }
     rulesDigest?: string
     summaryText?: string
@@ -2064,8 +2120,7 @@ export class GeminiAdapter implements Narrator {
     const key = JSON.stringify({
       wn: opts.world?.name,
       wd: opts.world?.description,
-      wl: opts.world?.lore,
-      wg: opts.world?.narrativeStyleGuide,
+      wg: opts.world?.worldGuide,
       cn: opts.campaign?.name,
       cs: opts.campaign?.storyDescription,
       rd: opts.rulesDigest,
@@ -2097,7 +2152,7 @@ export class GeminiAdapter implements Narrator {
    * resumo da aventura e perícias do jogador — tudo que é (quase) estático entre turnos.
    */
   private buildNarratorSystemPrompt(opts: {
-    world?: { name?: string; description?: string; lore?: string; narrativeStyleGuide?: string }
+    world?: { name?: string; description?: string; worldGuide?: WorldGuide }
     campaign?: { name?: string; storyDescription?: string }
     rulesDigest?: string
     summaryText?: string
@@ -2245,13 +2300,11 @@ export class GeminiAdapter implements Narrator {
     }
 
     // Injeta o contexto do universo (lore macro — fixo durante toda a sessão)
-    if (world && (world.description || world.lore || world.narrativeStyleGuide)) {
+    if (world && (world.description || world.worldGuide)) {
       const worldDescriptionForPrompt = mode === 'start'
         ? truncateForPrompt(world.description, 260)
         : world.description
-      const worldLoreForPrompt = mode === 'start'
-        ? undefined
-        : world.lore
+      const worldGuideForPrompt = renderWorldGuideMarkdown(world.worldGuide)
 
       lines.push(
         '',
@@ -2260,12 +2313,12 @@ export class GeminiAdapter implements Narrator {
         'Mesmo que o texto abaixo esteja em outro idioma, sua resposta (segments, options) DEVE ser sempre em português do Brasil — traduza mentalmente antes de narrar.',
         `Nome: ${world.name ?? 'Sem nome'}`,
         ...(worldDescriptionForPrompt ? [`Descrição: ${worldDescriptionForPrompt}`] : []),
-        ...(worldLoreForPrompt ? ['', worldLoreForPrompt] : [])
+        ...(worldGuideForPrompt ? ['', worldGuideForPrompt] : [])
       )
 
       lines.push('', ...buildUniverseStyleInferenceLines({
         concise: narrativeStyle === 'concise',
-        explicitGuide: world.narrativeStyleGuide
+        explicitGuide: buildWorldGuideStyleGuide(world.worldGuide)
       }))
     }
 
@@ -2910,7 +2963,7 @@ export class GeminiAdapter implements Narrator {
     promptOrContents: string | ContentEntry[],
     maxTokens?: number,
     systemPromptOpts: {
-      world?: { name?: string; description?: string; lore?: string }
+      world?: { name?: string; description?: string; worldGuide?: WorldGuide }
       campaign?: { name?: string; storyDescription?: string }
       rulesDigest?: string
       summaryText?: string
@@ -3170,7 +3223,7 @@ export class GeminiAdapter implements Narrator {
       ? [
           world.name ? `- Nome: ${world.name}` : null,
           world.description ? `- Descrição: ${truncateForPrompt(world.description, 260)}` : null,
-          world.narrativeStyleGuide ? `- Guia de estilo narrativo: ${world.narrativeStyleGuide}` : null
+          world.worldGuide ? renderWorldGuideMarkdown(world.worldGuide) : null
         ].filter((line): line is string => Boolean(line))
       : []
 
