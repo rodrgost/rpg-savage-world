@@ -3,6 +3,7 @@ import type {
   GenerateWorldGuideRequest,
   ExpandAdventureStoryResult,
   StoryCharacter,
+  CampaignMission,
   GenerateImageDescriptionRequest,
   Narrator,
   SuggestedCharacter,
@@ -1705,8 +1706,16 @@ export class GeminiAdapter implements Narrator {
       'Um JSON válido com os seguintes campos:',
       '- "name": título curto e evocativo da história (3-8 palavras) — em português do Brasil.',
       '- "nameEn": mesmo título traduzido para inglês.',
-      '- "storyDescription": 3-6 parágrafos com contexto, conflitos, facções, locais e 2-4 ganchos de aventura — em português do Brasil.',
+      '- "storyDescription": INTRODUÇÃO CURTA estilo contracapa de livro (1-2 parágrafos) — apresenta cenário e o gancho inicial do personagem, SEM revelar conflitos, facções, reviravoltas ou desfechos. É o único texto que o jogador vê — em português do Brasil.',
       '- "storyDescriptionEn": mesmo conteúdo de "storyDescription" traduzido para inglês.',
+      '- "storyDetails": 3-6 parágrafos com o conteúdo completo da trama — contexto, conflitos, facções, locais e segredos/reviravoltas planejadas. Uso exclusivo do Mestre/narrador, o jogador nunca lê isto — em português do Brasil.',
+      '- "storyDetailsEn": mesmo conteúdo de "storyDetails" traduzido para inglês.',
+      '- "storyMissions": array com 2 a 5 missões/ganchos de aventura, cada uma com:',
+      '  - "title": título curto da missão — em português do Brasil',
+      '  - "titleEn": mesmo título em inglês',
+      '  - "description": descrição breve do objetivo (1-2 frases) — em português do Brasil',
+      '  - "descriptionEn": mesma descrição em inglês',
+      '  - "optional": booleano — true para gancho secundário/opcional, false para missão principal',
       '- "storyCharacters": array com 3 a 7 NPCs relevantes para a narrativa, cada um com:',
       '  - "name": nome do personagem',
       '  - "role": papel na história (ex.: antagonista, mentor, aliado, líder de facção, neutro) — em português do Brasil',
@@ -1741,12 +1750,21 @@ export class GeminiAdapter implements Narrator {
       const lastBrace = cleaned.lastIndexOf('}')
       const jsonStr = firstBrace !== -1 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned
 
-      let parsed: { name?: unknown; nameEn?: unknown; storyDescription?: unknown; storyDescriptionEn?: unknown; storyCharacters?: unknown }
+      let parsed: {
+        name?: unknown
+        nameEn?: unknown
+        storyDescription?: unknown
+        storyDescriptionEn?: unknown
+        storyDetails?: unknown
+        storyDetailsEn?: unknown
+        storyMissions?: unknown
+        storyCharacters?: unknown
+      }
       try {
         parsed = JSON.parse(jsonStr)
       } catch {
-        // Fallback: retorna texto gerado como storyDescription sem personagens
-        return { storyDescription: sanitizeNarrativeOutput(generated), storyCharacters: [] }
+        // Fallback: retorna texto gerado como storyDescription sem personagens/missões
+        return { storyDescription: sanitizeNarrativeOutput(generated), storyMissions: [], storyCharacters: [] }
       }
 
       const storyDescription = sanitizeNarrativeOutput(
@@ -1755,6 +1773,26 @@ export class GeminiAdapter implements Narrator {
       const storyDescriptionEn = typeof parsed.storyDescriptionEn === 'string' && parsed.storyDescriptionEn.trim()
         ? sanitizeNarrativeOutput(parsed.storyDescriptionEn)
         : undefined
+
+      const storyDetails = typeof parsed.storyDetails === 'string' && parsed.storyDetails.trim()
+        ? sanitizeNarrativeOutput(parsed.storyDetails)
+        : undefined
+      const storyDetailsEn = typeof parsed.storyDetailsEn === 'string' && parsed.storyDetailsEn.trim()
+        ? sanitizeNarrativeOutput(parsed.storyDetailsEn)
+        : undefined
+
+      const rawMissions = Array.isArray(parsed.storyMissions) ? parsed.storyMissions : []
+      const storyMissions: CampaignMission[] = rawMissions
+        .slice(0, 5)
+        .filter((m): m is Record<string, unknown> => m !== null && typeof m === 'object')
+        .map((m) => ({
+          title: typeof m.title === 'string' ? m.title.trim() : '',
+          titleEn: typeof m.titleEn === 'string' && m.titleEn.trim() ? m.titleEn.trim() : undefined,
+          description: typeof m.description === 'string' ? m.description.trim() : '',
+          descriptionEn: typeof m.descriptionEn === 'string' && m.descriptionEn.trim() ? m.descriptionEn.trim() : undefined,
+          optional: m.optional === true
+        }))
+        .filter((m) => m.title.length > 0)
 
       const rawChars = Array.isArray(parsed.storyCharacters) ? parsed.storyCharacters : []
       const storyCharacters: StoryCharacter[] = rawChars
@@ -1774,7 +1812,7 @@ export class GeminiAdapter implements Narrator {
       const name = typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : undefined
       const nameEn = typeof parsed.nameEn === 'string' && parsed.nameEn.trim() ? parsed.nameEn.trim() : undefined
 
-      return { storyDescription, storyDescriptionEn, storyCharacters, name, nameEn }
+      return { storyDescription, storyDescriptionEn, storyDetails, storyDetailsEn, storyMissions, storyCharacters, name, nameEn }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
       throw new Error(`Falha ao gerar história com ${this.providerLabel}: ${message}`)
@@ -2109,7 +2147,7 @@ export class GeminiAdapter implements Narrator {
 
   private getCachedNarratorSystemPrompt(opts: {
     world?: { name?: string; description?: string; worldGuide?: WorldGuide }
-    campaign?: { name?: string; storyDescription?: string }
+    campaign?: { name?: string; storyDescription?: string; storyDetails?: string; storyMissions?: CampaignMission[] }
     rulesDigest?: string
     summaryText?: string
     playerSkills?: Record<string, string>
@@ -2123,6 +2161,8 @@ export class GeminiAdapter implements Narrator {
       wg: opts.world?.worldGuide,
       cn: opts.campaign?.name,
       cs: opts.campaign?.storyDescription,
+      cd: opts.campaign?.storyDetails,
+      cm: opts.campaign?.storyMissions,
       rd: opts.rulesDigest,
       st: opts.summaryText,
       ps: opts.playerSkills
@@ -2153,7 +2193,7 @@ export class GeminiAdapter implements Narrator {
    */
   private buildNarratorSystemPrompt(opts: {
     world?: { name?: string; description?: string; worldGuide?: WorldGuide }
-    campaign?: { name?: string; storyDescription?: string }
+    campaign?: { name?: string; storyDescription?: string; storyDetails?: string; storyMissions?: CampaignMission[] }
     rulesDigest?: string
     summaryText?: string
     playerSkills?: Record<string, string>
@@ -2323,18 +2363,30 @@ export class GeminiAdapter implements Narrator {
     }
 
     // Injeta o contexto da campanha (história específica)
-    if (campaign && campaign.storyDescription) {
-      const campaignStoryForPrompt = mode === 'start'
-        ? truncateForPrompt(campaign.storyDescription, 320)
-        : campaign.storyDescription
-
+    if (campaign && (campaign.storyDescription || campaign.storyDetails)) {
       lines.push(
         '',
         '## Campanha (Arco Planejado — Apenas Contexto de Fundo)',
         'Apenas temática e cor do mundo — não um roteiro (ver Hierarquia Canônica).',
         `Nome: ${campaign.name ?? 'Sem nome'}`,
-        `História: ${campaignStoryForPrompt ?? ''}`
+        ...(campaign.storyDescription ? [`Introdução: ${campaign.storyDescription}`] : [])
       )
+
+      if (campaign.storyDetails) {
+        lines.push(
+          '',
+          '### Detalhes Estratégicos (uso interno do narrador — não revelar diretamente ao jogador)',
+          campaign.storyDetails
+        )
+      }
+
+      if (campaign.storyMissions && campaign.storyMissions.length > 0) {
+        lines.push(
+          '',
+          '### Missões/Ganchos Disponíveis',
+          ...campaign.storyMissions.map((m) => `- [${m.optional ? 'Opcional' : 'Principal'}] ${m.title}: ${m.description}`)
+        )
+      }
     }
 
     // Inject rules digest (nearly static — only changes if edges/hindrances change)
@@ -2366,12 +2418,20 @@ export class GeminiAdapter implements Narrator {
     }
 
     if (mode === 'start') {
+      lines.push('', '## Regras de Início de Sessão')
+      if (!campaign) {
+        lines.push(
+          '- O personagem acorda SEM MEMÓRIA em local desconhecido — esse é o mistério central. Não exponha histórico, vínculos ou objetivos prévios; profissão, raça e itens são pistas que ele redescobre sobre si mesmo.',
+          '- Foque em percepção imediata e concreta. Evite termos analíticos como fato ("cerco biológico", "protocolo de quarentena") — trate como hipótese ("parece", "talvez").'
+        )
+      } else {
+        lines.push(
+          '- O personagem mantém memória e identidade completas — SEM amnésia. Ele conhece seu nome, profissão, raça e passado normalmente.',
+          '- Abra a cena já em movimento, ancorada no gancho da campanha (Introdução/Missões acima) — o personagem está em cena vivendo o início do enredo, não acordando em local desconhecido.'
+        )
+      }
       lines.push(
-        '',
-        '## Regras de Início de Sessão',
-        '- O personagem acorda SEM MEMÓRIA em local desconhecido — esse é o mistério central. Não exponha histórico, vínculos ou objetivos prévios; profissão, raça e itens são pistas que ele redescobre sobre si mesmo.',
-        '- Foque em percepção imediata e concreta. Evite termos analíticos como fato ("cerco biológico", "protocolo de quarentena") — trate como hipótese ("parece", "talvez").',
-        '- Preencha itemChanges com changeType "gained" para dar o kit inicial (4-8 itens coerentes) narrados como pertences descobertos ao acordar.',
+        '- Preencha itemChanges com changeType "gained" para dar o kit inicial (4-8 itens coerentes) narrados como pertences que o personagem já possui ao início da aventura.'
       )
     } else {
       lines.push(
@@ -3230,7 +3290,8 @@ export class GeminiAdapter implements Narrator {
     const campaignLines = campaign
       ? [
           campaign.name ? `- Nome: ${campaign.name}` : null,
-          campaign.storyDescription ? `- História: ${truncateForPrompt(campaign.storyDescription, 320)}` : null
+          campaign.storyDescription ? `- Introdução: ${campaign.storyDescription}` : null,
+          ...(campaign.storyMissions ?? []).map((m) => `- [${m.optional ? 'Opcional' : 'Principal'}] ${m.title}: ${m.description}`)
         ].filter((line): line is string => Boolean(line))
       : []
 
@@ -3250,6 +3311,28 @@ export class GeminiAdapter implements Narrator {
       `## Personagem\n${characterLines.join('\n')}`
     ].filter((section): section is string => Boolean(section)).join('\n\n')
 
+    const openingPremiseLines = campaign
+      ? [
+          'PREMISSA DE ABERTURA (OBRIGATÓRIA): O personagem JÁ CONHECE quem é — mantém memória e identidade completas (nome, profissão, raça, passado). NÃO aplique amnésia.',
+          'Abra a cena já em movimento, ancorada no gancho da Campanha acima: o personagem está vivendo o início do enredo (um evento, um encontro, uma chegada, uma missão começando), não acordando em local desconhecido.',
+          'Use a Introdução da campanha e, se houver, uma das missões listadas como motivo concreto e imediato para a cena começar.',
+          'Apresente um gancho narrativo claro que force o personagem a agir: uma tensão palpável, uma ameaça imediata, ou uma decisão urgente ligada ao enredo da campanha.',
+          'Trate profissão, raça, vantagens e itens como conhecimento consciente e já dominado pelo personagem — não como algo a ser descoberto.',
+          'Ofereça 4 opções de ação que façam mais sentido para esta cena de abertura — deixe a situação decidir quais ações se encaixam; cada opção deve parecer uma escolha de história, não um botão de menu.',
+          'Para CADA opção, avalie se ela exige uma rolagem de dados (diceCheck) conforme a instrução do campo "traco" no system prompt.'
+        ]
+      : [
+          'PREMISSA DE ABERTURA (OBRIGATÓRIA): O personagem ACORDA SEM MEMÓRIA. Ele desperta em um lugar desconhecido e não se lembra de quem é, de como chegou ali, nem de seu passado. Não revele ao jogador o histórico, a missão prévia ou as conexões do personagem — a amnésia é o ponto de partida da história e o mistério a ser desvendado ao longo da aventura.',
+          'Abra a cena no exato momento em que o personagem recobra a consciência: descreva as primeiras sensações confusas (a superfície onde está deitado, sons, cheiros, luz), a desorientação e o vazio de memória.',
+          'Deixe claro, através da narração e não de forma expositiva, que o personagem não reconhece o ambiente e não consegue recordar seu nome ou sua história. Ele pode ter apenas fragmentos vagos ou nenhuma lembrança.',
+          'Não rotule a situação com explicações técnicas ou estratégicas como se fossem conhecimento estabelecido do personagem (ex.: "cerco biológico", "base de contenção", "abrigo em ruínas"). Mostre apenas indícios observáveis e deixe a interpretação em aberto neste primeiro momento.',
+          'Trate os dados do personagem (profissão, raça, vantagens, itens) como coisas que ele DESCOBRE aos poucos sobre si mesmo — não como conhecimento consciente que ele já domina. Ele pode estranhar suas próprias roupas, ferramentas ou marcas no corpo sem entender de onde vieram.',
+          'Apresente um gancho narrativo claro ligado ao mistério da amnésia: uma tensão palpável, uma ameaça imediata, uma pista intrigante ou uma decisão urgente que force o personagem a agir mesmo sem saber quem é.',
+          'Estabeleça pelo menos 1 detalhe específico de worldbuilding (um nome de lugar, uma facção, um costume local, um objeto estranho) que o jogador possa explorar para começar a reconstruir sua identidade.',
+          'Ofereça 4 opções de ação que façam mais sentido para esta cena de abertura — deixe a situação decidir quais ações se encaixam; cada opção deve parecer uma escolha de história, não um botão de menu.',
+          'Para CADA opção, avalie se ela exige uma rolagem de dados (diceCheck) conforme a instrução do campo "traco" no system prompt.'
+        ]
+
     const userPrompt = [
       'INÍCIO DE SESSÃO — Narre a abertura desta história.',
       '',
@@ -3257,15 +3340,7 @@ export class GeminiAdapter implements Narrator {
       '',
       startContextMarkdown,
       '',
-      'PREMISSA DE ABERTURA (OBRIGATÓRIA): O personagem ACORDA SEM MEMÓRIA. Ele desperta em um lugar desconhecido e não se lembra de quem é, de como chegou ali, nem de seu passado. Não revele ao jogador o histórico, a missão prévia ou as conexões do personagem — a amnésia é o ponto de partida da história e o mistério a ser desvendado ao longo da aventura.',
-      'Abra a cena no exato momento em que o personagem recobra a consciência: descreva as primeiras sensações confusas (a superfície onde está deitado, sons, cheiros, luz), a desorientação e o vazio de memória.',
-      'Deixe claro, através da narração e não de forma expositiva, que o personagem não reconhece o ambiente e não consegue recordar seu nome ou sua história. Ele pode ter apenas fragmentos vagos ou nenhuma lembrança.',
-      'Não rotule a situação com explicações técnicas ou estratégicas como se fossem conhecimento estabelecido do personagem (ex.: "cerco biológico", "base de contenção", "abrigo em ruínas"). Mostre apenas indícios observáveis e deixe a interpretação em aberto neste primeiro momento.',
-      'Trate os dados do personagem (profissão, raça, vantagens, itens) como coisas que ele DESCOBRE aos poucos sobre si mesmo — não como conhecimento consciente que ele já domina. Ele pode estranhar suas próprias roupas, ferramentas ou marcas no corpo sem entender de onde vieram.',
-      'Apresente um gancho narrativo claro ligado ao mistério da amnésia: uma tensão palpável, uma ameaça imediata, uma pista intrigante ou uma decisão urgente que force o personagem a agir mesmo sem saber quem é.',
-      'Estabeleça pelo menos 1 detalhe específico de worldbuilding (um nome de lugar, uma facção, um costume local, um objeto estranho) que o jogador possa explorar para começar a reconstruir sua identidade.',
-      'Ofereça 4 opções de ação que façam mais sentido para esta cena de abertura — deixe a situação decidir quais ações se encaixam; cada opção deve parecer uma escolha de história, não um botão de menu.',
-      'Para CADA opção, avalie se ela exige uma rolagem de dados (diceCheck) conforme a instrução do campo "traco" no system prompt.',
+      ...openingPremiseLines,
       '',
       'ITENS INICIAIS (OBRIGATÓRIO):',
       'Retorne em "itemChanges" de 4 a 8 itens iniciais com changeType "gained" que o personagem já possui no início da aventura.',
@@ -3277,7 +3352,9 @@ export class GeminiAdapter implements Narrator {
       '- 1 a 2 itens temáticos/narrativos que conectam o personagem ao mundo (amuleto de família, carta misteriosa, mapa antigo, diário, etc.). Esses itens NÃO ÓBVIOS DEVEM ter o campo "description" preenchido (o que é / o que contém / para que serve), conforme a regra de descrição de itens do system prompt.',
       '- Dinheiro inicial OBRIGATÓRIO: inclua 1 item com categoria "money" e o nome apropriado ao cenário (ex.: "Moedas de Ouro", "Créditos", "Dólares", "Gil", etc.) e "quantity" com a quantia numérica exata coerente com o cenário e o contexto do personagem.',
       '- Para cenários modernos/futuristas: se o personagem tem profissão ou contexto que justifique, inclua um veículo (categoria "vehicle": carro, moto, nave, etc.) ou propriedade (categoria "property": apartamento, base, etc.) como item inicial.',
-      'Mencione os itens naturalmente dentro da narrativa de abertura, de forma coerente com a amnésia: descreva o personagem descobrindo esses pertences consigo ao acordar (revistando os próprios bolsos, encontrando objetos ao seu lado, estranhando as roupas ou o equipamento que veste) sem saber por que os possui.',
+      campaign
+        ? 'Mencione os itens naturalmente dentro da narrativa de abertura — o personagem já sabe que os possui e os usa com naturalidade (equipamento de trabalho, pertences pessoais, provisões de viagem).'
+        : 'Mencione os itens naturalmente dentro da narrativa de abertura, de forma coerente com a amnésia: descreva o personagem descobrindo esses pertences consigo ao acordar (revistando os próprios bolsos, encontrando objetos ao seu lado, estranhando as roupas ou o equipamento que veste) sem saber por que os possui.',
       'Use o mesmo formato de itemChanges já definido no system prompt. Cada item DEVE ter o campo "category" corretamente preenchido.'
     ].filter(Boolean).join('\n')
 

@@ -1,6 +1,6 @@
 import { FieldValue, firestore } from '../infrastructure/firebase.js'
 import type { Visibility } from './worlds.repo.js'
-import type { StoryCharacter } from '../llm/narrator.js'
+import type { StoryCharacter, CampaignMission } from '../llm/narrator.js'
 
 export type CampaignDoc = {
   worldId: string
@@ -8,6 +8,9 @@ export type CampaignDoc = {
   visibility?: Visibility
   storyDescription: string
   storyDescriptionEn?: string
+  storyDetails?: string
+  storyDetailsEn?: string
+  storyMissions?: CampaignMission[]
   storyCharacters?: StoryCharacter[]
   image?: {
     mimeType: string
@@ -48,6 +51,10 @@ export class CampaignsRepo {
     visibility: Visibility
     name?: string
     storyDescription: string
+    storyDescriptionEn?: string
+    storyDetails?: string
+    storyDetailsEn?: string
+    storyMissions?: CampaignMission[]
     storyCharacters?: StoryCharacter[]
     image?: { mimeType: string; base64: string }
     youtubeUrl?: string
@@ -61,6 +68,10 @@ export class CampaignsRepo {
         ownerId: params.ownerId,
         visibility: params.visibility,
         storyDescription: params.storyDescription,
+        ...(params.storyDescriptionEn ? { storyDescriptionEn: params.storyDescriptionEn } : {}),
+        ...(params.storyDetails ? { storyDetails: params.storyDetails } : {}),
+        ...(params.storyDetailsEn ? { storyDetailsEn: params.storyDetailsEn } : {}),
+        ...(params.storyMissions ? { storyMissions: params.storyMissions } : {}),
         ...(params.storyCharacters ? { storyCharacters: params.storyCharacters } : {}),
         ...(image ? { image } : {}),
         ...(params.youtubeUrl ? { youtubeUrl: params.youtubeUrl } : {}),
@@ -118,11 +129,22 @@ export class CampaignsRepo {
     await firestore.collection('campaigns').doc(campaignId).delete()
   }
 
-  async updateStoryDescription(campaignId: string, storyDescription: string, storyCharacters?: StoryCharacter[], storyDescriptionEn?: string): Promise<void> {
+  async updateStoryDescription(
+    campaignId: string,
+    storyDescription: string,
+    storyCharacters?: StoryCharacter[],
+    storyDescriptionEn?: string,
+    storyDetails?: string,
+    storyDetailsEn?: string,
+    storyMissions?: CampaignMission[]
+  ): Promise<void> {
     await firestore.collection('campaigns').doc(campaignId).set(
       {
         storyDescription,
         ...(storyDescriptionEn ? { storyDescriptionEn } : {}),
+        ...(storyDetails ? { storyDetails } : {}),
+        ...(storyDetailsEn ? { storyDetailsEn } : {}),
+        ...(storyMissions !== undefined ? { storyMissions } : {}),
         ...(storyCharacters !== undefined ? { storyCharacters } : {}),
         updatedAt: FieldValue.serverTimestamp()
       },
@@ -134,6 +156,10 @@ export class CampaignsRepo {
     campaignId: string
     name?: string
     storyDescription: string
+    storyDescriptionEn?: string
+    storyDetails?: string
+    storyDetailsEn?: string
+    storyMissions?: CampaignMission[]
     storyCharacters?: StoryCharacter[]
     visibility?: Visibility
     image?: { mimeType: string; base64: string }
@@ -144,6 +170,10 @@ export class CampaignsRepo {
       {
         name: params.name ?? '',
         storyDescription: params.storyDescription,
+        ...(params.storyDescriptionEn ? { storyDescriptionEn: params.storyDescriptionEn } : {}),
+        ...(params.storyDetails !== undefined ? { storyDetails: params.storyDetails } : {}),
+        ...(params.storyDetailsEn !== undefined ? { storyDetailsEn: params.storyDetailsEn } : {}),
+        ...(params.storyMissions !== undefined ? { storyMissions: params.storyMissions } : {}),
         ...(params.storyCharacters !== undefined ? { storyCharacters: params.storyCharacters } : {}),
         ...(params.visibility !== undefined ? { visibility: params.visibility } : {}),
         ...(image ? { image } : {}),

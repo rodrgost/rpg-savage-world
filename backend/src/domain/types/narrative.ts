@@ -243,6 +243,15 @@ export type NarratorTurnResponse = {
 
 // ─── Requests para o Narrator ───
 
+/** Gancho de missão da campanha — texto simples, sem tracking de progresso. */
+export type CampaignMission = {
+  title: string
+  titleEn?: string
+  description: string
+  descriptionEn?: string
+  optional: boolean
+}
+
 export type NarrateStartRequest = {
   world?: {
     name?: string
@@ -252,6 +261,9 @@ export type NarrateStartRequest = {
   campaign?: {
     storyDescription: string
     name?: string
+    /** Conteúdo denso (conflitos, facções, segredos) — uso exclusivo do LLM. */
+    storyDetails?: string
+    storyMissions?: CampaignMission[]
   }
   character: {
     name: string
@@ -285,6 +297,8 @@ export type NarrateTurnRequest = {
   campaign?: {
     name?: string
     storyDescription?: string
+    storyDetails?: string
+    storyMissions?: CampaignMission[]
   }
   /** Contexto para a LLM (summary, estado, inventário) */
   context: {

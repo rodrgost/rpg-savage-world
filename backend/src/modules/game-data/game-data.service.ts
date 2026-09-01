@@ -5,6 +5,7 @@ import { CampaignsRepo } from '../../repositories/campaigns.repo.js'
 import { WorldsRepo, type Visibility } from '../../repositories/worlds.repo.js'
 import { CharactersRepo } from '../../repositories/characters.repo.js'
 import { GeminiAdapter } from '../../llm/gemini.adapter.js'
+import type { CampaignMission } from '../../llm/narrator.js'
 import { GeminiImageGenerator } from '../../llm/gemini-image.generator.js'
 import { normalizeToWebp, type StoredImage } from '../../utils/image-normalize.js'
 import { isDieType, CHARACTER_CREATION, ATTRIBUTE_KEYS } from '../../domain/savage-worlds/constants.js'
@@ -519,6 +520,10 @@ export class GameDataService {
     worldId: string
     name?: string
     storyDescription?: string
+    storyDescriptionEn?: string
+    storyDetails?: string
+    storyDetailsEn?: string
+    storyMissions?: CampaignMission[]
     visibility?: Visibility
     image?: StoredImage
     youtubeUrl?: string
@@ -546,6 +551,10 @@ export class GameDataService {
       visibility,
       name: params.name,
       storyDescription: params.storyDescription?.trim() ?? '',
+      storyDescriptionEn: params.storyDescriptionEn?.trim() || undefined,
+      storyDetails: params.storyDetails?.trim() || undefined,
+      storyDetailsEn: params.storyDetailsEn?.trim() || undefined,
+      storyMissions: params.storyMissions,
       image: normalizedImage,
       youtubeUrl: params.youtubeUrl
     })
@@ -567,6 +576,9 @@ export class GameDataService {
     return {
       storyDescription: result.storyDescription,
       storyDescriptionEn: result.storyDescriptionEn,
+      storyDetails: result.storyDetails,
+      storyDetailsEn: result.storyDetailsEn,
+      storyMissions: result.storyMissions,
       storyCharacters: result.storyCharacters,
       name: result.name
     }
@@ -609,6 +621,10 @@ export class GameDataService {
     campaignId: string
     name?: string
     storyDescription: string
+    storyDescriptionEn?: string
+    storyDetails?: string
+    storyDetailsEn?: string
+    storyMissions?: CampaignMission[]
     storyCharacters?: Array<{ name: string; role: string; description: string; status: string }>
     visibility?: Visibility
     image?: StoredImage
@@ -639,6 +655,10 @@ export class GameDataService {
       campaignId: params.campaignId,
       name: params.name?.trim() || undefined,
       storyDescription: params.storyDescription?.trim() ?? '',
+      storyDescriptionEn: params.storyDescriptionEn?.trim() || undefined,
+      storyDetails: params.storyDetails?.trim() || undefined,
+      storyDetailsEn: params.storyDetailsEn?.trim() || undefined,
+      storyMissions: params.storyMissions,
       storyCharacters: params.storyCharacters,
       visibility: params.visibility ? normalizeVisibility(params.visibility) : undefined,
       image: normalizedImage,
@@ -688,8 +708,23 @@ export class GameDataService {
       worldGuideContext: renderWorldGuideMarkdown(world?.worldGuide) || undefined
     })
 
-    await this.campaigns.updateStoryDescription(campaign.id, result.storyDescription, result.storyCharacters, result.storyDescriptionEn)
-    return { storyDescription: result.storyDescription, storyCharacters: result.storyCharacters }
+    await this.campaigns.updateStoryDescription(
+      campaign.id,
+      result.storyDescription,
+      result.storyCharacters,
+      result.storyDescriptionEn,
+      result.storyDetails,
+      result.storyDetailsEn,
+      result.storyMissions
+    )
+    return {
+      storyDescription: result.storyDescription,
+      storyDescriptionEn: result.storyDescriptionEn,
+      storyDetails: result.storyDetails,
+      storyDetailsEn: result.storyDetailsEn,
+      storyMissions: result.storyMissions,
+      storyCharacters: result.storyCharacters
+    }
   }
 
   async createCharacter(params: {

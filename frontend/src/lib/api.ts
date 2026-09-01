@@ -1,5 +1,5 @@
 import { getAuthenticatedIdToken } from './firebase'
-import type { Campaign, Character, ChatMessage, GameState, Hindrance, KnownNpc, NarratorTurnResponse, OwnerProfile, RelationalStatus, SessionEvent, StoryCharacter, SummaryDoc, Visibility, World } from '../types'
+import type { Campaign, CampaignMission, Character, ChatMessage, GameState, Hindrance, KnownNpc, NarratorTurnResponse, OwnerProfile, RelationalStatus, SessionEvent, StoryCharacter, SummaryDoc, Visibility, World } from '../types'
 
 type StoredImage = {
   mimeType: string
@@ -216,6 +216,9 @@ function mapCampaignRecord(item: {
   name?: string
   storyDescription?: string
   storyDescriptionEn?: string
+  storyDetails?: string
+  storyDetailsEn?: string
+  storyMissions?: Array<{ title?: string; titleEn?: string; description?: string; descriptionEn?: string; optional?: boolean }>
   storyCharacters?: Array<{ name?: string; role?: string; description?: string; status?: string }>
   image?: { mimeType?: string; base64?: string }
   youtubeUrl?: string
@@ -229,6 +232,17 @@ function mapCampaignRecord(item: {
     name: item.name,
     storyDescription: item.storyDescription ?? '',
     storyDescriptionEn: item.storyDescriptionEn || undefined,
+    storyDetails: item.storyDetails || undefined,
+    storyDetailsEn: item.storyDetailsEn || undefined,
+    storyMissions: Array.isArray(item.storyMissions)
+      ? item.storyMissions.map((m) => ({
+          title: m.title ?? '',
+          titleEn: m.titleEn || undefined,
+          description: m.description ?? '',
+          descriptionEn: m.descriptionEn || undefined,
+          optional: m.optional === true
+        }))
+      : undefined,
     storyCharacters: Array.isArray(item.storyCharacters)
       ? item.storyCharacters.map((c) => ({
           name: c.name ?? '',
@@ -313,6 +327,10 @@ export async function createCampaign(params: {
   worldId: string
   name?: string
   storyDescription?: string
+  storyDescriptionEn?: string
+  storyDetails?: string
+  storyDetailsEn?: string
+  storyMissions?: CampaignMission[]
   visibility?: Visibility
   image?: StoredImage
   youtubeUrl?: string
@@ -336,6 +354,9 @@ export async function listCampaigns(worldId?: string): Promise<Campaign[]> {
       name?: string
       storyDescription?: string
       storyDescriptionEn?: string
+      storyDetails?: string
+      storyDetailsEn?: string
+      storyMissions?: Array<{ title?: string; titleEn?: string; description?: string; descriptionEn?: string; optional?: boolean }>
       storyCharacters?: Array<{ name?: string; role?: string; description?: string; status?: string }>
       image?: { mimeType?: string; base64?: string }
       youtubeUrl?: string
@@ -356,6 +377,9 @@ export async function getCampaign(campaignId: string): Promise<Campaign> {
       name?: string
       storyDescription?: string
       storyDescriptionEn?: string
+      storyDetails?: string
+      storyDetailsEn?: string
+      storyMissions?: Array<{ title?: string; titleEn?: string; description?: string; descriptionEn?: string; optional?: boolean }>
       storyCharacters?: Array<{ name?: string; role?: string; description?: string; status?: string }>
       image?: { mimeType?: string; base64?: string }
       youtubeUrl?: string
@@ -367,7 +391,18 @@ export async function getCampaign(campaignId: string): Promise<Campaign> {
 
 export async function updateCampaign(
   campaignId: string,
-  params: { name?: string; storyDescription?: string; storyCharacters?: StoryCharacter[]; visibility?: Visibility; image?: StoredImage; youtubeUrl?: string }
+  params: {
+    name?: string
+    storyDescription?: string
+    storyDescriptionEn?: string
+    storyDetails?: string
+    storyDetailsEn?: string
+    storyMissions?: CampaignMission[]
+    storyCharacters?: StoryCharacter[]
+    visibility?: Visibility
+    image?: StoredImage
+    youtubeUrl?: string
+  }
 ): Promise<void> {
   await apiRequest<{ ok: true }>(`/campaigns/${encodeURIComponent(campaignId)}`, {
     method: 'PUT',
@@ -384,24 +419,64 @@ export async function deleteCampaign(campaignId: string): Promise<void> {
 export async function incrementCampaignStoryPreview(params: {
   worldName: string
   worldId?: string
-}): Promise<{ storyDescription: string; storyDescriptionEn?: string; storyCharacters: StoryCharacter[]; name?: string }> {
-  const response = await apiRequest<{ storyDescription: string; storyDescriptionEn?: string; storyCharacters?: StoryCharacter[]; name?: string }>('/campaigns/increment-preview', {
+}): Promise<{
+  storyDescription: string
+  storyDescriptionEn?: string
+  storyDetails?: string
+  storyDetailsEn?: string
+  storyMissions: CampaignMission[]
+  storyCharacters: StoryCharacter[]
+  name?: string
+}> {
+  const response = await apiRequest<{
+    storyDescription: string
+    storyDescriptionEn?: string
+    storyDetails?: string
+    storyDetailsEn?: string
+    storyMissions?: CampaignMission[]
+    storyCharacters?: StoryCharacter[]
+    name?: string
+  }>('/campaigns/increment-preview', {
     method: 'POST',
     body: JSON.stringify(params)
   })
   return {
     storyDescription: response.storyDescription,
     storyDescriptionEn: response.storyDescriptionEn,
+    storyDetails: response.storyDetails,
+    storyDetailsEn: response.storyDetailsEn,
+    storyMissions: response.storyMissions ?? [],
     storyCharacters: response.storyCharacters ?? [],
     name: response.name
   }
 }
 
-export async function incrementCampaignStory(campaignId: string): Promise<{ storyDescription: string; storyCharacters: StoryCharacter[] }> {
-  const response = await apiRequest<{ storyDescription: string; storyCharacters?: StoryCharacter[] }>(`/campaigns/${encodeURIComponent(campaignId)}/increment`, {
+export async function incrementCampaignStory(campaignId: string): Promise<{
+  storyDescription: string
+  storyDescriptionEn?: string
+  storyDetails?: string
+  storyDetailsEn?: string
+  storyMissions: CampaignMission[]
+  storyCharacters: StoryCharacter[]
+}> {
+  const response = await apiRequest<{
+    storyDescription: string
+    storyDescriptionEn?: string
+    storyDetails?: string
+    storyDetailsEn?: string
+    storyMissions?: CampaignMission[]
+    storyCharacters?: StoryCharacter[]
+  }>(`/campaigns/${encodeURIComponent(campaignId)}/increment`, {
     method: 'POST'
   })
-  return { storyDescription: response.storyDescription, storyCharacters: response.storyCharacters ?? [] }
+  return {
+    storyDescription: response.storyDescription,
+    storyDescriptionEn: response.storyDescriptionEn,
+    storyDetails: response.storyDetails,
+    storyDetailsEn: response.storyDetailsEn,
+    storyMissions: response.storyMissions ?? [],
+    storyCharacters: response.storyCharacters ?? []
+  }
 }
 
 export async function generateCampaignImagePreview(params: {

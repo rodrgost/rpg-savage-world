@@ -1,12 +1,15 @@
 import type { GameState } from '../domain/types/gameState.js'
 import type { WorldGuide } from '../domain/types/world-guide.js'
 import type {
+  CampaignMission,
   NarrateStartRequest,
   NarrateTurnRequest,
   NarratorTurnResponse,
   ValidateActionRequest,
   ValidateActionResponse
 } from '../domain/types/narrative.js'
+
+export type { CampaignMission } from '../domain/types/narrative.js'
 import type { StructuredSummary } from './summary-format.js'
 
 export type { StructuredSummary, SummaryLocationBlock, SummaryCurrentBlock } from './summary-format.js'
@@ -38,6 +41,9 @@ export type StoryCharacter = {
 export type ExpandAdventureStoryResult = {
   storyDescription: string
   storyDescriptionEn?: string
+  storyDetails?: string
+  storyDetailsEn?: string
+  storyMissions: CampaignMission[]
   storyCharacters: StoryCharacter[]
   name?: string
   nameEn?: string

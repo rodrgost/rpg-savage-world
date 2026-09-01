@@ -20,6 +20,14 @@ export type StoryCharacter = {
   status: string
 }
 
+export type CampaignMission = {
+  title: string
+  titleEn?: string
+  description: string
+  descriptionEn?: string
+  optional: boolean
+}
+
 export type WorldGuideGlossaryTerm = {
   term: string
   definition: string
@@ -157,6 +165,9 @@ export type Campaign = {
   name?: string
   storyDescription: string
   storyDescriptionEn?: string
+  storyDetails?: string
+  storyDetailsEn?: string
+  storyMissions?: CampaignMission[]
   storyCharacters?: StoryCharacter[]
   image?: {
     mimeType: string

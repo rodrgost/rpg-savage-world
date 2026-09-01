@@ -85,10 +85,22 @@ const StoryCharacterBody = z.object({
   status: z.string().default('desconhecido')
 })
 
+const MissionBody = z.object({
+  title: z.string().min(1),
+  titleEn: z.string().optional(),
+  description: z.string().default(''),
+  descriptionEn: z.string().optional(),
+  optional: z.boolean().default(false)
+})
+
 const CreateCampaignBody = z.object({
   worldId: z.string().min(1),
   name: z.string().optional(),
   storyDescription: z.string().optional(),
+  storyDescriptionEn: z.string().optional(),
+  storyDetails: z.string().optional(),
+  storyDetailsEn: z.string().optional(),
+  storyMissions: z.array(MissionBody).min(0).max(7).optional(),
   storyCharacters: z.array(StoryCharacterBody).min(0).max(7).optional(),
   visibility: VisibilityBody.optional(),
   image: StoredImageBody.optional(),
@@ -98,6 +110,10 @@ const CreateCampaignBody = z.object({
 const UpdateCampaignBody = z.object({
   name: z.string().min(1).optional(),
   storyDescription: z.string().optional().default(''),
+  storyDescriptionEn: z.string().optional(),
+  storyDetails: z.string().optional(),
+  storyDetailsEn: z.string().optional(),
+  storyMissions: z.array(MissionBody).min(0).max(7).optional(),
   storyCharacters: z.array(StoryCharacterBody).min(0).max(7).optional(),
   visibility: VisibilityBody.optional(),
   image: StoredImageBody.optional(),

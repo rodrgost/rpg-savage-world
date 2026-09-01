@@ -12,7 +12,7 @@ import {
   incrementCampaignStoryPreview,
   updateCampaign
 } from '../lib/api'
-import type { StoryCharacter, Visibility } from '../types'
+import type { StoryCharacter, Visibility, CampaignMission } from '../types'
 
 type StoredImage = {
   mimeType: string
@@ -35,6 +35,9 @@ export function CreateCampaignPage({ uid }: Props) {
   const [name, setName] = useState('')
   const [storyDescription, setStoryDescription] = useState('')
   const [storyDescriptionEn, setStoryDescriptionEn] = useState('')
+  const [storyDetails, setStoryDetails] = useState('')
+  const [storyDetailsEn, setStoryDetailsEn] = useState('')
+  const [storyMissions, setStoryMissions] = useState<CampaignMission[]>([])
   const [storyCharacters, setStoryCharacters] = useState<StoryCharacter[]>([])
   const [imagePreview, setImagePreview] = useState<StoredImage | null>(null)
   const [youtubeUrl, setYoutubeUrl] = useState('')
@@ -42,6 +45,7 @@ export function CreateCampaignPage({ uid }: Props) {
   const [llmLoading, setLlmLoading] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
   const [storyTab, setStoryTab] = useState<'preview' | 'edit'>('preview')
+  const [detailsTab, setDetailsTab] = useState<'preview' | 'edit'>('preview')
   const [error, setError] = useState('')
   const isOwner = !isEditMode || !ownerId || ownerId === uid
 
@@ -74,6 +78,9 @@ export function CreateCampaignPage({ uid }: Props) {
         setName(campaign.name ?? '')
         setStoryDescription(campaign.storyDescription ?? '')
         setStoryDescriptionEn(campaign.storyDescriptionEn ?? '')
+        setStoryDetails(campaign.storyDetails ?? '')
+        setStoryDetailsEn(campaign.storyDetailsEn ?? '')
+        setStoryMissions(campaign.storyMissions ?? [])
         setStoryCharacters(campaign.storyCharacters ?? [])
         setImagePreview(campaign.image ?? null)
         setYoutubeUrl(campaign.youtubeUrl ?? '')
@@ -112,6 +119,10 @@ export function CreateCampaignPage({ uid }: Props) {
         await updateCampaign(campaignId, {
           name: name.trim() || undefined,
           storyDescription,
+          storyDescriptionEn: storyDescriptionEn.trim() || undefined,
+          storyDetails: storyDetails.trim() || undefined,
+          storyDetailsEn: storyDetailsEn.trim() || undefined,
+          storyMissions: storyMissions.length > 0 ? storyMissions : undefined,
           storyCharacters: storyCharacters.length > 0 ? storyCharacters : undefined,
           visibility,
           image: imagePreview ?? undefined,
@@ -123,6 +134,10 @@ export function CreateCampaignPage({ uid }: Props) {
           worldId: resolvedWorldId,
           name: name.trim() || undefined,
           storyDescription,
+          storyDescriptionEn: storyDescriptionEn.trim() || undefined,
+          storyDetails: storyDetails.trim() || undefined,
+          storyDetailsEn: storyDetailsEn.trim() || undefined,
+          storyMissions: storyMissions.length > 0 ? storyMissions : undefined,
           visibility,
           image: imagePreview ?? undefined,
           youtubeUrl: youtubeUrl.trim() || undefined
@@ -162,6 +177,9 @@ export function CreateCampaignPage({ uid }: Props) {
       const result = await incrementCampaignStoryPreview({ worldName, worldId: resolvedWorldId || undefined })
       setStoryDescription(result.storyDescription)
       setStoryDescriptionEn(result.storyDescriptionEn ?? '')
+      setStoryDetails(result.storyDetails ?? '')
+      setStoryDetailsEn(result.storyDetailsEn ?? '')
+      setStoryMissions(result.storyMissions)
       setStoryCharacters(result.storyCharacters)
       setName(result.name ?? '')
     } catch (loadError) {
@@ -223,7 +241,7 @@ export function CreateCampaignPage({ uid }: Props) {
 
         <div className="lore-section">
           <div className="lore-section-header">
-            <span className="lore-section-title">História / descrição da campanha</span>
+            <span className="lore-section-title">Introdução da campanha (o jogador vê)</span>
             {isOwner && (
               <div className="lore-tabs">
                 <button
@@ -243,6 +261,7 @@ export function CreateCampaignPage({ uid }: Props) {
               </div>
             )}
           </div>
+          <p className="muted">Texto curto (1-2 parágrafos), sem revelar tramas ou reviravoltas — é a única parte da história exibida ao jogador.</p>
 
           {storyTab === 'edit' && isOwner ? (
             <textarea
@@ -250,18 +269,79 @@ export function CreateCampaignPage({ uid }: Props) {
               value={storyDescription}
               onChange={(event) => setStoryDescription(event.target.value)}
               placeholder="Clique no botão para gerar com LLM"
-              rows={20}
+              rows={6}
             />
           ) : (
             <div className="lore-preview markdown-view">
               {storyDescription.trim() ? (
                 <Markdown remarkPlugins={[remarkGfm]}>{storyDescription}</Markdown>
               ) : (
-                <p className="muted">Nenhuma história ainda. {isOwner ? 'Gere com LLM ou edite manualmente.' : ''}</p>
+                <p className="muted">Nenhuma introdução ainda. {isOwner ? 'Gere com LLM ou edite manualmente.' : ''}</p>
               )}
             </div>
           )}
         </div>
+
+        <div className="lore-section">
+          <div className="lore-section-header">
+            <span className="lore-section-title">Detalhes estratégicos (uso do narrador — o jogador NÃO vê)</span>
+            {isOwner && (
+              <div className="lore-tabs">
+                <button
+                  type="button"
+                  className={`lore-tab${detailsTab === 'preview' ? ' active' : ''}`}
+                  onClick={() => setDetailsTab('preview')}
+                >
+                  📖 Visualizar
+                </button>
+                <button
+                  type="button"
+                  className={`lore-tab${detailsTab === 'edit' ? ' active' : ''}`}
+                  onClick={() => setDetailsTab('edit')}
+                >
+                  ✏️ Editar
+                </button>
+              </div>
+            )}
+          </div>
+
+          {detailsTab === 'edit' && isOwner ? (
+            <textarea
+              className="lore-textarea"
+              value={storyDetails}
+              onChange={(event) => setStoryDetails(event.target.value)}
+              placeholder="Clique no botão para gerar com LLM"
+              rows={16}
+            />
+          ) : (
+            <div className="lore-preview markdown-view">
+              {storyDetails.trim() ? (
+                <Markdown remarkPlugins={[remarkGfm]}>{storyDetails}</Markdown>
+              ) : (
+                <p className="muted">Nenhum detalhe ainda. {isOwner ? 'Gere com LLM ou edite manualmente.' : ''}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {storyMissions.length > 0 && (
+          <div className="lore-section">
+            <div className="lore-section-header">
+              <span className="lore-section-title">Missões da campanha</span>
+            </div>
+            <div className="story-characters-grid">
+              {storyMissions.map((mission, index) => (
+                <div key={index} className="story-character-card">
+                  <div className="story-character-header">
+                    <strong className="story-character-name">{mission.title}</strong>
+                    <span className="story-character-role">{mission.optional ? 'Opcional' : 'Principal'}</span>
+                  </div>
+                  {mission.description && <p className="story-character-description">{mission.description}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {storyCharacters.length > 0 && (
           <div className="lore-section">

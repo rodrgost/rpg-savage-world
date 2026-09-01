@@ -1190,7 +1190,9 @@ export class SessionService {
         campaign: campaign
           ? {
               storyDescription: campaign.storyDescription ?? campaign.storyDescriptionEn ?? '',
-              name: campaign.name
+              name: campaign.name,
+              storyDetails: campaign.storyDetails ?? campaign.storyDetailsEn ?? '',
+              storyMissions: campaign.storyMissions ?? []
             }
           : undefined,
         character: {
@@ -1373,9 +1375,11 @@ export class SessionService {
         campaign: campaign
           ? {
               storyDescription: campaign.storyDescription ?? campaign.storyDescriptionEn ?? '',
-              name: campaign.name
+              name: campaign.name,
+              storyDetails: campaign.storyDetails ?? campaign.storyDetailsEn ?? '',
+              storyMissions: campaign.storyMissions ?? []
             }
-          : { storyDescription: '' },
+          : undefined,
         character: {
           name: character.name ?? 'Aventureiro',
           profession: character.profession ?? character.professionEn,
@@ -1616,7 +1620,12 @@ export class SessionService {
             }
           : undefined,
         campaign: campaignDoc
-          ? { name: campaignDoc.name, storyDescription: campaignDoc.storyDescription ?? campaignDoc.storyDescriptionEn }
+          ? {
+              name: campaignDoc.name,
+              storyDescription: campaignDoc.storyDescription ?? campaignDoc.storyDescriptionEn,
+              storyDetails: campaignDoc.storyDetails ?? campaignDoc.storyDetailsEn,
+              storyMissions: campaignDoc.storyMissions ?? []
+            }
           : undefined,
         context: {
           summaryText: context.summaryText,
