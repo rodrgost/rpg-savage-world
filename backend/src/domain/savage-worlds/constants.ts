@@ -297,6 +297,11 @@ export type WeaponDefinition = {
 export const WEAPONS: readonly WeaponDefinition[] = [
   // Corpo a corpo
   { key: 'unarmed', label: 'Desarmado', damage: 'str', isRanged: false, notes: 'Dano de Força' },
+  { key: 'baton', label: 'Cassetete', damage: 'str+d4', isRanged: false, minStrength: 4 },
+  { key: 'knife', label: 'Faca', damage: 'str+d4', isRanged: false, minStrength: 4 },
+  { key: 'machete', label: 'Facão', damage: 'str+d6', isRanged: false, minStrength: 6 },
+  { key: 'club', label: 'Porrete', damage: 'str+d4', isRanged: false, minStrength: 4 },
+  { key: 'stun_gun', label: 'Taser', damage: 'str+d4', isRanged: false, minStrength: 4 },
   { key: 'dagger', label: 'Adaga', damage: 'str+d4', isRanged: false, minStrength: 4 },
   { key: 'short_sword', label: 'Espada Curta', damage: 'str+d6', isRanged: false, minStrength: 6 },
   { key: 'long_sword', label: 'Espada Longa', damage: 'str+d8', isRanged: false, minStrength: 8 },
@@ -347,10 +352,28 @@ export function difficultyToModifier(difficulty: string | null | undefined): num
 
 // ─── Lookup de armas (nome livre do inventário → definição do catálogo) ───
 
+const WEAPON_ALIASES: Record<string, string> = {
+  bastao: 'baton',
+  bastonete: 'baton',
+  cassetete: 'baton',
+  taser: 'stun_gun',
+  canivete: 'knife',
+  navalha: 'knife',
+  facao: 'machete',
+  porrete: 'club',
+  'arma de choque': 'stun_gun'
+}
+
 const WEAPON_DEFINITION_BY_LOOKUP = new Map<string, WeaponDefinition>()
 for (const weapon of WEAPONS) {
   WEAPON_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(weapon.key), weapon)
   WEAPON_DEFINITION_BY_LOOKUP.set(normalizeSkillLookupValue(weapon.label), weapon)
+}
+for (const [alias, key] of Object.entries(WEAPON_ALIASES)) {
+  const target = WEAPON_DEFINITION_BY_LOOKUP.get(key)
+  if (target) {
+    WEAPON_DEFINITION_BY_LOOKUP.set(alias, target)
+  }
 }
 
 /**
@@ -367,11 +390,11 @@ export function findWeaponDefinition(nameOrKey: string | null | undefined): Weap
   const direct = WEAPON_DEFINITION_BY_LOOKUP.get(normalized)
   if (direct) return direct
 
+  // Checa se alguma chave, rótulo ou alias é substring do nome do item
   let best: { weapon: WeaponDefinition; length: number } | undefined
-  for (const weapon of WEAPONS) {
-    const label = normalizeSkillLookupValue(weapon.label)
-    if (label && normalized.includes(label)) {
-      if (!best || label.length > best.length) best = { weapon, length: label.length }
+  for (const [lookupKey, weapon] of WEAPON_DEFINITION_BY_LOOKUP.entries()) {
+    if (lookupKey && normalized.includes(lookupKey)) {
+      if (!best || lookupKey.length > best.length) best = { weapon, length: lookupKey.length }
     }
   }
   return best?.weapon

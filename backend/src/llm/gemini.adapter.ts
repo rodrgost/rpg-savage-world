@@ -2250,10 +2250,20 @@ export class GeminiAdapter implements Narrator {
       '  "statusChanges": [',
       '    { "effectId": "<uuid>", "name": "<nome do efeito>", "changeType": "applied|removed", "turnsRemaining": 3, "description": "<descrição>", "targetType": "player|npc", "targetId": "<id do NPC quando targetType=npc, ou null>" }',
       '  ],',
+      '  "npcAttacks": [',
+      '    { "npcId": "<id ou displayName do NPC que ataca>", "skillDie": 6, "damageFormula": "str+d6", "ap": 0, "isRanged": false }',
+      '  ],',
       '  "outcomeOverride": { "mechanicalResult": "success|failure", "narratedOutcome": "success|failure", "justification": "<causa narrativa da inversão>" } | null',
       '}'
 ,
-      '```',
+      '## Regras do Campo npcAttacks',
+      '- Se um ou mais NPCs hostis atacarem ou contra-atacarem o jogador neste turno (ex: o jogador errou o golpe e o inimigo revidou, ou o inimigo tomou iniciativa ofensiva), declare cada ataque em npcAttacks:',
+      '  - npcId: ID hash (se NPC presente) ou displayName do NPC.',
+      '  - skillDie: 4, 6 (comum), 8 (treinado/veterano), 10 (mestre) ou 12 (chefe).',
+      '  - damageFormula: ex: "str+d6", "2d6", "str+d4", "2d8".',
+      '  - ap: penetração de armadura (0 a 2, default 0).',
+      '  - isRanged: true se for à distância (disparo/arremesso), false/omitido se corpo a corpo.',
+      '- Se nenhum NPC atacar neste turno, retorne "npcAttacks": [].',
       '',
       '## Regras do Campo chanceCheck',
       '**Obrigatório em toda option.** Preencha apenas "reason" (1 frase justificando por que a ação é resolvida de forma puramente narrativa). Os campos "required" e "successChance" estão desativados — ignore-os.',
@@ -2841,8 +2851,29 @@ export class GeminiAdapter implements Narrator {
       }
     })
 
-    // Parse npc attacks (desativado: combate agora é narrativo via chanceCheck)
-    const npcAttacks: NpcAttackEntry[] = []
+    // Parse npc attacks
+    const rawNpcAttacks = Array.isArray(raw.npcAttacks) ? raw.npcAttacks : []
+    const npcAttacks: NpcAttackEntry[] = rawNpcAttacks.flatMap((entry: unknown) => {
+      const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>
+      const rawNpcId = typeof e.npcId === 'string' ? e.npcId.trim() : ''
+      // Remapeia a referência (id cru/nome) para o id final estável.
+      const npcId = resolveNpcRef(rawNpcId) ?? rawNpcId
+      const skillDie = typeof e.skillDie === 'number' ? e.skillDie : 0
+      const damageFormula = typeof e.damageFormula === 'string' ? e.damageFormula.trim() : ''
+      if (!npcId || !damageFormula || ![4, 6, 8, 10, 12].includes(skillDie)) return []
+      // Descartar ataques de NPC cujo id não existe na cena ou na resposta
+      if (!npcById.has(npcId) && !presentById.has(npcId)) {
+        warn('sanitizeNarratorResponse', `npcAttacks: npcId desconhecido descartado: "${rawNpcId}"`)
+        return []
+      }
+      return [{
+        npcId,
+        skillDie,
+        damageFormula,
+        ap: typeof e.ap === 'number' ? e.ap : 0,
+        isRanged: typeof e.isRanged === 'boolean' ? e.isRanged : false
+      }]
+    })
 
 
     // Fix B: opções de ataque sem targetId válido → downgrade para custom.

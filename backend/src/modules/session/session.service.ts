@@ -1721,17 +1721,10 @@ export class SessionService {
     }
 
     // 5.5. Processar ataques de NPCs contra o jogador
-    // No Savage Worlds cada personagem age no seu próprio turno de iniciativa.
-    // Quando o jogador ataca (seja via action 'attack' ou outro tipo que resulte em ataque),
-    // o NPC já recebeu dano neste turno — processar npcAttacks simultaneamente resultaria 
-    // no jogador sofrendo dano no mesmo turno em que atacou, o que é incorreto mecanicamente.
-    // Verifica tanto o tipo da ação quanto os eventos emitidos para capturar todos os casos de ataque.
-    const hasPlayerAttack = normalizedAction.type === 'attack' 
-      || result.emittedEvents.some(ev => ev.type === 'attack_hit' || ev.type === 'attack_miss')
-    // Ataques de NPC são autoridade EXCLUSIVA do narrador (LLM): só ocorrem quando o LLM
-    // os declara explicitamente em "npcAttacks". Não há mais auto-geração de ataques quando
-    // a lista vem vazia — um NPC hostil presente na cena não ataca por conta própria.
-    const pendingNpcAttacks: NpcAttackEntry[] = hasPlayerAttack ? [] : (narratorResponse.npcAttacks ?? [])
+    // Ataques de NPC são autoridade do narrador (LLM): ocorrem quando o LLM
+    // os declara explicitamente em "npcAttacks" (ex.: contra-ataques quando o jogador erra,
+    // ou ações ofensivas de inimigos hostis na cena).
+    const pendingNpcAttacks: NpcAttackEntry[] = narratorResponse.npcAttacks ?? []
     const npcAttackEvents: Array<{ type: string; payload: unknown }> = []
     for (const entry of pendingNpcAttacks) {
       // Validar: NPC deve estar na cena, ser diferente do jogador, e skillDie deve ser DieType válido

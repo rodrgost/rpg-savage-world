@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { applyAction, applyNpcAttack } from './rule-engine.js'
+import { findWeaponDefinition } from '../domain/savage-worlds/constants.js'
 import type { GameState } from '../domain/types/gameState.js'
 import type { NpcAttackEntry } from '../domain/types/narrative.js'
 
@@ -210,4 +211,189 @@ test('applyAction emite evento chance_check_result', () => {
   assert.equal(ev.payload.reason, 'Desafio simples')
   assert.equal(ev.payload.description, 'Arrombar fechadura')
 })
+
+test('applyNpcAttack executa ataque de NPC ativo e emite hit ou miss', () => {
+  const state = makeBaseState()
+  state.npcs = [
+    {
+      id: 'npc-goblin',
+      name: 'Goblin Salteador',
+      displayName: 'Goblin Salteador',
+      isWildCard: false,
+      attributes: { strength: 6 },
+      skills: {},
+      wounds: 0,
+      maxWounds: 1,
+      fatigue: 0,
+      isShaken: false,
+      toughness: 4,
+      parry: 4,
+      armor: 0,
+      pace: 6,
+      bennies: 0,
+      disposition: 'hostile',
+      location: 'Floresta',
+      status: 'active',
+      followsPlayer: false
+    }
+  ]
+
+  const attack: NpcAttackEntry = {
+    npcId: 'npc-goblin',
+    skillDie: 8,
+    damageFormula: 'str+d6',
+    ap: 0
+  }
+
+  const result = applyNpcAttack(state, attack)
+  assert.equal(result.emittedEvents.length, 1)
+  const evType = result.emittedEvents[0].type
+  assert.ok(evType === 'npc_attack_hit' || evType === 'npc_attack_miss')
+})
+
+test('applyNpcAttack ignora atacante com status incapacitated ou defeated', () => {
+  const state = makeBaseState()
+  state.npcs = [
+    {
+      id: 'npc-orc',
+      name: 'Orc Caído',
+      displayName: 'Orc Caído',
+      isWildCard: false,
+      attributes: {},
+      skills: {},
+      wounds: 2,
+      maxWounds: 1,
+      fatigue: 0,
+      isShaken: false,
+      toughness: 6,
+      parry: 5,
+      armor: 1,
+      pace: 6,
+      bennies: 0,
+      disposition: 'hostile',
+      location: 'Floresta',
+      status: 'incapacitated',
+      followsPlayer: false
+    }
+  ]
+
+  const attack: NpcAttackEntry = {
+    npcId: 'npc-orc',
+    skillDie: 8,
+    damageFormula: 'str+d8',
+    ap: 1
+  }
+
+  const result = applyNpcAttack(state, attack)
+  assert.equal(result.emittedEvents.length, 0)
+})
+
+test('ataque do jogador funciona sem ter perícia cadastrada e usa 50% de chance', () => {
+  const state = makeBaseState()
+  state.npcs = [
+    {
+      id: 'npc-bandit',
+      name: 'Bandido',
+      displayName: 'Bandido',
+      isWildCard: false,
+      attributes: { strength: 6 },
+      skills: {},
+      wounds: 0,
+      maxWounds: 1,
+      fatigue: 0,
+      isShaken: false,
+      toughness: 4,
+      parry: 4,
+      armor: 0,
+      pace: 6,
+      bennies: 0,
+      disposition: 'hostile',
+      location: 'Estrada',
+      status: 'active',
+      followsPlayer: false
+    }
+  ]
+
+  // Teste de acerto (roll 40 <= 50)
+  const hitResult = applyAction(state, { type: 'attack', targetId: 'npc-bandit' }, () => 0.39)
+  assert.equal(hitResult.emittedEvents.length, 1)
+  assert.equal(hitResult.emittedEvents[0].type, 'attack_hit')
+
+  // Teste de erro (roll 60 > 50)
+  const missResult = applyAction(state, { type: 'attack', targetId: 'npc-bandit' }, () => 0.59)
+  assert.equal(missResult.emittedEvents.length, 1)
+  assert.equal(missResult.emittedEvents[0].type, 'attack_miss')
+})
+
+test('ataque de NPC usa 20% para inimigo comum (Extra) e 50% para Wild Card', () => {
+  const state = makeBaseState()
+  state.npcs = [
+    {
+      id: 'extra-goblin',
+      name: 'Goblin Comum',
+      displayName: 'Goblin Comum',
+      isWildCard: false,
+      attributes: { strength: 6 },
+      skills: {},
+      wounds: 0,
+      maxWounds: 1,
+      fatigue: 0,
+      isShaken: false,
+      toughness: 4,
+      parry: 4,
+      armor: 0,
+      pace: 6,
+      bennies: 0,
+      disposition: 'hostile',
+      location: 'Caverna',
+      status: 'active',
+      followsPlayer: false
+    },
+    {
+      id: 'wildcard-boss',
+      name: 'Chefe Orc',
+      displayName: 'Chefe Orc',
+      isWildCard: true,
+      attributes: { strength: 8 },
+      skills: {},
+      wounds: 0,
+      maxWounds: 3,
+      fatigue: 0,
+      isShaken: false,
+      toughness: 6,
+      parry: 5,
+      armor: 1,
+      pace: 6,
+      bennies: 2,
+      disposition: 'hostile',
+      location: 'Caverna',
+      status: 'active',
+      followsPlayer: false
+    }
+  ]
+
+  const attackExtra: NpcAttackEntry = { npcId: 'extra-goblin', skillDie: 6, damageFormula: 'str+d4' }
+  const attackBoss: NpcAttackEntry = { npcId: 'wildcard-boss', skillDie: 8, damageFormula: 'str+d6' }
+
+  // Extra com roll 25 (> 20%) -> Erra
+  const extraMiss = applyNpcAttack(state, attackExtra, () => 0.24)
+  assert.equal(extraMiss.emittedEvents[0].type, 'npc_attack_miss')
+
+  // Extra com roll 15 (<= 20%) -> Acerta
+  const extraHit = applyNpcAttack(state, attackExtra, () => 0.14)
+  assert.equal(extraHit.emittedEvents[0].type, 'npc_attack_hit')
+
+  // Wild Card com roll 40 (<= 50%) -> Acerta
+  const bossHit = applyNpcAttack(state, attackBoss, () => 0.39)
+  assert.equal(bossHit.emittedEvents[0].type, 'npc_attack_hit')
+})
+
+test('findWeaponDefinition reconhece cassetete tatico de polimero', () => {
+  const def = findWeaponDefinition('Cassetete Tático de Polímero')
+  assert.ok(def)
+  assert.equal(def?.damage, 'str+d4')
+})
+
+
+
 

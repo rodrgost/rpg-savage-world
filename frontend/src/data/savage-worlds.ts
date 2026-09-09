@@ -266,11 +266,7 @@ export function checkEdgeRequirements(
   for (const req of edge.requirements) {
     switch (req.type) {
       case 'attribute': {
-        const current = attributes[req.attribute] ?? 4
-        if (current < req.minDie) {
-          const attrDef = ATTRIBUTES.find((a) => a.key === req.attribute)
-          unmet.push(`${attrDef?.label ?? req.attribute} d${req.minDie}+`)
-        }
+        // Atributos foram removidos dos personagens; requisitos de atributo são considerados satisfeitos
         break
       }
       case 'skill': {

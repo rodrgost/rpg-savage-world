@@ -1,5 +1,4 @@
 import {
-  ATTRIBUTES,
   SKILLS,
   EDGES,
   HINDRANCES,
@@ -9,14 +8,6 @@ import {
   CORE_RULES,
   CHARACTER_CREATION,
 } from '../data/savage-worlds'
-
-const ATTR_LABEL: Record<string, string> = {
-  agility: 'Agilidade',
-  smarts: 'Astúcia',
-  spirit: 'Espírito',
-  strength: 'Força',
-  vigor: 'Vigor',
-}
 
 /* ── helpers ── */
 
@@ -32,7 +23,7 @@ function groupBy<T>(items: T[], key: (item: T) => string): Record<string, T[]> {
 /* ── component ── */
 
 export function RulesPage() {
-  const skillsByAttr = groupBy(SKILLS, (s) => s.linkedAttribute)
+  const sortedSkills = [...SKILLS].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
   const edgesByCat = groupBy(EDGES, (e) => e.category)
   const meleeWeapons = WEAPONS.filter((w) => !w.isRanged)
   const rangedWeapons = WEAPONS.filter((w) => w.isRanged)
@@ -41,7 +32,7 @@ export function RulesPage() {
     <section className="panel page-rules">
       <h2 className="page-rules-title">📜 Regras do Jogo</h2>
       <p className="page-rules-subtitle">
-        Consulte abaixo as mecânicas, atributos, perícias, vantagens, complicações, equipamentos e regras de progressão.
+        Consulte abaixo as mecânicas, perícias, vantagens, complicações, equipamentos e regras de progressão.
       </p>
 
       {/* ── Regras Básicas ── */}
@@ -57,38 +48,18 @@ export function RulesPage() {
         </div>
       </details>
 
-      {/* ── Atributos ── */}
-      <details className="rules-section">
-        <summary>Atributos ({ATTRIBUTES.length})</summary>
-        <div className="rules-section-body">
-          <div className="rules-attr-grid">
-            {ATTRIBUTES.map((a) => (
-              <div key={a.key} className="rules-attr-card">
-                <strong>{a.label}</strong>
-                <span>{a.description}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </details>
-
       {/* ── Perícias ── */}
       <details className="rules-section">
         <summary>Perícias ({SKILLS.length})</summary>
         <div className="rules-section-body">
-          {Object.entries(skillsByAttr).map(([attrKey, skills]) => (
-            <div key={attrKey} className="rules-skill-group">
-              <h4 className="rules-skill-group-title">{ATTR_LABEL[attrKey] ?? attrKey}</h4>
-              <div className="rules-skill-list">
-                {skills.map((s) => (
-                  <div key={s.key} className="rules-skill-item">
-                    <span className="rules-skill-name">{s.label}</span>
-                    <span className="rules-skill-desc">{s.description}</span>
-                  </div>
-                ))}
+          <div className="rules-skill-list">
+            {sortedSkills.map((s) => (
+              <div key={s.key} className="rules-skill-item">
+                <span className="rules-skill-name">{s.label}</span>
+                <span className="rules-skill-desc">{s.description}</span>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </details>
 
@@ -248,10 +219,6 @@ export function RulesPage() {
         <div className="rules-section-body">
           <div className="rules-creation-grid">
             <div className="rules-creation-item">
-              <span className="rules-creation-value">{CHARACTER_CREATION.attributePoints}</span>
-              <span className="rules-creation-label">Pontos de Atributo</span>
-            </div>
-            <div className="rules-creation-item">
               <span className="rules-creation-value">{CHARACTER_CREATION.skillPoints}</span>
               <span className="rules-creation-label">Pontos de Perícia</span>
             </div>
@@ -274,16 +241,11 @@ export function RulesPage() {
           </div>
           <div className="rules-creation-note">
             <p>
-              Cada personagem começa com todos os atributos em d4 e distribui{' '}
-              <strong>{CHARACTER_CREATION.attributePoints} pontos</strong> para melhorá-los (cada ponto sobe um step: d4→d6→d8→d10→d12).
-            </p>
-            <p>
-              Perícias começam em d0 e recebem <strong>{CHARACTER_CREATION.skillPoints} pontos</strong>.
-              Subir acima do atributo vinculado custa 2 pontos por step, em vez de 1.
+              Perícias começam em d0 e recebem <strong>{CHARACTER_CREATION.skillPoints} pontos</strong> para distribuição (cada d4 custa 1 pt, e cada avanço adicional custa 1 pt).
             </p>
             <p>
               Complicações concedem pontos extras: Menor = 1 pt, Maior = 2 pts (máximo 4 pts).
-              Esses pontos podem ser gastos em Vantagens extras, pontos de atributo ou pontos de perícia.
+              Esses pontos podem ser gastos em Vantagens extras ou pontos de perícia.
             </p>
           </div>
         </div>

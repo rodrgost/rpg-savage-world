@@ -134,6 +134,22 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
         propertyOrdering: ['effectId', 'name', 'changeType', 'turnsRemaining', 'description', 'targetType', 'targetId']
       }
     },
+    npcAttacks: {
+      type: 'ARRAY',
+      description: 'Ataques/contra-ataques de NPCs hostis contra o jogador neste turno. Deixe vazio [] se nenhum NPC atacar.',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          npcId: { type: 'STRING', description: 'ID ou displayName do NPC atacante.' },
+          skillDie: { type: 'INTEGER', description: 'Dado de perícia de ataque do NPC (4, 6, 8, 10 ou 12).' },
+          damageFormula: { type: 'STRING', description: 'Fórmula de dano do NPC (ex: "str+d6", "2d6", "str+d4").' },
+          ap: { type: 'INTEGER', nullable: true, description: 'Penetração de armadura (default 0).' },
+          isRanged: { type: 'BOOLEAN', nullable: true, description: 'true se o ataque for à distância.' }
+        },
+        required: ['npcId', 'skillDie', 'damageFormula'],
+        propertyOrdering: ['npcId', 'skillDie', 'damageFormula', 'ap', 'isRanged']
+      }
+    },
     outcomeOverride: {
       type: 'OBJECT',
       nullable: true,
@@ -148,7 +164,7 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
     }
   },
   required: ['segments', 'options'],
-  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'outcomeOverride']
+  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride']
 }
 
 /**

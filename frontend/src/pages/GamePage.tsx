@@ -29,7 +29,7 @@ import {
 import type { EnginePhaseData } from '../lib/api'
 import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, KnownNpc, NarratorTurnResponse, NarrativeSegment, NarrativeStyle, RelationalStatus, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
 import { RELATION_LABELS, RELATION_OPTIONS, relationClass, relationFromDisposition } from '../lib/npcLabels'
-import { ATTRIBUTES, SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
+import { SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
 import { YouTubeAmbient } from '../components/YouTubeAmbient'
 
 // ─── Helpers ───
@@ -166,9 +166,9 @@ function normalizeLookupKey(value: string): string {
     .toLowerCase()
 }
 
-/** Traduz chaves canônicas de atributo (inglês) para labels PT-BR */
-const ATTR_LABEL_MAP: Record<string, string> = Object.fromEntries(
-  ATTRIBUTES.map((a) => [a.key, a.label])
+/** Traduz chaves de perícias para labels PT-BR */
+const TRAIT_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  SKILLS.map((s) => [s.key, s.label])
 )
 
 function normalizeActionPayload(actionPayload: Record<string, unknown>): Record<string, unknown> {
@@ -853,7 +853,6 @@ function AttackResultCard({ event }: { event: SessionEvent }) {
   const isHit = event.type === 'attack_hit'
   const p = event.payload as unknown as AttackHitPayload & AttackMissPayload
   const traitRoll = p.traitRoll
-  const wildRoll = p.wildRoll
 
   return (
     <div className={`dice-result-card ${isHit ? 'dice-success' : 'dice-failure'}`}>
@@ -861,95 +860,38 @@ function AttackResultCard({ event }: { event: SessionEvent }) {
         <span className="dice-result-icon">{isHit ? '⚔️' : '❌'}</span>
         <span className="dice-result-title">{p.skill} → {p.targetName}</span>
         {isHit ? (
-          <span className="dice-result-badge success">
-            {p.attackRaises > 0
-              ? `Acertou +${p.attackRaises} ampliaç${p.attackRaises > 1 ? 'ões' : 'ão'}`
-              : 'Acertou'}
-          </span>
+          <span className="dice-result-badge success">Acertou</span>
         ) : (
           <span className="dice-result-badge failure">Errou</span>
         )}
       </div>
 
-      {/* Rolagem de ataque */}
+      {/* Rolagem de teste de acerto */}
       <div className="dice-result-rolls">
         {traitRoll && (
           <div className="dice-roll-group">
-            <span className="dice-roll-label">Ataque d{traitRoll.sides}</span>
+            <span className="dice-roll-label">Acerto d{traitRoll.sides}</span>
             <div className="dice-roll-values">
-              {traitRoll.rolls?.map((r: number, i: number) => (
-                <span key={i} className={`dice-value ${traitRoll.aced ? 'aced' : ''}`}>
-                  {r}{traitRoll.aced && i < traitRoll.rolls.length - 1 ? '🔥' : ''}
-                </span>
-              )) ?? <span className="dice-value">{traitRoll.total}</span>}
+              <span className="dice-value">{traitRoll.total}</span>
               <span className="dice-roll-total">= {traitRoll.total}</span>
-            </div>
-          </div>
-        )}
-        {wildRoll && (
-          <div className="dice-roll-group">
-            <span className="dice-roll-label">Wild d6</span>
-            <div className="dice-roll-values">
-              {wildRoll.rolls?.map((r: number, i: number) => (
-                <span key={i} className={`dice-value ${wildRoll.aced ? 'aced' : ''}`}>
-                  {r}{wildRoll.aced && i < wildRoll.rolls.length - 1 ? '🔥' : ''}
-                </span>
-              )) ?? <span className="dice-value">{wildRoll.total}</span>}
-              <span className="dice-roll-total">= {wildRoll.total}</span>
             </div>
           </div>
         )}
       </div>
       <div className="dice-result-summary">
         <span className="dice-final">Ataque: <strong>{p.attackRoll}</strong></span>
-        <span className="dice-tn">Aparar: {p.targetParry}</span>
+        <span className="dice-tn">Alvo: {p.targetParry}%</span>
       </div>
 
-      {/* Dano (apenas em acerto) */}
+      {/* Status do impacto em acerto */}
       {isHit && (
-        <>
-          <div className="dice-result-rolls attack-damage-rolls">
-            {p.damageRolls?.map((dr, i) => {
-              const diceLabel = dr.label === 'str'
-                ? `Força d${dr.sides}`
-                : dr.label === 'bonus'
-                  ? `Bônus d${dr.sides}`
-                  : `Arma d${dr.sides}`
-              return (
-                <div key={i} className="dice-roll-group">
-                  <span className="dice-roll-label">{diceLabel}</span>
-                  <div className="dice-roll-values">
-                    {dr.rolls.map((r: number, j: number) => (
-                      <span key={j} className={`dice-value ${dr.aced ? 'aced' : ''}`}>
-                        {r}{dr.aced && j < dr.rolls.length - 1 ? '🔥' : ''}
-                      </span>
-                    ))}
-                    <span className="dice-roll-total">= {dr.total}</span>
-                  </div>
-                </div>
-              )
-            })}
-            {(p.raiseBonusDamage ?? 0) > 0 && (
-              <div className="dice-roll-group">
-                <span className="dice-roll-label">Ampliação d6</span>
-                <div className="dice-roll-values">
-                  <span className="dice-value">{p.raiseBonusDamage}</span>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="dice-result-summary">
-            <span className="dice-final">Dano: <strong>{p.damageTotal}</strong></span>
-            <span className="dice-tn">Resistência: {p.targetToughness}</span>
-            {p.targetIncapacitated ? (
-              <span className="attack-result-status incapacitated">Incapacitado</span>
-            ) : p.woundsInflicted > 0 ? (
-              <span className="attack-result-status wounded">{p.woundsInflicted} ferimento{p.woundsInflicted > 1 ? 's' : ''} — total: {p.targetWounds ?? p.woundsInflicted}</span>
-            ) : p.targetShaken ? (
-              <span className="attack-result-status shaken">Abalado</span>
-            ) : null}
-          </div>
-        </>
+        <div className="dice-result-summary" style={{ marginTop: '6px' }}>
+          {p.targetIncapacitated ? (
+            <span className="attack-result-status incapacitated">Alvo Incapacitado / Derrotado!</span>
+          ) : (
+            <span className="attack-result-status wounded">1 Ferimento Causado (Total: {p.targetWounds})</span>
+          )}
+        </div>
       )}
     </div>
   )
@@ -959,7 +901,6 @@ function NpcAttackResultCard({ event }: { event: SessionEvent }) {
   const isHit = event.type === 'npc_attack_hit'
   const p = event.payload as unknown as NpcAttackHitPayload & NpcAttackMissPayload
   const traitRoll = p.traitRoll
-  const wildRoll = p.wildRoll
 
   return (
     <div className={`dice-result-card ${isHit ? 'dice-failure' : 'dice-success'}`}>
@@ -967,11 +908,7 @@ function NpcAttackResultCard({ event }: { event: SessionEvent }) {
         <span className="dice-result-icon">{isHit ? '🗡️' : '🛡️'}</span>
         <span className="dice-result-title">{p.npcName} ataca você</span>
         {isHit ? (
-          <span className="dice-result-badge failure">
-            {p.attackRaises > 0
-              ? `Acertou +${p.attackRaises} ampliaç${p.attackRaises > 1 ? 'ões' : 'ão'}`
-              : 'Acertou'}
-          </span>
+          <span className="dice-result-badge failure">Acertou</span>
         ) : (
           <span className="dice-result-badge success">Errou</span>
         )}
@@ -980,27 +917,10 @@ function NpcAttackResultCard({ event }: { event: SessionEvent }) {
       <div className="dice-result-rolls">
         {traitRoll && (
           <div className="dice-roll-group">
-            <span className="dice-roll-label">Ataque d{traitRoll.sides}</span>
+            <span className="dice-roll-label">Acerto d{traitRoll.sides}</span>
             <div className="dice-roll-values">
-              {traitRoll.rolls?.map((r: number, i: number) => (
-                <span key={i} className={`dice-value ${traitRoll.aced ? 'aced' : ''}`}>
-                  {r}{traitRoll.aced && i < traitRoll.rolls.length - 1 ? '🔥' : ''}
-                </span>
-              )) ?? <span className="dice-value">{traitRoll.total}</span>}
+              <span className="dice-value">{traitRoll.total}</span>
               <span className="dice-roll-total">= {traitRoll.total}</span>
-            </div>
-          </div>
-        )}
-        {wildRoll && (
-          <div className="dice-roll-group">
-            <span className="dice-roll-label">Wild d6</span>
-            <div className="dice-roll-values">
-              {wildRoll.rolls?.map((r: number, i: number) => (
-                <span key={i} className={`dice-value ${wildRoll.aced ? 'aced' : ''}`}>
-                  {r}{wildRoll.aced && i < wildRoll.rolls.length - 1 ? '🔥' : ''}
-                </span>
-              )) ?? <span className="dice-value">{wildRoll.total}</span>}
-              <span className="dice-roll-total">= {wildRoll.total}</span>
             </div>
           </div>
         )}
@@ -1008,53 +928,17 @@ function NpcAttackResultCard({ event }: { event: SessionEvent }) {
 
       <div className="dice-result-summary">
         <span className="dice-final">Ataque: <strong>{p.attackRoll}</strong></span>
-        <span className="dice-tn">Aparar: {p.targetParry}</span>
+        <span className="dice-tn">Alvo: {p.targetParry}%</span>
       </div>
 
       {isHit && (
-        <>
-          <div className="dice-result-rolls attack-damage-rolls">
-            {p.damageRolls?.map((dr, i) => {
-              const diceLabel = dr.label === 'str'
-                ? `Força d${dr.sides}`
-                : dr.label === 'bonus'
-                  ? `Bônus d${dr.sides}`
-                  : `Arma d${dr.sides}`
-              return (
-                <div key={i} className="dice-roll-group">
-                  <span className="dice-roll-label">{diceLabel}</span>
-                  <div className="dice-roll-values">
-                    {dr.rolls.map((r: number, j: number) => (
-                      <span key={j} className={`dice-value ${dr.aced ? 'aced' : ''}`}>
-                        {r}{dr.aced && j < dr.rolls.length - 1 ? '🔥' : ''}
-                      </span>
-                    ))}
-                    <span className="dice-roll-total">= {dr.total}</span>
-                  </div>
-                </div>
-              )
-            })}
-            {(p.raiseBonusDamage ?? 0) > 0 && (
-              <div className="dice-roll-group">
-                <span className="dice-roll-label">Ampliação d6</span>
-                <div className="dice-roll-values">
-                  <span className="dice-value">{p.raiseBonusDamage}</span>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="dice-result-summary">
-            <span className="dice-final">Dano: <strong>{p.damageTotal}</strong></span>
-            <span className="dice-tn">Resistência: {p.playerToughness}</span>
-            {p.playerIncapacitated ? (
-              <span className="attack-result-status incapacitated">Você está incapacitado — ferimentos: {p.playerWounds}</span>
-            ) : p.woundsInflicted > 0 ? (
-              <span className="attack-result-status wounded">{p.woundsInflicted} ferimento{p.woundsInflicted > 1 ? 's' : ''} sofrido{p.woundsInflicted > 1 ? 's' : ''} — total: {p.playerWounds}</span>
-            ) : p.playerShaken ? (
-              <span className="attack-result-status shaken">Abalado</span>
-            ) : null}
-          </div>
-        </>
+        <div className="dice-result-summary" style={{ marginTop: '6px' }}>
+          {p.playerIncapacitated ? (
+            <span className="attack-result-status incapacitated">Você está Incapacitado! ({p.playerWounds}/3 Ferimentos)</span>
+          ) : (
+            <span className="attack-result-status wounded">1 Ferimento Sofrido (Seus Ferimentos: {p.playerWounds}/3)</span>
+          )}
+        </div>
       )}
     </div>
   )
@@ -1335,7 +1219,7 @@ function DiceResultCard({ event }: { event: SessionEvent }) {
 
   const p = event.payload as unknown as TraitTestPayload
   const rawTrait = p.trait?.trim() ?? ''
-  const traitName = (ATTR_LABEL_MAP[rawTrait] ?? rawTrait) || 'Teste'
+  const traitName = (TRAIT_LABEL_MAP[rawTrait] ?? rawTrait) || 'Teste'
   const traitRoll = p.traitRoll
   const wildRoll = p.wildRoll
   const modifier = p.modifier ?? 0
@@ -1647,9 +1531,6 @@ function SidebarOverview({ player, location, turn, chapter }: {
     <div className="sidebar-overview">
       <SidebarStatus player={player} location={location} turn={turn} chapter={chapter} />
 
-      <h4 className="sidebar-section-header">Atributos</h4>
-      <SidebarAttributes player={player} />
-
       <h4 className="sidebar-section-header">Perícias</h4>
       <SidebarSkills player={player} />
 
@@ -1707,45 +1588,21 @@ function SidebarStatus({ player: p, location, turn, chapter }: {
   )
 }
 
-function SidebarAttributes({ player: p }: { player: GameState['player'] }) {
-  return (
-    <div className="sidebar-attr-list">
-      {ATTRIBUTES.map((a) => (
-        <div key={a.key} className="sidebar-attr-row">
-          <span className="attr-name">{a.label}</span>
-          <span className="attr-die">{dieLabel(p.attributes[a.key] ?? 4)}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 function SidebarSkills({ player: p }: { player: GameState['player'] }) {
   const entries = Object.entries(p.skills)
   if (!entries.length) return <p className="muted">Nenhuma perícia</p>
 
-  // Agrupar por atributo vinculado
-  const grouped = new Map<string, { key: string; label: string; die: number }[]>()
-  for (const [key, die] of entries) {
+  const sorted = entries.map(([key, die]) => {
     const def = SKILLS.find((s) => s.key === key)
-    const attr = def?.linkedAttribute ?? 'other'
-    if (!grouped.has(attr)) grouped.set(attr, [])
-    grouped.get(attr)!.push({ key, label: def?.label ?? key, die })
-  }
-
-  const attrLabel = (k: string) => ATTRIBUTES.find((a) => a.key === k)?.label ?? k
+    return { key, label: def?.label ?? key, die }
+  }).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
 
   return (
     <div className="sidebar-skills">
-      {[...grouped.entries()].map(([attr, skills]) => (
-        <div key={attr} className="skill-group">
-          <h5 className="skill-group-header">{attrLabel(attr)}</h5>
-          {skills.map((s) => (
-            <div key={s.key} className="sidebar-skill-row">
-              <span className="skill-name">{s.label}</span>
-              <span className="skill-die">{dieLabel(s.die)}</span>
-            </div>
-          ))}
+      {sorted.map((s) => (
+        <div key={s.key} className="sidebar-skill-row">
+          <span className="skill-name">{s.label}</span>
+          <span className="skill-die">{dieLabel(s.die)}</span>
         </div>
       ))}
     </div>
@@ -2047,7 +1904,6 @@ export function GamePage() {
 
   /* Quick-action state */
   const [selectedSkill, setSelectedSkill] = useState('')
-  const [selectedAttribute, setSelectedAttribute] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showManualComposer, setShowManualComposer] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -2539,18 +2395,17 @@ export function GamePage() {
   async function handleTraitTest() {
     if (!sessionId) return
     const skill = selectedSkill || undefined
-    const attribute = selectedAttribute || undefined
-    if (!skill && !attribute) {
-      setError('Selecione uma perícia ou atributo')
+    if (!skill) {
+      setError('Selecione uma perícia')
       return
     }
     setError('')
     setLoading(true)
     setCurrentOptions([])
-    pushOptimisticPlayerMessage(`Teste de ${ATTR_LABEL_MAP[skill ?? ''] ?? skill ?? ATTR_LABEL_MAP[attribute ?? ''] ?? attribute}`)
+    pushOptimisticPlayerMessage(`Teste de ${TRAIT_LABEL_MAP[skill] ?? skill}`)
     const signal = getStreamController()
     try {
-      const result = await executeTraitTest({ sessionId, skill, attribute }, handleEnginePhase, signal)
+      const result = await executeTraitTest({ sessionId, skill }, handleEnginePhase, signal)
       handlePayload(result)
     } catch (err) {
       if ((err as { name?: string }).name === 'AbortError') return
@@ -2978,7 +2833,6 @@ export function GamePage() {
               value={selectedSkill}
               onChange={(e) => {
                 setSelectedSkill(e.target.value)
-                setSelectedAttribute('')
                 setInput('')
               }}
             >
@@ -2989,23 +2843,8 @@ export function GamePage() {
                 </option>
               ))}
             </select>
-            <select
-              value={selectedAttribute}
-              onChange={(e) => {
-                setSelectedAttribute(e.target.value)
-                setSelectedSkill('')
-                setInput('')
-              }}
-            >
-              <option value="">-- Atributo --</option>
-              {ATTRIBUTES.map((a) => (
-                <option key={a.key} value={a.key}>
-                  {a.label}
-                </option>
-              ))}
-            </select>
             <button
-              disabled={loading || (!selectedSkill && !selectedAttribute)}
+              disabled={loading || !selectedSkill}
               onClick={handleTraitTest}
               type="button"
             >

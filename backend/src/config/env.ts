@@ -20,13 +20,13 @@ export const env = {
 
   /** Orçamento de tokens (estimativa ~4 chars/token) para a janela de histórico recente
    *  mantida fora do resumo — substitui um teto fixo de N mensagens, robusto a turnos
-   *  com mensagens muito curtas ou muito longas. Default: 6000 tokens. */
-  recentTokenBudget: Number(process.env.RECENT_TOKEN_BUDGET ?? '6000'),
+   *  com mensagens muito curtas ou muito longas. Default: 3000 tokens. */
+  recentTokenBudget: Number(process.env.RECENT_TOKEN_BUDGET ?? '3000'),
 
   /** Nº mínimo de tokens excedentes (além da janela recente) para justificar uma chamada
    *  LLM de compactação. Abaixo deste limiar, o excedente acumula até o próximo turno.
-   *  Default: 4500 (~75% do orçamento da janela recente). */
-  compactBatchMinTokens: Number(process.env.COMPACT_BATCH_MIN_TOKENS ?? '4500'),
+   *  Default: 2250 (~75% do orçamento da janela recente). */
+  compactBatchMinTokens: Number(process.env.COMPACT_BATCH_MIN_TOKENS ?? '2250'),
 
   // Origens adicionais permitidas no CORS (ex.: domínio customizado no Railway)
   allowedOrigins: (process.env.ALLOWED_ORIGIN ?? '').split(',').map(o => o.trim()).filter(Boolean)

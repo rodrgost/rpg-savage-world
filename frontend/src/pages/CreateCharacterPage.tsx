@@ -14,8 +14,6 @@ import {
 } from '../lib/api'
 import type { DieType, Hindrance, Visibility, World } from '../types'
 import {
-  ATTRIBUTES,
-  ATTRIBUTE_KEYS,
   CHARACTER_CREATION,
   DIE_OPTIONS,
   EDGES,
@@ -32,18 +30,6 @@ import type { HindrancePointsAllocation } from '../data/savage-worlds'
 
 type StoredImage = { mimeType: string; base64: string }
 type Props = { uid: string }
-
-const ATTR_ICONS: Record<string, string> = {
-  agility: '⚡', smarts: '🧠', spirit: '🔥', strength: '💪', vigor: '🛡️',
-}
-
-function defaultAttributes(): Record<string, DieType> {
-  return Object.fromEntries(ATTRIBUTE_KEYS.map((k) => [k, 4 as DieType]))
-}
-
-function countAttributeSteps(attrs: Record<string, number>): number {
-  return ATTRIBUTE_KEYS.reduce((sum, k) => sum + ((attrs[k] ?? 4) - 4) / 2, 0)
-}
 
 function countSkillSteps(skills: Record<string, number>): number {
   let cost = 0
@@ -71,18 +57,7 @@ function DieSelector({ value, onChange }: { value: DieType; onChange: (v: DieTyp
   )
 }
 
-/* ── Skills grouped by linked attribute ─── */
-function groupSkillsByAttribute() {
-  const groups: Record<string, typeof SKILLS> = {}
-  for (const sk of SKILLS) {
-    const attr = sk.linkedAttribute
-    if (!groups[attr]) groups[attr] = []
-    groups[attr].push(sk)
-  }
-  return groups
-}
-
-const SKILL_GROUPS = groupSkillsByAttribute()
+const SORTED_SKILLS = [...SKILLS].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
 
 /* ── Edge groups by category ─── */
 function groupEdgesByCategory() {
@@ -117,7 +92,6 @@ export function CreateCharacterPage({ uid }: Props) {
   const [professionEn, setProfessionEn] = useState<string | undefined>()
   const [descriptionEn, setDescriptionEn] = useState<string | undefined>()
   const [campaignRoleEn, setCampaignRoleEn] = useState<string | undefined>()
-  const [attributes, setAttributes] = useState<Record<string, DieType>>(defaultAttributes)
   const [skills, setSkills] = useState<Record<string, DieType>>({})
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
   const [selectedHindrances, setSelectedHindrances] = useState<Hindrance[]>([])
@@ -133,10 +107,6 @@ export function CreateCharacterPage({ uid }: Props) {
   })
 
   /* ---------- Derived ---------- */
-  const attrPointsTotal = CHARACTER_CREATION.attributePoints + hindranceAllocation.extraAttributePoints
-  const attrPointsUsed = useMemo(() => countAttributeSteps(attributes), [attributes])
-  const attrPointsLeft = attrPointsTotal - attrPointsUsed
-
   const skillPointsTotal = CHARACTER_CREATION.skillPoints + hindranceAllocation.extraSkillPoints
   const skillPointsUsed = useMemo(() => countSkillSteps(skills), [skills])
   const skillPointsLeft = skillPointsTotal - skillPointsUsed
@@ -146,9 +116,8 @@ export function CreateCharacterPage({ uid }: Props) {
   const isReadOnly = isEditMode && !isOwner
 
   const fightingDie = skills['Luta'] ?? 0
-  const vigorDie = attributes['vigor'] ?? 4
   const derivedParry = calcParry(fightingDie || 0)
-  const derivedToughness = calcToughness(vigorDie)
+  const derivedToughness = calcToughness(4)
 
   /* Hindrance budget */
   const hindrancePointsEarned = useMemo(
@@ -172,10 +141,10 @@ export function CreateCharacterPage({ uid }: Props) {
   const edgeEligibility = useMemo(() => {
     const map: Record<string, { eligible: boolean; unmetRequirements: string[] }> = {}
     for (const edge of EDGES) {
-      map[edge.key] = checkEdgeRequirements(edge, attributes, skills, selectedEdges)
+      map[edge.key] = checkEdgeRequirements(edge, {}, skills, selectedEdges)
     }
     return map
-  }, [attributes, skills, selectedEdges])
+  }, [skills, selectedEdges])
 
   /* ---------- Load data ---------- */
   useEffect(() => {
@@ -203,7 +172,6 @@ export function CreateCharacterPage({ uid }: Props) {
         setProfession(c.profession ?? '')
         setDescription(c.description ?? '')
         setCampaignRole(c.campaignRole ?? '')
-        if (c.attributes) setAttributes(c.attributes as Record<string, DieType>)
         if (c.skills) setSkills(c.skills as Record<string, DieType>)
         if (c.edges) setSelectedEdges(c.edges)
         if (c.hindrances) setSelectedHindrances(c.hindrances)
@@ -216,9 +184,6 @@ export function CreateCharacterPage({ uid }: Props) {
   }, [isEditMode, characterId, uid])
 
   /* ---------- Handlers ---------- */
-  function setAttr(key: string, value: DieType) {
-    setAttributes((prev) => ({ ...prev, [key]: value }))
-  }
 
   function toggleSkill(key: string) {
     setSkills((prev) => {
@@ -372,7 +337,6 @@ export function CreateCharacterPage({ uid }: Props) {
     }
     setError('')
     if (!selectedWorldId) { setError('Selecione um universo'); return }
-    if (attrPointsLeft < 0) { setError('Pontos de atributo excedidos'); return }
     if (skillPointsLeft < 0) { setError('Pontos de perícia excedidos'); return }
     if (!hindranceLimits.valid) { setError(hindranceLimits.errors.join('. ')); return }
     if (hindrancePointsLeft < 0) { setError('Pontos de Complicações gastos em excesso'); return }
@@ -392,8 +356,13 @@ export function CreateCharacterPage({ uid }: Props) {
         await updateCharacter(characterId, {
           name, gender, race, profession, description, campaignRole,
           visibility,
-          attributes, skills, edges: selectedEdges, hindrances: selectedHindrances,
-          hindranceAllocation, image
+          attributes: {}, skills, edges: selectedEdges, hindrances: selectedHindrances,
+          hindranceAllocation: {
+            extraEdges: hindranceAllocation.extraEdges,
+            extraAttributePoints: 0,
+            extraSkillPoints: hindranceAllocation.extraSkillPoints
+          },
+          image
         })
       } else {
         await createCharacter({
@@ -401,8 +370,13 @@ export function CreateCharacterPage({ uid }: Props) {
           name, gender, race, profession, description, campaignRole,
           genderEn, raceEn, professionEn, descriptionEn, campaignRoleEn,
           visibility,
-          attributes, skills, edges: selectedEdges, hindrances: selectedHindrances,
-          hindranceAllocation, image
+          attributes: {}, skills, edges: selectedEdges, hindrances: selectedHindrances,
+          hindranceAllocation: {
+            extraEdges: hindranceAllocation.extraEdges,
+            extraAttributePoints: 0,
+            extraSkillPoints: hindranceAllocation.extraSkillPoints
+          },
+          image
         })
       }
       navigate('/characters')
@@ -581,38 +555,14 @@ export function CreateCharacterPage({ uid }: Props) {
           </div>
         </div>
 
-        {/* ═══════ ATRIBUTOS + PERÍCIAS ═══════ */}
+        {/* ═══════ PERÍCIAS ═══════ */}
         <div className="section-card">
           <div className="section-card-header">
-            <h3>🎲 Atributos &amp; Perícias</h3>
+            <h3>📖 Perícias</h3>
           </div>
           <div className="section-card-body">
             <div className="subsection-head">
-              <h4>Atributos</h4>
-              <span className={`badge ${attrPointsLeft < 0 ? 'badge--error' : attrPointsLeft === 0 ? 'badge--success' : 'badge--accent'}`}>
-                {attrPointsLeft} / {attrPointsTotal} pts
-              </span>
-            </div>
-            <div className="attr-list">
-              {ATTRIBUTES.map((attr) => (
-                <div key={attr.key} className="attr-row">
-                  <div className="attr-icon">{ATTR_ICONS[attr.key] ?? '⬡'}</div>
-                  <div className="attr-info">
-                    <strong>{attr.label}</strong>
-                    <small>{attr.description}</small>
-                  </div>
-                  <DieSelector
-                    value={(attributes[attr.key] ?? 4) as DieType}
-                    onChange={(v) => setAttr(attr.key, v)}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <hr className="subsection-divider" />
-
-            <div className="subsection-head">
-              <h4>📖 Perícias</h4>
+              <h4>Perícias</h4>
               <span className={`badge ${skillPointsLeft < 0 ? 'badge--error' : skillPointsLeft === 0 ? 'badge--success' : 'badge--accent'}`}>
                 {skillPointsLeft} / {skillPointsTotal} pts
               </span>
@@ -621,38 +571,29 @@ export function CreateCharacterPage({ uid }: Props) {
               Marque as perícias desejadas. Cada d4 = 1 pt, cada aumento = +1 pt.
             </p>
 
-            {ATTRIBUTES.map((attr) => {
-              const groupSkills = SKILL_GROUPS[attr.key]
-              if (!groupSkills?.length) return null
-              return (
-                <div key={attr.key} className="skill-group">
-                  <div className="skill-group-title">{ATTR_ICONS[attr.key]} {attr.label}</div>
-                  <div className="skill-grid">
-                    {groupSkills.map((sk) => {
-                      const active = sk.key in skills
-                      return (
-                        <div key={sk.key} className={`skill-row ${active ? 'active' : ''}`}>
-                          <label className="skill-check">
-                            <input
-                              checked={active}
-                              onChange={() => toggleSkill(sk.key)}
-                              type="checkbox"
-                            />
-                            <span>{sk.label}</span>
-                          </label>
-                          {active && (
-                            <DieSelector
-                              value={skills[sk.key]}
-                              onChange={(v) => setSkillDie(sk.key, v)}
-                            />
-                          )}
-                        </div>
-                      )
-                    })}
+            <div className="skill-grid">
+              {SORTED_SKILLS.map((sk) => {
+                const active = sk.key in skills
+                return (
+                  <div key={sk.key} className={`skill-row ${active ? 'active' : ''}`}>
+                    <label className="skill-check">
+                      <input
+                        checked={active}
+                        onChange={() => toggleSkill(sk.key)}
+                        type="checkbox"
+                      />
+                      <span>{sk.label}</span>
+                    </label>
+                    {active && (
+                      <DieSelector
+                        value={skills[sk.key]}
+                        onChange={(v) => setSkillDie(sk.key, v)}
+                      />
+                    )}
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
 
@@ -715,15 +656,6 @@ export function CreateCharacterPage({ uid }: Props) {
                       <button type="button" className="stepper-btn" onClick={() => adjustAllocation('extraEdges', -1)}>−</button>
                       <span className="stepper-value">{hindranceAllocation.extraEdges}</span>
                       <button type="button" className="stepper-btn" onClick={() => adjustAllocation('extraEdges', 1)}>+</button>
-                    </div>
-                  </div>
-
-                  <div className="budget-row">
-                    <span className="budget-label">+1 Ponto de Atributo <small>(2 pts)</small></span>
-                    <div className="budget-stepper">
-                      <button type="button" className="stepper-btn" onClick={() => adjustAllocation('extraAttributePoints', -1)}>−</button>
-                      <span className="stepper-value">{hindranceAllocation.extraAttributePoints}</span>
-                      <button type="button" className="stepper-btn" onClick={() => adjustAllocation('extraAttributePoints', 1)}>+</button>
                     </div>
                   </div>
 
@@ -838,7 +770,7 @@ export function CreateCharacterPage({ uid }: Props) {
           {!isReadOnly && (
             <button
               className="button-primary-lg"
-              disabled={loading || !selectedWorldId || attrPointsLeft < 0 || skillPointsLeft < 0}
+              disabled={loading || !selectedWorldId || skillPointsLeft < 0}
               type="submit"
             >
               {loading

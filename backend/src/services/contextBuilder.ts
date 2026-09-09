@@ -7,7 +7,6 @@ import { extractSceneObjectsFromText } from './canonical-anchors.js'
 import {
   EDGES,
   HINDRANCES,
-  ATTRIBUTES,
   findWeaponDefinition,
   getCanonicalSkillLabel,
   resolveArmorValue,

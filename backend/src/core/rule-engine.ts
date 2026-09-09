@@ -226,7 +226,7 @@ export function applyDamageToTarget(
   return { woundsInflicted: wounds, isIncapacitated: target.wounds > target.maxWounds }
 }
 
-export function applyAction(state: GameState, action: PlayerAction): EngineResult {
+export function applyAction(state: GameState, action: PlayerAction, rng?: () => number): EngineResult {
   const emittedEvents: EngineResult['emittedEvents'] = []
   const nextState: GameState = structuredClone(state)
   nextState.meta.turn = state.meta.turn + 1
@@ -289,115 +289,34 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
         break
       }
 
-      const attackSkill = getCanonicalSkillLabel(action.skill)
-      // Sem perícia válida de combate: não forçamos 'Luta' nem nenhuma outra —
-      // o ataque não rola dado, só sinaliza que faltou perícia.
-      if (!attackSkill) {
-        emittedEvents.push({
-          type: 'attack_skill_missing',
-          payload: { targetId: action.targetId }
-        })
-        break
-      }
-      const attackSkillKey = findSkillDefinition(attackSkill)?.key ?? ''
-      const attackDie = getSkillDie(nextState, attackSkill)
-      const penalty = woundPenalty(nextState.player.wounds)
-      const calledShotPenalty = action.calledShot ? -2 : 0
-      // marksman / Atirador: +1 em Tiro se não se moveu
-      const marksmanBonus = (!action.hasMoved && attackSkillKey === 'shooting'
-        && nextState.player.edges.some((e) => e === 'marksman' || e === 'Atirador')) ? 1 : 0
-      const attackModifier = (action.modifier ?? 0) + penalty + calledShotPenalty + marksmanBonus
-      const attackTN = target.parry
-      // Dano/AP são resolvidos pelo APP a partir da arma equipada (catálogo WEAPONS).
-      // Só usamos valores vindos da ação se explicitamente fornecidos (compatibilidade);
-      // caso contrário, o motor é a fonte da verdade.
-      const isRangedAttack = attackSkillKey === 'shooting'
-      const resolvedWeapon = resolvePlayerWeapon(nextState, isRangedAttack)
-      const ap = action.ap ?? resolvedWeapon.ap
+      // Verificação genérica de acerto sem necessidade de perícia prévia:
+      const attackSkill = getCanonicalSkillLabel(action.skill) ?? (action.skill?.trim() || 'Ataque')
 
-      const attackResult = rollTrait(attackDie, true, attackModifier)
+      // Verificação Genérica: 50% de chance de acerto para o jogador
+      const hitChance = 50
+      const rollVal = Math.floor((rng?.() ?? Math.random()) * 100) + 1
+      const isHit = rollVal <= hitChance
+      const traitRoll = { sides: 100, rolls: [rollVal], total: rollVal, aced: false }
 
-      if (attackResult.finalTotal < attackTN) {
+      if (!isHit) {
         emittedEvents.push({
           type: 'attack_miss',
           payload: {
             targetId: target.id,
             targetName: target.name,
             skill: attackSkill,
-            attackRoll: attackResult.finalTotal,
-            targetParry: attackTN,
-            traitRoll: attackResult.traitRoll,
-            wildRoll: attackResult.wildRoll
+            attackRoll: rollVal,
+            targetParry: hitChance,
+            traitRoll,
+            wildRoll: null
           }
         })
         break
       }
 
-      // Hit → roll damage (fórmula resolvida pela arma do app; LLM não decide mais)
-      const damageFormula = action.damageFormula ?? resolvedWeapon.damageFormula
-      const strengthDie = nextState.player.attributes.strength
-      const attackRaises = countRaises(attackResult.finalTotal, attackTN)
-
-      const damageResult = rollDamage(damageFormula, strengthDie)
-      // Um aumento no ataque concede +1d6 de dano — apenas UM dado, independentemente
-      // de quantos aumentos foram obtidos (regra de Savage Worlds).
-      const raiseBonusDamage = attackRaises > 0 ? rollExplodingInline(6) : 0
-
-      // Called Shot bonus damage (head or vitals: +4)
-      const calledShotDamageBonus = (action.calledShot === 'head' || action.calledShot === 'vitals') ? 4 : 0
-
-      // assassin / Assassino: +2 de dano contra alvos Atordoados (Shaken = Vulnerável)
-      const assassinBonus = (target.isShaken && nextState.player.edges.some((e) => e === 'assassin' || e === 'Assassino')) ? 2 : 0
-
-      // champion / Campeão: +2 de dano contra criaturas sobrenaturais malignas
-      const championBonus = (target.tags?.includes('supernatural') && nextState.player.edges.some((e) => e === 'champion' || e === 'Campeão')) ? 2 : 0
-
-      // berserk / Berserk: +1 de dano enquanto em Fúria
-      const berserkDamageBonus = nextState.player.statusEffects.some((se) => se.id === 'berserk_rage') ? 1 : 0
-
-      const totalDamage = damageResult.total + raiseBonusDamage + calledShotDamageBonus + assassinBonus + championBonus + berserkDamageBonus
-      const effectiveToughness = Math.max(0, target.toughness - ap)
-      const dmgResult = resolveDamageVsToughness(totalDamage, effectiveToughness)
-
-      // Called Shot em membro: limita os ferimentos por aumento a 1.
-      const cappedWounds = action.calledShot === 'limb' ? Math.min(dmgResult.wounds, 1) : dmgResult.wounds
-
-      // Aplica dano respeitando Wild Card × Extra (Extras caem com 1 ferimento).
-      const outcome = applyDamageToTarget(target, target.isWildCard, { shaken: dmgResult.shaken, wounds: cappedWounds })
-      const finalWounds = outcome.woundsInflicted
-      let isIncapacitated = outcome.isIncapacitated
-
-      // NPC Wild Card Soak: tenta absorver ferimentos antes de confirmar incapacitação.
-      if (target.isWildCard && finalWounds > 0 && target.bennies > 0) {
-        target.bennies -= 1
-        const npcVigorDie = (target.attributes.vigor ?? 4) as DieType
-        const npcSoakPenalty = -Math.min(target.wounds, 3)
-        const npcSoakResult = rollTrait(npcVigorDie, true, npcSoakPenalty)
-
-        let woundsSoakedNpc = 0
-        if (npcSoakResult.isSuccess) {
-          woundsSoakedNpc = 1 + npcSoakResult.raises
-          target.wounds = Math.max(0, target.wounds - woundsSoakedNpc)
-        }
-        isIncapacitated = target.wounds > target.maxWounds
-
-        emittedEvents.push({
-          type: 'npc_soak_roll',
-          payload: {
-            npcId: target.id,
-            npcName: target.name,
-            vigorDie: npcVigorDie,
-            modifier: npcSoakPenalty,
-            traitRoll: npcSoakResult.traitRoll,
-            wildRoll: npcSoakResult.wildRoll,
-            finalTotal: npcSoakResult.finalTotal,
-            isSuccess: npcSoakResult.isSuccess,
-            woundsSoaked: woundsSoakedNpc,
-            remainingWounds: target.wounds,
-            remainingBennies: target.bennies
-          }
-        })
-      }
+      // Hit → Dano fixo de 1 (qualquer ataque causa 1 de dano/ferimento)
+      target.wounds = (target.wounds ?? 0) + 1
+      const isIncapacitated = target.wounds >= target.maxWounds
 
       emittedEvents.push({
         type: 'attack_hit',
@@ -405,21 +324,21 @@ export function applyAction(state: GameState, action: PlayerAction): EngineResul
           targetId: target.id,
           targetName: target.name,
           skill: attackSkill,
-          attackRoll: attackResult.finalTotal,
-          targetParry: attackTN,
-          attackRaises,
-          damageTotal: totalDamage,
-          raiseBonusDamage,
-          calledShotDamageBonus,
+          attackRoll: rollVal,
+          targetParry: hitChance,
+          attackRaises: 0,
+          damageTotal: 1,
+          raiseBonusDamage: 0,
+          calledShotDamageBonus: 0,
           calledShot: action.calledShot ?? null,
           targetToughness: target.toughness,
-          woundsInflicted: finalWounds,
-          targetShaken: target.isShaken,
+          woundsInflicted: 1,
+          targetShaken: false,
           targetWounds: target.wounds,
           targetIncapacitated: isIncapacitated,
-          traitRoll: attackResult.traitRoll,
-          wildRoll: attackResult.wildRoll,
-          damageRolls: damageResult.dice
+          traitRoll,
+          wildRoll: null,
+          damageRolls: []
         }
       })
 
@@ -685,7 +604,8 @@ function rollExplodingInline(sides: number, rng: () => number = Math.random): nu
 
 export function applyNpcAttack(
   state: GameState,
-  entry: NpcAttackEntry
+  entry: NpcAttackEntry,
+  rng: () => number = Math.random
 ): { nextState: GameState; emittedEvents: EngineResult['emittedEvents'] } {
   const emittedEvents: EngineResult['emittedEvents'] = []
   const nextState: GameState = structuredClone(state)
@@ -707,48 +627,38 @@ export function applyNpcAttack(
     return { nextState, emittedEvents }
   }
 
-  const skillDie = entry.skillDie as DieType
-  const npcWoundPenalty = -Math.min(npc.wounds, 3)
-  const attackResult = rollTrait(skillDie, npc.isWildCard, npcWoundPenalty)
-  // dodge / Esquivar: +2 de TN efetivo contra ataques à distância
-  const dodgeBonus = (entry.isRanged && nextState.player.edges.some((e) => e === 'dodge' || e === 'Esquivar')) ? 2 : 0
-  const attackTN = nextState.player.parry + dodgeBonus
+  // Verificação Genérica de Acerto:
+  // - 20% para inimigos comuns (Extras)
+  // - 50% para inimigos Wild Card
+  const hitChance = npc.isWildCard ? 50 : 20
+  const rollVal = Math.floor(rng() * 100) + 1
+  const isHit = rollVal <= hitChance
+  const attackRaises = isHit && rollVal <= Math.max(1, Math.floor(hitChance * 0.2)) ? 1 : 0
 
-  if (attackResult.finalTotal < attackTN) {
+  const traitRoll = { sides: 100, rolls: [rollVal], total: rollVal, aced: false }
+
+  if (!isHit) {
     emittedEvents.push({
       type: 'npc_attack_miss',
       payload: {
         npcId: npc.id,
         npcName: npc.name,
-        skillDie,
-        attackRoll: attackResult.finalTotal,
-        targetParry: attackTN,
-        traitRoll: attackResult.traitRoll,
-        wildRoll: attackResult.wildRoll
+        skillDie: entry.skillDie ?? 6,
+        attackRoll: rollVal,
+        targetParry: hitChance,
+        traitRoll,
+        wildRoll: null
       }
     })
     return { nextState, emittedEvents }
   }
 
-  // Hit → rola dano
-  const npcStrengthDie = (npc.attributes.strength ?? 6) as DieType
-  const attackRaises = countRaises(attackResult.finalTotal, attackTN)
-  const damageResult = rollDamage(entry.damageFormula, npcStrengthDie)
-
-  // Um aumento no ataque concede +1d6 de dano — apenas UM dado (regra de Savage Worlds).
-  const raiseBonusDamage = attackRaises > 0 ? rollExplodingInline(6) : 0
-
-  const totalDamage = damageResult.total + raiseBonusDamage
-  const ap = entry.ap ?? 0
-  const effectiveToughness = Math.max(0, nextState.player.toughness - ap)
-  const dmgResult = resolveDamageVsToughness(totalDamage, effectiveToughness)
-
-  // O jogador é sempre Wild Card → mesma rotina de aplicação de dano usada contra NPCs.
-  const outcome = applyDamageToTarget(nextState.player, true, dmgResult)
+  // Hit → Dano fixo de 1 (qualquer ataque causa 1 de dano/ferimento)
+  nextState.player.wounds = (nextState.player.wounds ?? 0) + 1
+  const isIncapacitated = nextState.player.wounds >= nextState.player.maxWounds
 
   // berserk / Berserk: entra em Fúria ao receber ferimento (se ainda não estiver)
-  if (outcome.woundsInflicted > 0
-    && nextState.player.edges.some((e) => e === 'berserk' || e === 'Berserk')
+  if (nextState.player.edges.some((e) => e === 'berserk' || e === 'Berserk')
     && !nextState.player.statusEffects.some((se) => se.id === 'berserk_rage')) {
     nextState.player.statusEffects = [
       ...nextState.player.statusEffects,
@@ -762,20 +672,20 @@ export function applyNpcAttack(
     payload: {
       npcId: npc.id,
       npcName: npc.name,
-      skillDie,
-      attackRoll: attackResult.finalTotal,
-      targetParry: attackTN,
-      attackRaises,
-      damageTotal: totalDamage,
-      raiseBonusDamage,
+      skillDie: entry.skillDie ?? 6,
+      attackRoll: rollVal,
+      targetParry: hitChance,
+      attackRaises: 0,
+      damageTotal: 1,
+      raiseBonusDamage: 0,
       playerToughness: nextState.player.toughness,
-      woundsInflicted: outcome.woundsInflicted,
-      playerShaken: nextState.player.isShaken,
+      woundsInflicted: 1,
+      playerShaken: false,
       playerWounds: nextState.player.wounds,
-      playerIncapacitated: outcome.isIncapacitated,
-      traitRoll: attackResult.traitRoll,
-      wildRoll: attackResult.wildRoll,
-      damageRolls: damageResult.dice
+      playerIncapacitated: isIncapacitated,
+      traitRoll,
+      wildRoll: null,
+      damageRolls: []
     }
   })
 

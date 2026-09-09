@@ -85,11 +85,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function validateSWAttributes(attributes: Record<string, number>, extraAttributePoints = 0): Record<string, DieType> {
+function validateSWAttributes(attributes?: Record<string, number>, extraAttributePoints = 0): Record<string, DieType> {
+  if (!attributes || Object.keys(attributes).length === 0) {
+    return {}
+  }
   const validated: Record<string, DieType> = {}
   let stepsUsed = 0
   for (const key of ATTRIBUTE_KEYS) {
     const raw = attributes[key]
+    if (raw === undefined) continue
     const value = typeof raw === 'number' && isDieType(raw) ? raw : 4
     validated[key] = value as DieType
     stepsUsed += (value - 4) / 2
@@ -742,7 +746,7 @@ export class GameDataService {
     descriptionEn?: string
     campaignRoleEn?: string
     visibility?: Visibility
-    attributes: Record<string, number>
+    attributes?: Record<string, number>
     skills?: Record<string, number>
     edges?: string[]
     hindrances?: unknown[]
@@ -1032,7 +1036,7 @@ export class GameDataService {
     description?: string
     campaignRole?: string
     visibility?: Visibility
-    attributes: Record<string, number>
+    attributes?: Record<string, number>
     skills?: Record<string, number>
     edges?: string[]
     hindrances?: unknown[]

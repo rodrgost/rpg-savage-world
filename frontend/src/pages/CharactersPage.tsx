@@ -4,20 +4,12 @@ import { useNavigate } from 'react-router-dom'
 import { listCharacters, listCampaigns, listWorlds, startSession } from '../lib/api'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import type { Campaign, Character, World } from '../types'
-import { ATTRIBUTES, dieLabel } from '../data/savage-worlds'
+import { dieLabel } from '../data/savage-worlds'
 
 type Props = {
   uid: string
   ownerLabel: string
   ownerPhotoUrl?: string
-}
-
-const ATTR_SHORT: Record<string, string> = {
-  agility: 'Agi',
-  smarts: 'Ast',
-  spirit: 'Esp',
-  strength: 'For',
-  vigor: 'Vig',
 }
 
 function cleanHindranceName(name: string): string {
@@ -75,7 +67,7 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
         <span className="page-list-icon">🧙</span>
         <div>
           <h2>Personagens</h2>
-          <p className="page-list-subtitle muted">Fichas, atributos e a porta de entrada para a sessão.</p>
+          <p className="page-list-subtitle muted">Fichas, perícias e a porta de entrada para a sessão.</p>
         </div>
         <button onClick={() => navigate('/characters/new')} type="button" className="page-list-cta">
           + Criar personagem
@@ -148,19 +140,6 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                     .filter(Boolean)
                     .join(' • ') || 'Sem profissão'}
                 </p>
-
-                {/* Atributos */}
-                <div className="character-sheet-summary">
-                  <p className="muted">Atributos</p>
-                  <div className="char-attributes-grid">
-                    {ATTRIBUTES.map((a) => (
-                      <div key={a.key} className="char-attr-cell">
-                        <span className="char-attr-label">{ATTR_SHORT[a.key] ?? a.label}</span>
-                        <span className="char-attr-value">{dieLabel(character.attributes[a.key] ?? 4)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
                 {/* Perícias */}
                 {character.skills && Object.keys(character.skills).length > 0 && (
