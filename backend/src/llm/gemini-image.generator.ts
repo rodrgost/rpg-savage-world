@@ -111,6 +111,18 @@ function extractFirstImage(response: GeminiGenerateContentResponse): GeneratedIm
   throw new Error('Gemini não retornou imagem (inlineData)')
 }
 
+function sanitizePromptForSafety(prompt: string): string {
+  const cleaned = prompt
+    .replace(/\b(Star\s*Wars|Guerras?\s*Cl[ôo]nicas?|Clone\s*Troopers?|Soldados?\s*Clones?|Clones?|Clônicas?|Warhammer|Dungeons\s*&\s*Dragons|Marvel|DC)\b/gi, 'guerra espacial futurista sci-fi')
+    .replace(/\b(plast[óo]ide|blaster|lightsaber|sabre\s*de\s*luz|jedis?|siths?)\b/gi, 'futurista')
+    .replace(/\b(DC-\d+[A-Z]?|Fase\s*I{1,3}|CT-\d+|TK-\d+)\b/gi, '')
+    .replace(/["'“”]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return cleaned || 'Retrato ilustrado de personagem de RPG em alta qualidade, enquadramento de busto, iluminação cinematográfica, seguro para todos os públicos.'
+}
+
 export class GeminiImageGenerator {
   private readonly apiKey = readEnv('GEMINI_API_KEY')
   private readonly model = readEnv('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image')
@@ -125,6 +137,7 @@ export class GeminiImageGenerator {
 
     const parsedParams = imageGenerationParamsSchema.parse(params)
     const maxAttempts = 3
+    let currentPrompt = buildPrompt(parsedParams)
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const url = `${this.baseUrl}/v1beta/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`
@@ -134,12 +147,11 @@ export class GeminiImageGenerator {
         parsedParams.timeoutMs ?? this.timeoutMs
       )
 
-      const promptText = buildPrompt(parsedParams)
       if (attempt === 1) {
-        log('GeminiImage', `Prompt (${promptText.length} chars): ${promptText}`)
+        log('GeminiImage', `Prompt (${currentPrompt.length} chars): ${currentPrompt}`)
         log('GeminiImage', `Model: ${this.model} Temperature: ${this.temperature}`)
       } else {
-        log('GeminiImage', `Tentativa ${attempt}/${maxAttempts}`)
+        log('GeminiImage', `Tentativa ${attempt}/${maxAttempts} (Prompt: ${currentPrompt.slice(0, 100)}...)`)
       }
 
       try {
@@ -147,7 +159,7 @@ export class GeminiImageGenerator {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: promptText }] }],
+            contents: [{ parts: [{ text: currentPrompt }] }],
             generationConfig: {
               temperature: this.temperature,
               responseModalities: ['IMAGE', 'TEXT']
@@ -185,6 +197,11 @@ export class GeminiImageGenerator {
             'Raw (primeiros 500 chars):', raw.slice(0, 500)
           )
           if (attempt < maxAttempts) {
+            // Se foi bloqueado por conteúdo proibido, sanitizar o prompt para a próxima tentativa
+            if (blockReason && (blockReason.includes('PROHIBITED_CONTENT') || blockReason.includes('SAFETY'))) {
+              currentPrompt = sanitizePromptForSafety(currentPrompt)
+              log('GeminiImage', `Aplicando prompt descaracterizado para a tentativa ${attempt + 1}: ${currentPrompt}`)
+            }
             await new Promise((r) => setTimeout(r, 1500 * attempt))
             continue
           }

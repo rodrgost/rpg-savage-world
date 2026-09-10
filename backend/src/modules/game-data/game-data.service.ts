@@ -20,15 +20,27 @@ function sanitizeInlineText(value: string | undefined): string {
   return (value ?? '').trim().replace(/\s+/g, ' ')
 }
 
+function sanitizeBrandNamesOnly(value: string | undefined): string {
+  const text = sanitizeInlineText(value)
+  if (!text) return ''
+
+  return text
+    .replace(/\b(Star\s*Wars|Lucasfilm|Disney|Warhammer\s*(40k)?|Dungeons\s*&\s*Dragons|D&D|Marvel|DC\s*Comics)\b/gi, '')
+    .replace(/\b(DC-\d+[A-Z]?|Fase\s*I{1,3}|CT-\d+|TK-\d+)\b/gi, '')
+    .replace(/["'“”]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function buildWorldImagePrompt(params: { campaignName?: string; visualDescription?: string }): string {
-  const campaignName = sanitizeInlineText(params.campaignName)
+  const campaignName = sanitizeBrandNamesOnly(params.campaignName)
   const visualDescription = sanitizeInlineText(params.visualDescription)
   const title = campaignName || 'Campanha sem titulo'
 
   return [
     'Crie uma key art ilustrada.',
     `Ancora de titulo da campanha: "${title}".`,
-    ...(visualDescription ? [`Direcao visual: ${visualDescription}.`] : []),
+    ...(visualDescription ? [`Direcao visual: ${sanitizeBrandNamesOnly(visualDescription)}.`] : []),
     'Objetivos de composicao: paisagem epica ou vista de assentamento, sensacao clara de escala, profundidade em camadas, clima e narrativa visual guiados pelo proprio cenario.',
     `Integracao de titulo: renderize APENAS o nome exato da campanha "${title}" como tipografia legivel de capa/poster dentro da arte. Mantenha todas as letras dentro da zona segura central de 80%, sem subtitulos, slogans, logos, marcas-d\'agua, UI ou palavras extras.`,
     'Restricoes: sem UI, sem personagens como assunto principal.'
@@ -36,13 +48,13 @@ function buildWorldImagePrompt(params: { campaignName?: string; visualDescriptio
 }
 
 function buildUniverseImagePrompt(params: { name: string; visualDescription?: string }): string {
-  const worldName = sanitizeInlineText(params.name)
+  const worldName = sanitizeBrandNamesOnly(params.name)
   const visualDescription = sanitizeInlineText(params.visualDescription)
 
   return [
     'Crie uma key art ilustrada cinematografica.',
     `Ancora de cenario: nome do mundo "${worldName || 'Mundo sem nome'}".`,
-    ...(visualDescription ? [`Direcao visual: ${visualDescription}.`] : []),
+    ...(visualDescription ? [`Direcao visual: ${sanitizeBrandNamesOnly(visualDescription)}.`] : []),
     'Objetivos de composicao: paisagem epica ou vista de assentamento, sensacao clara de escala, profundidade em camadas, clima e narrativa visual — a imagem INTEIRA deve ser guiada pelo tema e pela estetica deste cenario.',
     'Referencia de capa: se o nome do mundo evocar uma franquia conhecida de filme, serie, jogo, quadrinho ou livro, baseie a imagem INTEIRA — paleta, atmosfera, iluminacao, composicao e estilo visual — na estetica da capa ou poster oficial. A referencia tematica define tudo: color grading, design ambiental, clima e direcao de arte.',
     `Integracao de titulo: renderize APENAS o nome exato "${worldName}" — sem subtitulos, sem slogans, sem palavras extras. Estilize como titulo de capa de livro ou poster de filme: tipografia, posicionamento, tamanho e elementos decorativos devem corresponder a identidade visual e ao tema do cenario. Mantenha TODO o texto do titulo estritamente dentro da zona segura central de 80% da imagem, sem tocar ou ultrapassar qualquer borda.`,
@@ -59,24 +71,35 @@ function buildCharacterImagePrompt(params: {
   additionalDescription?: string
   visualDescription?: string
 }): string {
-  const worldName = sanitizeInlineText(params.worldName)
-  const campaignName = sanitizeInlineText(params.campaignName)
-  const gender = sanitizeInlineText(params.gender)
-  const race = sanitizeInlineText(params.race)
-  const profession = sanitizeInlineText(params.profession)
-  const additional = sanitizeInlineText(params.additionalDescription)
   const visualDescription = sanitizeInlineText(params.visualDescription)
+
+  if (visualDescription) {
+    const cleanVisual = sanitizeBrandNamesOnly(visualDescription)
+    return [
+      'Crie uma ilustracao de retrato de personagem de RPG de altissima qualidade.',
+      'Estilo: renderizacao digital cinematografica de arte conceitual, pintura digital detalhada, enquadramento de busto.',
+      `Descricao detalhada da cena e personagem: ${cleanVisual}`,
+      'Composicao e iluminacao: personagem centralizado, iluminação dramática de cinema, foco nítido nas feições e texturas da armadura/vestimenta.',
+      'Restricoes: totalmente vestido, sem tipografia, sem texto, sem logos, sem marcas registradas, seguro para todos os publicos.'
+    ].join('\n')
+  }
+
+  const worldName = sanitizeBrandNamesOnly(params.worldName)
+  const campaignName = sanitizeBrandNamesOnly(params.campaignName)
+  const gender = sanitizeInlineText(params.gender)
+  const race = sanitizeBrandNamesOnly(params.race)
+  const profession = sanitizeBrandNamesOnly(params.profession)
+  const additional = sanitizeBrandNamesOnly(params.additionalDescription)
 
   return [
     'Crie uma ilustracao de retrato de personagem de RPG.',
-    'Estilo: alta qualidade, enquadramento de busto.',
+    'Estilo: alta qualidade, enquadramento de busto, pintura digital cinematografica.',
     'Regras: sem marcas-d\'agua, sem tipografia, seguro para todos os publicos.',
-    `Cenario: ${worldName || 'Mundo desconhecido'}${campaignName ? `, ${campaignName}` : ''}.`,
+    ...(worldName ? [`Universo/Cenario: ${worldName}${campaignName ? `, ${campaignName}` : ''}.`] : []),
+    `Profissao/Papel: ${profession || 'Viajante'}.`,
     ...(gender ? [`Genero: ${gender}.`] : []),
     ...(race ? [`Raca/Especie: ${race}.`] : []),
-    `Profissao: ${profession || 'Viajante'}.`,
     ...(additional ? [`Detalhes visuais: ${additional}.`] : []),
-    ...(visualDescription ? [`Direcao visual: ${visualDescription}.`] : []),
     'Composicao: personagem centralizado, iluminacao quente, totalmente vestido.'
   ].join('\n')
 }
@@ -490,12 +513,24 @@ export class GameDataService {
 
     const visualDescription = await this.buildVisualDescription({ entityType: 'world', title: name })
 
-    const generated = await this.imageGenerator.generateImage({
-      prompt: buildUniverseImagePrompt({ name, visualDescription }),
-      width: 768,
-      height: 432,
-      mimeType: 'image/webp'
-    })
+    let generated: { mimeType: string; base64: string }
+    try {
+      generated = await this.imageGenerator.generateImage({
+        prompt: buildUniverseImagePrompt({ name, visualDescription }),
+        width: 768,
+        height: 432,
+        mimeType: 'image/webp'
+      })
+    } catch (error) {
+      log('GameData', `Erro na geração primária de imagem de mundo: ${error instanceof Error ? error.message : String(error)}. Aplicando fallback genérico.`)
+      const fallbackPrompt = 'Crie uma key art ilustrada de paisagem conceitual épica para cenário de RPG, alta qualidade, sem texto, seguro para todos os públicos.'
+      generated = await this.imageGenerator.generateImage({
+        prompt: fallbackPrompt,
+        width: 768,
+        height: 432,
+        mimeType: 'image/webp'
+      })
+    }
 
     const normalized = await this.normalizeWorldImage({ mimeType: generated.mimeType, base64: generated.base64 })
     return { image: normalized }
@@ -688,12 +723,24 @@ export class GameDataService {
 
     const visualDescription = await this.buildVisualDescription({ entityType: 'campaign', title: campaignName || 'Unnamed campaign', storyDescription: storyContext })
 
-    const generated = await this.imageGenerator.generateImage({
-      prompt: buildWorldImagePrompt({ campaignName, visualDescription }),
-      width: 768,
-      height: 432,
-      mimeType: 'image/webp'
-    })
+    let generated: { mimeType: string; base64: string }
+    try {
+      generated = await this.imageGenerator.generateImage({
+        prompt: buildWorldImagePrompt({ campaignName, visualDescription }),
+        width: 768,
+        height: 432,
+        mimeType: 'image/webp'
+      })
+    } catch (error) {
+      log('GameData', `Erro na geração primária de imagem de campanha: ${error instanceof Error ? error.message : String(error)}. Aplicando fallback genérico.`)
+      const fallbackPrompt = 'Crie uma key art ilustrada de aventura épica para campanha de RPG, alta qualidade, sem texto, seguro para todos os públicos.'
+      generated = await this.imageGenerator.generateImage({
+        prompt: fallbackPrompt,
+        width: 768,
+        height: 432,
+        mimeType: 'image/webp'
+      })
+    }
 
     const normalized = await this.normalizeWorldImage({ mimeType: generated.mimeType, base64: generated.base64 })
     return { image: normalized }
@@ -833,20 +880,39 @@ export class GameDataService {
       additionalDescription: params.additionalDescription
     })
 
-    const generated = await this.imageGenerator.generateImage({
-      prompt: buildCharacterImagePrompt({
-        worldName,
-        campaignName,
-        gender: params.gender,
-        race: params.race,
-        profession: params.profession,
-        additionalDescription: params.additionalDescription,
-        visualDescription
-      }),
-      width: 512,
-      height: 512,
-      mimeType: 'image/webp'
-    })
+    let generated: { mimeType: string; base64: string }
+    try {
+      generated = await this.imageGenerator.generateImage({
+        prompt: buildCharacterImagePrompt({
+          worldName,
+          campaignName,
+          gender: params.gender,
+          race: params.race,
+          profession: params.profession,
+          additionalDescription: params.additionalDescription,
+          visualDescription
+        }),
+        width: 512,
+        height: 512,
+        mimeType: 'image/webp'
+      })
+    } catch (error) {
+      log('GameData', `Erro na geração primária de imagem de personagem: ${error instanceof Error ? error.message : String(error)}. Aplicando fallback genérico.`)
+      const fallbackPrompt = [
+        'Crie uma ilustracao de retrato de personagem de RPG.',
+        'Estilo: alta qualidade, enquadramento de busto, iluminação cinematográfica.',
+        ...(params.gender ? [`Genero: ${sanitizeInlineText(params.gender)}.`] : []),
+        `Profissao/Classe: ${sanitizeBrandNamesOnly(params.profession) || 'Aventureiro'} em estilo ficcao cientifica e fantasia.`,
+        'Regras: sem marcas-d\'agua, sem tipografia, seguro para todos os publicos.'
+      ].join('\n')
+
+      generated = await this.imageGenerator.generateImage({
+        prompt: fallbackPrompt,
+        width: 512,
+        height: 512,
+        mimeType: 'image/webp'
+      })
+    }
 
     const normalized = await this.normalizeCharacterImage({ mimeType: generated.mimeType, base64: generated.base64 })
     return { image: normalized }

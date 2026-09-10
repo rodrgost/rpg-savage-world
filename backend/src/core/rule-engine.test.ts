@@ -394,6 +394,24 @@ test('findWeaponDefinition reconhece cassetete tatico de polimero', () => {
   assert.equal(def?.damage, 'str+d4')
 })
 
+test('applyItemChanges com item consumivel de cura reduz ferimentos do jogador', async () => {
+  const { InventoryService } = await import('../services/inventory.service.js')
+  const service = new InventoryService()
+  const state = makeBaseState()
+  state.player.wounds = 2
+  state.player.inventory = [
+    { id: 'item-potion', name: 'Poção de Cura', description: 'Restaura a saúde', quantity: 1, category: 'consumable' }
+  ]
+
+  const nextState = service.applyItemChanges(state, [
+    { itemId: 'item-potion', name: 'Poção de Cura', changeType: 'used', quantity: 1, category: 'consumable' }
+  ])
+
+  assert.equal(nextState.player.wounds, 1)
+  assert.equal(nextState.player.inventory.length, 0)
+})
+
+
 
 
 

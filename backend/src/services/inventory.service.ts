@@ -15,6 +15,9 @@ const DURABLE_CATEGORIES = new Set<ItemCategory>([
   'misc'
 ])
 
+const HEALING_ITEM_PATTERN = /\b(cura|curativo|curativa|socorro|socorros|poção|pocao|potion|remédio|remedio|bandagem|erva|ervas|antídoto|antidoto|elixir|medkit|medicina|vitalidade|saude|saúde)\b/i
+
+
 const ITEM_REFERENCE_STOPWORDS = new Set([
   'a',
   'as',
@@ -120,6 +123,7 @@ export class InventoryService {
     if (!changes.length) return state
 
     const inventory = [...(state.player.inventory ?? [])].map((item) => ({ ...item }))
+    let woundsToHeal = 0
 
     for (const change of changes) {
       const existingById = change.itemId
@@ -148,25 +152,48 @@ export class InventoryService {
         }
       } else {
         // lost or used
+        const effectiveCategory = change.category ?? existing?.category
+        const isDurable = effectiveCategory !== undefined && DURABLE_CATEGORIES.has(effectiveCategory)
+
+        if (change.changeType === 'used' && isDurable) {
+          // Itens duráveis NÃO são consumidos pelo simples uso
+          continue
+        }
+
         if (existing) {
-          // Itens duráveis NÃO são consumidos pelo simples uso: ignoramos
-          // changeType "used" para evitar que o LLM remova veículos, armas,
-          // armaduras, etc. só porque o jogador os utilizou. Categoria efetiva
-          // vem da mudança ou, na falta, do próprio item já no inventário.
-          const effectiveCategory = change.category ?? existing.category
-          if (
-            change.changeType === 'used' &&
-            effectiveCategory !== undefined &&
-            DURABLE_CATEGORIES.has(effectiveCategory)
-          ) {
-            continue
-          }
           existing.quantity -= change.quantity
           if (existing.quantity <= 0) {
             const idx = inventory.indexOf(existing)
             if (idx >= 0) inventory.splice(idx, 1)
           }
         }
+
+        // Se for um item consumível/de cura sendo usado, acumula cura para o personagem
+        if (change.changeType === 'used' || (change.changeType === 'lost' && !isDurable)) {
+          const itemName = change.name ?? existing?.name ?? ''
+          const itemDesc = change.description ?? existing?.description ?? ''
+          const isHealingConsumable =
+            (effectiveCategory === 'consumable' || effectiveCategory === undefined) &&
+            HEALING_ITEM_PATTERN.test(`${itemName} ${itemDesc}`)
+
+          if (isHealingConsumable) {
+            woundsToHeal += Math.max(1, change.quantity)
+          }
+        }
+      }
+    }
+
+    let wounds = state.player.wounds
+    let fatigue = state.player.fatigue
+
+    if (woundsToHeal > 0) {
+      if (wounds > 0) {
+        const healed = Math.min(wounds, woundsToHeal)
+        wounds -= healed
+        woundsToHeal -= healed
+      }
+      if (woundsToHeal > 0 && fatigue > 0) {
+        fatigue = Math.max(0, fatigue - woundsToHeal)
       }
     }
 
@@ -174,7 +201,9 @@ export class InventoryService {
       ...state,
       player: {
         ...state.player,
-        inventory
+        inventory,
+        wounds,
+        fatigue
       }
     }
   }

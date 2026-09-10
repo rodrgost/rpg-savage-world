@@ -2626,6 +2626,217 @@ button:disabled {
   border-color: var(--text-secondary);
 }
 
+/* ─── Sidebar Campaign Tab (Aba de Campanha) ─── */
+.sidebar-campaign-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.campaign-subnav {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.campaign-subnav::-webkit-scrollbar {
+  display: none;
+}
+
+.campaign-subnav-btn {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 150ms ease;
+}
+
+.campaign-subnav-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.campaign-subnav-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.campaign-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.campaign-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.campaign-title {
+  margin: 0;
+  font-size: var(--font-md);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.campaign-world-badge {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: #60a5fa;
+}
+
+.campaign-meta-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  font-size: var(--font-xs);
+}
+
+.campaign-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.campaign-block-title {
+  margin: 0;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.campaign-desc-text {
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.campaign-missions-list,
+.campaign-chars-list,
+.campaign-factions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.campaign-mission-card,
+.campaign-char-card,
+.faction-card {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: var(--font-xs);
+}
+
+.mission-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: 4px;
+}
+
+.mission-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+}
+
+.mission-badge.main {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.mission-badge.optional {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.mission-title {
+  color: var(--text-primary);
+}
+
+.mission-desc,
+.char-desc {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+}
+
+.char-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.char-name {
+  color: var(--text-primary);
+}
+
+.char-role {
+  color: #60a5fa;
+  font-size: 11px;
+}
+
+.char-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.faction-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.campaign-facts-list {
+  margin: 0;
+  padding-left: var(--space-3);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+.campaign-facts-list li {
+  margin-bottom: 4px;
+}
+
+.campaign-summary-box {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.summary-text {
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 /* ─── Sidebar Footer ─── */
 .sidebar-footer {
   flex-shrink: 0;

@@ -27,7 +27,7 @@ import {
   updateKnownNpc
 } from '../lib/api'
 import type { EnginePhaseData } from '../lib/api'
-import type { ActionOption, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, KnownNpc, NarratorTurnResponse, NarrativeSegment, NarrativeStyle, RelationalStatus, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse } from '../types'
+import type { ActionOption, Campaign, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, KnownNpc, NarratorTurnResponse, NarrativeSegment, NarrativeStyle, RelationalStatus, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse, World } from '../types'
 import { RELATION_LABELS, RELATION_OPTIONS, relationClass, relationFromDisposition } from '../lib/npcLabels'
 import { SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
 import { YouTubeAmbient } from '../components/YouTubeAmbient'
@@ -1289,11 +1289,12 @@ function DiceResultCard({ event }: { event: SessionEvent }) {
 
 // ─── Character Sidebar ───
 
-type SidebarTab = 'status' | 'inventory' | 'known' | 'narration'
+type SidebarTab = 'status' | 'inventory' | 'campaign' | 'known' | 'narration'
 
 const SIDEBAR_TABS: { key: SidebarTab; label: string; icon: string }[] = [
   { key: 'status', label: 'Status', icon: '❤️' },
   { key: 'inventory', label: 'Mochila', icon: '🎒' },
+  { key: 'campaign', label: 'Campanha', icon: '📜' },
   { key: 'known', label: 'Conhecidos', icon: '👥' },
   { key: 'narration', label: 'Narração', icon: '🎭' },
 ]
@@ -1320,6 +1321,9 @@ function CharacterSidebar({
   savingNarration,
   knownNpcs = [],
   onUpdateKnownNpc,
+  campaign,
+  world,
+  summaryText,
 }: {
   state: GameState | null
   open: boolean
@@ -1342,6 +1346,9 @@ function CharacterSidebar({
   savingNarration: boolean
   knownNpcs?: KnownNpc[]
   onUpdateKnownNpc?: (npcId: string, patch: { relationalStatus?: Exclude<RelationalStatus, 'desconhecido'>; notes?: string; resetToAuto?: boolean }) => Promise<void>
+  campaign?: Campaign | null
+  world?: World | null
+  summaryText?: string
 }) {
   const [confirmReset, setConfirmReset] = useState(false)
 
@@ -1383,40 +1390,54 @@ function CharacterSidebar({
               onVocabChange={onSimpleVocabularyChange}
               saving={savingNarration}
             />
-          ) : !p ? (
-            <p className="muted">Carregando...</p>
           ) : (
             <>
-              {activeTab === 'status' && (
-                <SidebarOverview
-                  player={p}
-                  location={state?.worldState.activeLocation ?? '?'}
-                  turn={state?.meta.turn ?? 0}
-                  chapter={state?.meta.chapter ?? 0}
+              {activeTab === 'campaign' && (
+                <SidebarCampaign
+                  campaign={campaign}
+                  world={world}
+                  summaryText={summaryText}
+                  location={state?.worldState.activeLocation}
+                  chapter={state?.meta.chapter}
+                  turn={state?.meta.turn}
                 />
               )}
-              {activeTab === 'inventory' && (
-                <SidebarInventory
-                  items={p.inventory}
-                  onRemove={onRemoveItem}
-                  equippedAttackItemId={p.equippedAttackItemId}
-                  equippedArmorItemId={p.equippedArmorItemId}
-                  equippedShieldItemId={p.equippedShieldItemId}
-                  onEquipAttack={onEquipAttack}
-                  onUnequipAttack={onUnequipAttack}
-                  onEquipArmor={onEquipArmor}
-                  onUnequipArmor={onUnequipArmor}
-                  onEquipShield={onEquipShield}
-                  onUnequipShield={onUnequipShield}
-                />
-              )}
-              {activeTab === 'known' && (
-                <SidebarKnownNpcs
-                  knownNpcs={knownNpcs}
-                  activeLocation={state?.worldState.activeLocation}
-                  sceneNpcIds={new Set((state?.npcs ?? []).filter((npc) => npc.status !== 'left').map((npc) => npc.id))}
-                  onUpdate={onUpdateKnownNpc}
-                />
+              {!p && activeTab !== 'campaign' ? (
+                <p className="muted">Carregando...</p>
+              ) : (
+                <>
+                  {activeTab === 'status' && p && (
+                    <SidebarOverview
+                      player={p}
+                      location={state?.worldState.activeLocation ?? '?'}
+                      turn={state?.meta.turn ?? 0}
+                      chapter={state?.meta.chapter ?? 0}
+                    />
+                  )}
+                  {activeTab === 'inventory' && p && (
+                    <SidebarInventory
+                      items={p.inventory}
+                      onRemove={onRemoveItem}
+                      equippedAttackItemId={p.equippedAttackItemId}
+                      equippedArmorItemId={p.equippedArmorItemId}
+                      equippedShieldItemId={p.equippedShieldItemId}
+                      onEquipAttack={onEquipAttack}
+                      onUnequipAttack={onUnequipAttack}
+                      onEquipArmor={onEquipArmor}
+                      onUnequipArmor={onUnequipArmor}
+                      onEquipShield={onEquipShield}
+                      onUnequipShield={onUnequipShield}
+                    />
+                  )}
+                  {activeTab === 'known' && (
+                    <SidebarKnownNpcs
+                      knownNpcs={knownNpcs}
+                      activeLocation={state?.worldState.activeLocation}
+                      sceneNpcIds={new Set((state?.npcs ?? []).filter((npc) => npc.status !== 'left').map((npc) => npc.id))}
+                      onUpdate={onUpdateKnownNpc}
+                    />
+                  )}
+                </>
               )}
             </>
           )}
@@ -1517,6 +1538,209 @@ function SidebarNarration({
       </label>
 
       {saving && <p className="narration-saving">Salvando...</p>}
+    </div>
+  )
+}
+
+function SidebarCampaign({
+  campaign,
+  world,
+  summaryText,
+  location,
+  chapter,
+  turn,
+}: {
+  campaign?: Campaign | null
+  world?: World | null
+  summaryText?: string
+  location?: string
+  chapter?: number
+  turn?: number
+}) {
+  const [activeSection, setActiveSection] = useState<'overview' | 'missions' | 'characters' | 'world' | 'summary'>('overview')
+
+  if (!campaign && !world && !summaryText) {
+    return <p className="muted">Informações da campanha indisponíveis.</p>
+  }
+
+  const missions = campaign?.storyMissions ?? []
+  const storyChars = campaign?.storyCharacters ?? []
+  const worldGuide = world?.worldGuide
+  const knownFacts = worldGuide?.knowledgeHorizon?.knownFacts ?? []
+  const factions = worldGuide?.factionsAndPower?.groups ?? []
+  const keyLocations = worldGuide?.geography?.keyLocations ?? []
+
+  return (
+    <div className="sidebar-campaign-panel">
+      {/* Sub-abas de navegação da campanha */}
+      <div className="campaign-subnav">
+        <button
+          type="button"
+          className={`campaign-subnav-btn${activeSection === 'overview' ? ' active' : ''}`}
+          onClick={() => setActiveSection('overview')}
+        >
+          Visão Geral
+        </button>
+        {missions.length > 0 && (
+          <button
+            type="button"
+            className={`campaign-subnav-btn${activeSection === 'missions' ? ' active' : ''}`}
+            onClick={() => setActiveSection('missions')}
+          >
+            Objetivos ({missions.length})
+          </button>
+        )}
+        {storyChars.length > 0 && (
+          <button
+            type="button"
+            className={`campaign-subnav-btn${activeSection === 'characters' ? ' active' : ''}`}
+            onClick={() => setActiveSection('characters')}
+          >
+            Personagens ({storyChars.length})
+          </button>
+        )}
+        {(world || worldGuide) && (
+          <button
+            type="button"
+            className={`campaign-subnav-btn${activeSection === 'world' ? ' active' : ''}`}
+            onClick={() => setActiveSection('world')}
+          >
+            Universo
+          </button>
+        )}
+        {summaryText && (
+          <button
+            type="button"
+            className={`campaign-subnav-btn${activeSection === 'summary' ? ' active' : ''}`}
+            onClick={() => setActiveSection('summary')}
+          >
+            Resumo
+          </button>
+        )}
+      </div>
+
+      <div className="campaign-content">
+        {/* Visão Geral */}
+        {activeSection === 'overview' && (
+          <div className="campaign-section">
+            {campaign?.name && <h4 className="campaign-title">{campaign.name}</h4>}
+            {world?.name && <div className="campaign-world-badge">🌍 Universo: {world.name}</div>}
+
+            <div className="campaign-meta-box">
+              <div><strong>Local Atual:</strong> {location ?? 'Desconhecido'}</div>
+              <div><strong>Capítulo:</strong> {chapter ?? 1} &middot; <strong>Turno:</strong> {turn ?? 0}</div>
+            </div>
+
+            {campaign?.storyDescription && (
+              <div className="campaign-block">
+                <h5 className="campaign-block-title">Premissa</h5>
+                <p className="campaign-desc-text">{campaign.storyDescription}</p>
+              </div>
+            )}
+
+            {campaign?.storyDetails && (
+              <div className="campaign-block">
+                <h5 className="campaign-block-title">Detalhes da História</h5>
+                <p className="campaign-desc-text">{campaign.storyDetails}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Missões / Objetivos */}
+        {activeSection === 'missions' && (
+          <div className="campaign-section">
+            <h5 className="campaign-block-title">Missões &amp; Objetivos</h5>
+            <div className="campaign-missions-list">
+              {missions.map((m, idx) => (
+                <div key={idx} className="campaign-mission-card">
+                  <div className="mission-header">
+                    <span className={`mission-badge ${m.optional ? 'optional' : 'main'}`}>
+                      {m.optional ? 'Opcional' : 'Principal'}
+                    </span>
+                    <strong className="mission-title">{m.title}</strong>
+                  </div>
+                  {m.description && <p className="mission-desc">{m.description}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Personagens da História */}
+        {activeSection === 'characters' && (
+          <div className="campaign-section">
+            <h5 className="campaign-block-title">Personagens da Campanha</h5>
+            <div className="campaign-chars-list">
+              {storyChars.map((c, idx) => (
+                <div key={idx} className="campaign-char-card">
+                  <div className="char-header">
+                    <strong className="char-name">{c.name}</strong>
+                    {c.role && <span className="char-role">{c.role}</span>}
+                  </div>
+                  {c.status && <div className="char-status">Status: {c.status}</div>}
+                  {c.description && <p className="char-desc">{c.description}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Guia do Universo */}
+        {activeSection === 'world' && (
+          <div className="campaign-section">
+            {world?.name && <h4 className="campaign-title">🌍 {world.name}</h4>}
+            {world?.description && <p className="campaign-desc-text">{world.description}</p>}
+
+            {knownFacts.length > 0 && (
+              <div className="campaign-block">
+                <h5 className="campaign-block-title">Fatos Conhecidos</h5>
+                <ul className="campaign-facts-list">
+                  {knownFacts.map((fact, idx) => (
+                    <li key={idx}>{fact}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {factions.length > 0 && (
+              <div className="campaign-block">
+                <h5 className="campaign-block-title">Facções &amp; Poderes</h5>
+                <div className="campaign-factions-list">
+                  {factions.map((f, idx) => (
+                    <div key={idx} className="faction-card">
+                      <strong>{f.name}</strong> ({f.role})
+                      {f.publicFace && <div className="faction-detail">Face pública: {f.publicFace}</div>}
+                      {f.powerBase && <div className="faction-detail">Base de poder: {f.powerBase}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {keyLocations.length > 0 && (
+              <div className="campaign-block">
+                <h5 className="campaign-block-title">Locais Conhecidos</h5>
+                <ul className="campaign-facts-list">
+                  {keyLocations.map((loc, idx) => (
+                    <li key={idx}>📍 {loc}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Resumo da Aventura */}
+        {activeSection === 'summary' && (
+          <div className="campaign-section">
+            <h5 className="campaign-block-title">Resumo Narrativo</h5>
+            <div className="campaign-summary-box">
+              <p className="summary-text">{summaryText}</p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1910,6 +2134,8 @@ export function GamePage() {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('status')
   const [resetting, setResetting] = useState(false)
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null)
+  const [campaign, setCampaign] = useState<Campaign | null>(null)
+  const [world, setWorld] = useState<World | null>(null)
   const [worldInfo, setWorldInfo] = useState<{ campaignName: string; worldName: string } | null>(null)
   const [pendingDiceOption, setPendingDiceOption] = useState<ActionOption | null>(null)
   const [pendingValidation, setPendingValidation] = useState<{ input: string; validation: ValidateActionResponse } | null>(null)
@@ -2115,23 +2341,25 @@ export function GamePage() {
         if (lastNarrator?.options) {
           setCurrentOptions(normalizeOptions(lastNarrator.options))
         }
-        // Fetch campaign to get youtubeUrl and header info
+        // Fetch campaign to get youtubeUrl and campaign/world info
         const campaignId = payload.state?.meta?.campaignId
         if (campaignId) {
           getCampaign(campaignId)
-            .then((campaign) => {
-              setYoutubeUrl(campaign.youtubeUrl ?? null)
-              // Fetch world for universe name
-              if (campaign.worldId) {
-                getWorld(campaign.worldId)
-                  .then((world) => {
-                    setWorldInfo({ campaignName: campaign.name ?? '', worldName: world.name })
+            .then((c) => {
+              setCampaign(c)
+              setYoutubeUrl(c.youtubeUrl ?? null)
+              // Fetch world for universe info
+              if (c.worldId) {
+                getWorld(c.worldId)
+                  .then((w) => {
+                    setWorld(w)
+                    setWorldInfo({ campaignName: c.name ?? '', worldName: w.name })
                   })
                   .catch(() => {
-                    setWorldInfo({ campaignName: campaign.name ?? '', worldName: '' })
+                    setWorldInfo({ campaignName: c.name ?? '', worldName: '' })
                   })
               } else {
-                setWorldInfo({ campaignName: campaign.name ?? '', worldName: '' })
+                setWorldInfo({ campaignName: c.name ?? '', worldName: '' })
               }
             })
             .catch(() => { /* ignore */ })
@@ -2709,6 +2937,9 @@ export function GamePage() {
         savingNarration={savingNarration}
         knownNpcs={knownNpcs}
         onUpdateKnownNpc={handleUpdateKnownNpc}
+        campaign={campaign}
+        world={world}
+        summaryText={sessionSummaryText}
       />
 
       {/* ── Chat Narrativo ── */}
