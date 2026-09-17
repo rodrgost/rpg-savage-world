@@ -497,3 +497,22 @@ export type SummaryDoc = {
   summaryText: string
   lastTurnIncluded: number
 }
+
+export type SystemPromptVariable = {
+  name: string
+  description: string
+}
+
+export type SystemPromptDto = {
+  key: string
+  name: string
+  description: string
+  category: string
+  enabled: boolean
+  isCustomized: boolean
+  defaultPrompt?: string
+  customPrompt?: string | null
+  effectivePrompt?: string
+  variables?: readonly SystemPromptVariable[]
+}
+

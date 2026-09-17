@@ -20,6 +20,7 @@ import { deriveCanonicalFacts, buildCanonicalFactsPromptSection } from '../../se
 import { SessionEventRepo } from '../../repositories/sessionEvent.repo.js'
 import { SessionSummaryRepo } from '../../repositories/sessionSummary.repo.js'
 import { CanonicalFactRepo } from '../../repositories/canonicalFact.repo.js'
+import { SystemPromptsRepo } from '../../repositories/systemPrompts.repo.js'
 import { ChatMessageRepo, type ChatMessageRow } from '../../repositories/chatMessage.repo.js'
 import { buildLlmContext } from '../../services/contextBuilder.js'
 import { segmentsToText } from '../../domain/segments.js'
@@ -170,6 +171,7 @@ export class SessionService {
   private readonly npcService = new NpcService()
   private readonly npcRelations = new NpcRelationsService()
   private readonly knownNpcs = new KnownNpcsRepo()
+  private readonly systemPrompts = new SystemPromptsRepo()
   private readonly narrator: Narrator = new GeminiAdapter()
 
   private async requireOwnedSession(sessionId: string, ownerId: string): Promise<Record<string, unknown>> {
@@ -1178,6 +1180,7 @@ export class SessionService {
     })
 
     // ── Chamar LLM para narrativa inicial ──
+    const customNarratorPrompt = await this.systemPrompts.get(params.ownerId, 'narrator')
     const narratorResponse = this.validateNarratorResponse({
       response: await this.narrator.narrateStart({
         world: world
@@ -1204,7 +1207,8 @@ export class SessionService {
           edges,
           hindrances: hindrances.map((h) => ({ name: h.name, severity: h.severity }))
         },
-        simpleVocabulary: params.simpleVocabulary
+        simpleVocabulary: params.simpleVocabulary,
+        customSystemPrompt: customNarratorPrompt ?? undefined
       }),
       state,
       mode: 'start'
@@ -1363,6 +1367,7 @@ export class SessionService {
     })
 
     // ── Chamar LLM para nova narrativa inicial ──
+    const customNarratorPrompt = await this.systemPrompts.get(params.ownerId, 'narrator')
     const narratorResponse = this.validateNarratorResponse({
       response: await this.narrator.narrateStart({
         world: world
@@ -1389,7 +1394,8 @@ export class SessionService {
           edges,
           hindrances: hindrances.map((h) => ({ name: h.name, severity: h.severity }))
         },
-        simpleVocabulary
+        simpleVocabulary,
+        customSystemPrompt: customNarratorPrompt ?? undefined
       }),
       state,
       mode: 'start'
@@ -1585,14 +1591,15 @@ export class SessionService {
 
     // 3. Buscar contexto, campanha e mundo para a LLM (em paralelo para reduzir latência)
     const worldIdDirect = result.nextState.meta.worldId || null
-    const [summary, recentMessages, campaignDoc, worldDocDirect, canonicalFacts] = await Promise.all([
+    const [summary, recentMessages, campaignDoc, worldDocDirect, canonicalFacts, customNarratorPrompt] = await Promise.all([
       this.summaryRepo.getSummary(params.sessionId),
       this.summaries.getRecentWindow(params.sessionId),
       result.nextState.meta.campaignId
         ? this.campaigns.get(result.nextState.meta.campaignId)
         : Promise.resolve(null),
       worldIdDirect ? this.worlds.get(worldIdDirect) : Promise.resolve(null),
-      this.facts.listBySession(params.sessionId)
+      this.facts.listBySession(params.sessionId),
+      this.systemPrompts.get(params.ownerId, 'narrator')
     ])
     const worldDoc = worldDocDirect ?? (campaignDoc?.worldId ? await this.worlds.get(campaignDoc.worldId) : null)
     const context = buildLlmContext({ state: result.nextState, summary, recentMessages, npcCatalog: worldDoc?.npcCatalog })
@@ -1647,7 +1654,8 @@ export class SessionService {
         },
         recentMessages: context.recentMessages,
         narrativeStyle: sessionNarrativeStyle ?? result.nextState.meta.narrativeStyle ?? 'concise',
-        simpleVocabulary: sessionSimpleVocabulary ?? result.nextState.meta.simpleVocabulary ?? true
+        simpleVocabulary: sessionSimpleVocabulary ?? result.nextState.meta.simpleVocabulary ?? true,
+        customSystemPrompt: customNarratorPrompt ?? undefined
       }),
       state: result.nextState,
       mode: 'turn',

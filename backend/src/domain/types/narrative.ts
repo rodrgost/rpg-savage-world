@@ -275,6 +275,8 @@ export type NarrateStartRequest = {
     hindrances: Array<{ name: string; severity: string }>
   }
   simpleVocabulary?: boolean
+  /** Prompt de sistema customizado do narrador configurado pelo usuário */
+  customSystemPrompt?: string
 }
 
 export type NarrateTurnRequest = {
@@ -342,4 +344,6 @@ export type NarrateTurnRequest = {
   recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
   narrativeStyle?: NarrativeStyle
   simpleVocabulary?: boolean
+  /** Prompt de sistema customizado do narrador configurado pelo usuário */
+  customSystemPrompt?: string
 }

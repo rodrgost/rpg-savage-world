@@ -14,6 +14,7 @@ const GamePage = lazy(() => import('./pages/GamePage').then(m => ({ default: m.G
 const CharactersPage = lazy(() => import('./pages/CharactersPage').then(m => ({ default: m.CharactersPage })))
 const PlaythroughsPage = lazy(() => import('./pages/PlaythroughsPage').then(m => ({ default: m.PlaythroughsPage })))
 const RulesPage = lazy(() => import('./pages/RulesPage').then(m => ({ default: m.RulesPage })))
+const SystemPromptsPage = lazy(() => import('./pages/SystemPromptsPage').then(m => ({ default: m.SystemPromptsPage })))
 
 /** Redirect /worlds/:worldId/campaigns → /campaigns?worldId=X */
 function WorldCampaignsRedirect() {
@@ -62,6 +63,9 @@ function AuthenticatedLayout({
             </NavLink>
             <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/rules">
               Regras
+            </NavLink>
+            <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/prompts">
+              Prompts
             </NavLink>
           </nav>
 
@@ -152,6 +156,7 @@ export function App() {
             <Route path="/characters/new" element={<CreateCharacterPage uid={uid} />} />
             <Route path="/characters/:characterId/edit" element={<CreateCharacterPage uid={uid} />} />
             <Route path="/rules" element={<RulesPage />} />
+            <Route path="/prompts" element={<SystemPromptsPage uid={uid} />} />
           </Route>
           <Route path="/game/:sessionId" element={<GamePage />} />
         </Route>

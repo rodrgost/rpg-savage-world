@@ -13,6 +13,8 @@ import type { DieType, Hindrance, NpcDefinition, RelationalStatus } from '../../
 import type { WorldGuide } from '../../domain/types/world-guide.js'
 import { renderWorldGuideMarkdown } from '../../domain/types/world-guide.js'
 import { KnownNpcsRepo } from '../../repositories/knownNpcs.repo.js'
+import { SystemPromptsRepo } from '../../repositories/systemPrompts.repo.js'
+import { DEFAULT_NARRATOR_SYSTEM_PROMPT, NARRATOR_PROMPT_METADATA } from '../../llm/prompts/narrator.prompt.js'
 import { firebaseAuth, firestore } from '../../infrastructure/firebase.js'
 import { log, warn } from '../../utils/file-logger.js'
 
@@ -287,6 +289,7 @@ export class GameDataService {
   private readonly knownNpcs = new KnownNpcsRepo()
   private readonly narrator = new GeminiAdapter()
   private readonly imageGenerator = new GeminiImageGenerator()
+  private readonly systemPrompts = new SystemPromptsRepo()
 
   private async buildVisualDescription(params:
     | { entityType: 'world'; title: string }
@@ -1230,5 +1233,105 @@ export class GameDataService {
     const catalog = (world.npcCatalog ?? []).filter((n) => n.id !== params.npcId)
     await this.worlds.updateNpcCatalog(params.worldId, catalog)
     return { ok: true }
+  }
+
+  // ── System Prompts ───────────────────────────
+
+  async listSystemPrompts(params: { userId: string }) {
+    const customNarrator = await this.systemPrompts.get(params.userId, 'narrator')
+    return [
+      {
+        ...NARRATOR_PROMPT_METADATA,
+        isCustomized: Boolean(customNarrator),
+        defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
+        customPrompt: customNarrator,
+        effectivePrompt: customNarrator ?? DEFAULT_NARRATOR_SYSTEM_PROMPT
+      },
+      {
+        key: 'summary',
+        name: 'Resumo da Aventura',
+        description: 'Condensa o histórico de mensagens e eventos em um resumo canônico progressivo.',
+        category: 'core',
+        enabled: false,
+        isCustomized: false
+      },
+      {
+        key: 'world_guide',
+        name: 'Criação de Lore / Guia de Mundo',
+        description: 'Gera a bíblia temática do universo com regras, tecnologia, poderes e facções.',
+        category: 'lore',
+        enabled: false,
+        isCustomized: false
+      },
+      {
+        key: 'character_suggestion',
+        name: 'Sugestão de Personagem',
+        description: 'Gera conceitos e fichas sugeridas de personagens coerentes com o cenário.',
+        category: 'character',
+        enabled: false,
+        isCustomized: false
+      },
+      {
+        key: 'action_validation',
+        name: 'Validação de Ações',
+        description: 'Valida a viabilidade de ações livres antes de executá-las nas rodadas de jogo.',
+        category: 'rules',
+        enabled: false,
+        isCustomized: false
+      }
+    ]
+  }
+
+  async getSystemPrompt(params: { userId: string; promptKey: string }) {
+    if (params.promptKey !== 'narrator') {
+      throw new NotFoundException(`Prompt de sistema "${params.promptKey}" não encontrado ou ainda não disponível para edição.`)
+    }
+    const customPrompt = await this.systemPrompts.get(params.userId, params.promptKey)
+    return {
+      ...NARRATOR_PROMPT_METADATA,
+      isCustomized: Boolean(customPrompt),
+      defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
+      customPrompt,
+      effectivePrompt: customPrompt ?? DEFAULT_NARRATOR_SYSTEM_PROMPT
+    }
+  }
+
+  async updateSystemPrompt(params: { userId: string; promptKey: string; prompt: string }) {
+    if (params.promptKey !== 'narrator') {
+      throw new BadRequestException(`Apenas o prompt "narrator" pode ser editado no momento.`)
+    }
+    const trimmed = (params.prompt ?? '').trim()
+    if (!trimmed) {
+      await this.systemPrompts.delete(params.userId, params.promptKey)
+      return {
+        ...NARRATOR_PROMPT_METADATA,
+        isCustomized: false,
+        defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
+        customPrompt: null,
+        effectivePrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT
+      }
+    }
+    await this.systemPrompts.set(params.userId, params.promptKey, trimmed)
+    return {
+      ...NARRATOR_PROMPT_METADATA,
+      isCustomized: true,
+      defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
+      customPrompt: trimmed,
+      effectivePrompt: trimmed
+    }
+  }
+
+  async resetSystemPrompt(params: { userId: string; promptKey: string }) {
+    if (params.promptKey !== 'narrator') {
+      throw new BadRequestException(`Apenas o prompt "narrator" pode ser resetado no momento.`)
+    }
+    await this.systemPrompts.delete(params.userId, params.promptKey)
+    return {
+      ...NARRATOR_PROMPT_METADATA,
+      isCustomized: false,
+      defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
+      customPrompt: null,
+      effectivePrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT
+    }
   }
 }

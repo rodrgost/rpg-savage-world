@@ -1,5 +1,5 @@
 import { getAuthenticatedIdToken } from './firebase'
-import type { Campaign, CampaignMission, Character, ChatMessage, GameState, Hindrance, KnownNpc, NarratorTurnResponse, OwnerProfile, RelationalStatus, SessionEvent, StoryCharacter, SummaryDoc, Visibility, World } from '../types'
+import type { Campaign, CampaignMission, Character, ChatMessage, GameState, Hindrance, KnownNpc, NarratorTurnResponse, OwnerProfile, RelationalStatus, SessionEvent, StoryCharacter, SummaryDoc, Visibility, World, SystemPromptDto } from '../types'
 
 type StoredImage = {
   mimeType: string
@@ -1144,3 +1144,27 @@ export async function getMessages(sessionId: string): Promise<ChatMessage[]> {
   )
   return response.messages
 }
+
+// ── System Prompts ───────────────────────────
+
+export async function listSystemPrompts(): Promise<SystemPromptDto[]> {
+  return await apiRequest<SystemPromptDto[]>('/system-prompts')
+}
+
+export async function getSystemPrompt(promptKey: string): Promise<SystemPromptDto> {
+  return await apiRequest<SystemPromptDto>(`/system-prompts/${encodeURIComponent(promptKey)}`)
+}
+
+export async function updateSystemPrompt(promptKey: string, prompt: string): Promise<SystemPromptDto> {
+  return await apiRequest<SystemPromptDto>(`/system-prompts/${encodeURIComponent(promptKey)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ prompt })
+  })
+}
+
+export async function resetSystemPrompt(promptKey: string): Promise<SystemPromptDto> {
+  return await apiRequest<SystemPromptDto>(`/system-prompts/${encodeURIComponent(promptKey)}`, {
+    method: 'DELETE'
+  })
+}
+

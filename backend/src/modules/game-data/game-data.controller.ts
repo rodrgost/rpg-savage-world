@@ -273,7 +273,12 @@ const UpdateKnownNpcBody = z
     notes: z.string().max(500).optional(),
     resetToAuto: z.boolean().optional()
   })
-  .strict()
+// ─── System Prompts ──────────────────────────────────────────
+
+const UpdateSystemPromptBody = z.object({
+  prompt: z.string()
+})
+
 // ─── Controller ────────────────────────────────────────────────
 
 @Controller()
@@ -486,5 +491,38 @@ export class GameDataController {
     @Param('npcId') npcId: string
   ) {
     return await this.gameData.deleteWorldNpc({ userId, worldId, npcId })
+  }
+
+  // ── System Prompts ───────────────────────────
+
+  @Get('/system-prompts')
+  async listSystemPrompts(@CurrentUser('uid') userId: string) {
+    return await this.gameData.listSystemPrompts({ userId })
+  }
+
+  @Get('/system-prompts/:promptKey')
+  async getSystemPrompt(
+    @CurrentUser('uid') userId: string,
+    @Param('promptKey') promptKey: string
+  ) {
+    return await this.gameData.getSystemPrompt({ userId, promptKey })
+  }
+
+  @Put('/system-prompts/:promptKey')
+  async updateSystemPrompt(
+    @CurrentUser('uid') userId: string,
+    @Param('promptKey') promptKey: string,
+    @Body() body: unknown
+  ) {
+    const parsed = UpdateSystemPromptBody.parse(body)
+    return await this.gameData.updateSystemPrompt({ userId, promptKey, prompt: parsed.prompt })
+  }
+
+  @Delete('/system-prompts/:promptKey')
+  async resetSystemPrompt(
+    @CurrentUser('uid') userId: string,
+    @Param('promptKey') promptKey: string
+  ) {
+    return await this.gameData.resetSystemPrompt({ userId, promptKey })
   }
 }

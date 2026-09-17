@@ -39,6 +39,13 @@ const actions = [
     description: 'Consulte Savage Worlds e os atalhos da sua implementação antes de jogar.',
     to: '/rules',
     action: 'Consultar regras'
+  },
+  {
+    icon: '🧠',
+    title: 'Prompts de Sistema',
+    description: 'Personalize o prompt de narração e as diretrizes da IA para suas mesas.',
+    to: '/prompts',
+    action: 'Editar prompts'
   }
 ]
 
