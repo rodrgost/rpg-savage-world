@@ -15,6 +15,7 @@ import { renderWorldGuideMarkdown } from '../../domain/types/world-guide.js'
 import { KnownNpcsRepo } from '../../repositories/knownNpcs.repo.js'
 import { SystemPromptsRepo } from '../../repositories/systemPrompts.repo.js'
 import { DEFAULT_NARRATOR_SYSTEM_PROMPT, NARRATOR_PROMPT_METADATA } from '../../llm/prompts/narrator.prompt.js'
+import { DEFAULT_CAMPAIGN_FINALE_SYSTEM_PROMPT, CAMPAIGN_FINALE_PROMPT_METADATA } from '../../llm/prompts/campaign-finale.prompt.js'
 import { firebaseAuth, firestore } from '../../infrastructure/firebase.js'
 import { log, warn } from '../../utils/file-logger.js'
 
@@ -250,7 +251,7 @@ function sanitizeSheetValues(values: Record<string, unknown> | undefined): Recor
 }
 
 function normalizeVisibility(value: unknown): Visibility {
-  return value === 'public' ? 'public' : 'private'
+  return value === 'private' ? 'private' : 'public'
 }
 
 function getCharacterOwnerId(character: { ownerId?: string; userId?: string }): string {
@@ -789,12 +790,10 @@ export class GameDataService {
     race?: string
     profession: string
     description?: string
-    campaignRole?: string
     genderEn?: string
     raceEn?: string
     professionEn?: string
     descriptionEn?: string
-    campaignRoleEn?: string
     visibility?: Visibility
     attributes?: Record<string, number>
     skills?: Record<string, number>
@@ -839,12 +838,10 @@ export class GameDataService {
       race: params.race?.trim() ?? '',
       profession: params.profession,
       description: params.description?.trim() ?? '',
-      campaignRole: params.campaignRole?.trim() ?? '',
       genderEn: params.genderEn?.trim() || undefined,
       raceEn: params.raceEn?.trim() || undefined,
       professionEn: params.professionEn?.trim() || undefined,
       descriptionEn: params.descriptionEn?.trim() || undefined,
-      campaignRoleEn: params.campaignRoleEn?.trim() || undefined,
       attributes: normalizedAttributes,
       skills: normalizedSkills,
       edges: normalizedEdges,
@@ -954,7 +951,6 @@ export class GameDataService {
       race?: string
       profession?: string
       description?: string
-      campaignRole?: string
     }
   }) {
     const typedName = params.existingFields?.name?.trim() ?? ''
@@ -1001,7 +997,6 @@ export class GameDataService {
       const race = (suggestion.race || '').trim()
       const profession = suggestion.profession.trim()
       const description = suggestion.description.trim()
-      const campaignRole = (suggestion.campaignRole || '').trim()
 
       if (!name || !profession || description.length < 80) {
         throw new Error('O provedor de IA retornou uma sugestão incompleta.')
@@ -1011,8 +1006,7 @@ export class GameDataService {
         worldId: params.worldId,
         hasName: Boolean(name),
         hasProfession: Boolean(profession),
-        descriptionLength: description.length,
-        campaignRoleLength: campaignRole.length
+        descriptionLength: description.length
       })
 
       return {
@@ -1021,12 +1015,10 @@ export class GameDataService {
         race,
         profession,
         description,
-        campaignRole,
         genderPt: suggestion.genderPt,
         racePt: suggestion.racePt,
         professionPt: suggestion.professionPt,
         descriptionPt: suggestion.descriptionPt,
-        campaignRolePt: suggestion.campaignRolePt,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
@@ -1073,12 +1065,10 @@ export class GameDataService {
         race: (suggestion.race || '').trim(),
         profession: suggestion.profession.trim(),
         description: suggestion.description.trim(),
-        campaignRole: (suggestion.campaignRole || '').trim(),
         genderPt: suggestion.genderPt,
         racePt: suggestion.racePt,
         professionPt: suggestion.professionPt,
         descriptionPt: suggestion.descriptionPt,
-        campaignRolePt: suggestion.campaignRolePt,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido'
@@ -1103,7 +1093,6 @@ export class GameDataService {
     race?: string
     profession: string
     description?: string
-    campaignRole?: string
     visibility?: Visibility
     attributes?: Record<string, number>
     skills?: Record<string, number>
@@ -1147,7 +1136,6 @@ export class GameDataService {
       race: params.race?.trim() ?? '',
       profession: params.profession,
       description: params.description?.trim() ?? '',
-      campaignRole: params.campaignRole?.trim() ?? '',
       visibility: params.visibility ? normalizeVisibility(params.visibility) : undefined,
       attributes: normalizedAttributes,
       skills: normalizedSkills,
@@ -1238,7 +1226,10 @@ export class GameDataService {
   // ── System Prompts ───────────────────────────
 
   async listSystemPrompts(params: { userId: string }) {
-    const customNarrator = await this.systemPrompts.get(params.userId, 'narrator')
+    const [customNarrator, customFinale] = await Promise.all([
+      this.systemPrompts.get(params.userId, 'narrator'),
+      this.systemPrompts.get(params.userId, 'campaign_finale')
+    ])
     return [
       {
         ...NARRATOR_PROMPT_METADATA,
@@ -1246,6 +1237,13 @@ export class GameDataService {
         defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
         customPrompt: customNarrator,
         effectivePrompt: customNarrator ?? DEFAULT_NARRATOR_SYSTEM_PROMPT
+      },
+      {
+        ...CAMPAIGN_FINALE_PROMPT_METADATA,
+        isCustomized: Boolean(customFinale),
+        defaultPrompt: DEFAULT_CAMPAIGN_FINALE_SYSTEM_PROMPT,
+        customPrompt: customFinale,
+        effectivePrompt: customFinale ?? DEFAULT_CAMPAIGN_FINALE_SYSTEM_PROMPT
       },
       {
         key: 'summary',
@@ -1283,55 +1281,75 @@ export class GameDataService {
   }
 
   async getSystemPrompt(params: { userId: string; promptKey: string }) {
-    if (params.promptKey !== 'narrator') {
-      throw new NotFoundException(`Prompt de sistema "${params.promptKey}" não encontrado ou ainda não disponível para edição.`)
+    if (params.promptKey === 'narrator') {
+      const customPrompt = await this.systemPrompts.get(params.userId, params.promptKey)
+      return {
+        ...NARRATOR_PROMPT_METADATA,
+        isCustomized: Boolean(customPrompt),
+        defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
+        customPrompt,
+        effectivePrompt: customPrompt ?? DEFAULT_NARRATOR_SYSTEM_PROMPT
+      }
     }
-    const customPrompt = await this.systemPrompts.get(params.userId, params.promptKey)
-    return {
-      ...NARRATOR_PROMPT_METADATA,
-      isCustomized: Boolean(customPrompt),
-      defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
-      customPrompt,
-      effectivePrompt: customPrompt ?? DEFAULT_NARRATOR_SYSTEM_PROMPT
+    if (params.promptKey === 'campaign_finale') {
+      const customPrompt = await this.systemPrompts.get(params.userId, params.promptKey)
+      return {
+        ...CAMPAIGN_FINALE_PROMPT_METADATA,
+        isCustomized: Boolean(customPrompt),
+        defaultPrompt: DEFAULT_CAMPAIGN_FINALE_SYSTEM_PROMPT,
+        customPrompt,
+        effectivePrompt: customPrompt ?? DEFAULT_CAMPAIGN_FINALE_SYSTEM_PROMPT
+      }
     }
+    throw new NotFoundException(`Prompt de sistema "${params.promptKey}" não encontrado ou ainda não disponível para edição.`)
   }
 
   async updateSystemPrompt(params: { userId: string; promptKey: string; prompt: string }) {
-    if (params.promptKey !== 'narrator') {
-      throw new BadRequestException(`Apenas o prompt "narrator" pode ser editado no momento.`)
+    const isNarrator = params.promptKey === 'narrator'
+    const isFinale = params.promptKey === 'campaign_finale'
+    if (!isNarrator && !isFinale) {
+      throw new BadRequestException(`Apenas os prompts "narrator" e "campaign_finale" podem ser editados no momento.`)
     }
+    const meta = isNarrator ? NARRATOR_PROMPT_METADATA : CAMPAIGN_FINALE_PROMPT_METADATA
+    const defaultPrompt = isNarrator ? DEFAULT_NARRATOR_SYSTEM_PROMPT : DEFAULT_CAMPAIGN_FINALE_SYSTEM_PROMPT
+
     const trimmed = (params.prompt ?? '').trim()
     if (!trimmed) {
       await this.systemPrompts.delete(params.userId, params.promptKey)
       return {
-        ...NARRATOR_PROMPT_METADATA,
+        ...meta,
         isCustomized: false,
-        defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
+        defaultPrompt,
         customPrompt: null,
-        effectivePrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT
+        effectivePrompt: defaultPrompt
       }
     }
     await this.systemPrompts.set(params.userId, params.promptKey, trimmed)
     return {
-      ...NARRATOR_PROMPT_METADATA,
+      ...meta,
       isCustomized: true,
-      defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
+      defaultPrompt,
       customPrompt: trimmed,
       effectivePrompt: trimmed
     }
   }
 
   async resetSystemPrompt(params: { userId: string; promptKey: string }) {
-    if (params.promptKey !== 'narrator') {
-      throw new BadRequestException(`Apenas o prompt "narrator" pode ser resetado no momento.`)
+    const isNarrator = params.promptKey === 'narrator'
+    const isFinale = params.promptKey === 'campaign_finale'
+    if (!isNarrator && !isFinale) {
+      throw new BadRequestException(`Apenas os prompts "narrator" e "campaign_finale" podem ser resetados no momento.`)
     }
+    const meta = isNarrator ? NARRATOR_PROMPT_METADATA : CAMPAIGN_FINALE_PROMPT_METADATA
+    const defaultPrompt = isNarrator ? DEFAULT_NARRATOR_SYSTEM_PROMPT : DEFAULT_CAMPAIGN_FINALE_SYSTEM_PROMPT
+
     await this.systemPrompts.delete(params.userId, params.promptKey)
     return {
-      ...NARRATOR_PROMPT_METADATA,
+      ...meta,
       isCustomized: false,
-      defaultPrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT,
+      defaultPrompt,
       customPrompt: null,
-      effectivePrompt: DEFAULT_NARRATOR_SYSTEM_PROMPT
+      effectivePrompt: defaultPrompt
     }
   }
 }

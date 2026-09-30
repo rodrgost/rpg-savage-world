@@ -10,12 +10,22 @@ const workspaceRoot = resolve(backendRoot, '..')
 loadDotenv({ path: resolve(workspaceRoot, '.env') })
 loadDotenv({ path: resolve(backendRoot, '.env'), override: false })
 
+function resolveFilePath(filePath: string): string {
+  if (!filePath) return ''
+  if (existsSync(filePath)) return filePath
+  const fromWorkspace = resolve(workspaceRoot, filePath)
+  if (existsSync(fromWorkspace)) return fromWorkspace
+  const fromBackend = resolve(backendRoot, filePath)
+  if (existsSync(fromBackend)) return fromBackend
+  return filePath
+}
+
 export const env = {
   port: Number(process.env.PORT ?? '3100'),
   nodeEnv: process.env.NODE_ENV ?? 'development',
 
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? '',
-  firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? '',
+  firebaseServiceAccountPath: resolveFilePath(process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? ''),
   firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
 
   /** Orçamento de tokens (estimativa ~4 chars/token) para a janela de histórico recente

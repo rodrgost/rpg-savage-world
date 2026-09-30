@@ -80,18 +80,16 @@ export function CreateCharacterPage({ uid }: Props) {
   const [worlds, setWorlds] = useState<World[]>([])
   const [selectedWorldId, setSelectedWorldId] = useState('')
   const [ownerId, setOwnerId] = useState('')
-  const [visibility, setVisibility] = useState<Visibility>('private')
+  const [visibility, setVisibility] = useState<Visibility>('public')
   const [name, setName] = useState('')
   const [gender, setGender] = useState('')
   const [race, setRace] = useState('')
   const [profession, setProfession] = useState('')
   const [description, setDescription] = useState('')
-  const [campaignRole, setCampaignRole] = useState('')
   const [genderEn, setGenderEn] = useState<string | undefined>()
   const [raceEn, setRaceEn] = useState<string | undefined>()
   const [professionEn, setProfessionEn] = useState<string | undefined>()
   const [descriptionEn, setDescriptionEn] = useState<string | undefined>()
-  const [campaignRoleEn, setCampaignRoleEn] = useState<string | undefined>()
   const [skills, setSkills] = useState<Record<string, DieType>>({})
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
   const [selectedHindrances, setSelectedHindrances] = useState<Hindrance[]>([])
@@ -171,7 +169,6 @@ export function CreateCharacterPage({ uid }: Props) {
         setRace(c.race ?? '')
         setProfession(c.profession ?? '')
         setDescription(c.description ?? '')
-        setCampaignRole(c.campaignRole ?? '')
         if (c.skills) setSkills(c.skills as Record<string, DieType>)
         if (c.edges) setSelectedEdges(c.edges)
         if (c.hindrances) setSelectedHindrances(c.hindrances)
@@ -255,12 +252,10 @@ export function CreateCharacterPage({ uid }: Props) {
       setRace(suggestion.racePt ?? suggestion.race)
       setProfession(suggestion.professionPt ?? suggestion.profession)
       setDescription(suggestion.descriptionPt ?? suggestion.description)
-      setCampaignRole(suggestion.campaignRolePt ?? suggestion.campaignRole)
       setGenderEn(suggestion.genderPt ? suggestion.gender : undefined)
       setRaceEn(suggestion.racePt ? suggestion.race : undefined)
       setProfessionEn(suggestion.professionPt ? suggestion.profession : undefined)
       setDescriptionEn(suggestion.descriptionPt ? suggestion.description : undefined)
-      setCampaignRoleEn(suggestion.campaignRolePt ? suggestion.campaignRole : undefined)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao gerar sugestão por IA para este personagem')
     } finally {
@@ -282,12 +277,10 @@ export function CreateCharacterPage({ uid }: Props) {
       setRace(suggestion.racePt ?? suggestion.race)
       setProfession(suggestion.professionPt ?? suggestion.profession)
       setDescription(suggestion.descriptionPt ?? suggestion.description)
-      setCampaignRole(suggestion.campaignRolePt ?? suggestion.campaignRole)
       setGenderEn(suggestion.genderPt ? suggestion.gender : undefined)
       setRaceEn(suggestion.racePt ? suggestion.race : undefined)
       setProfessionEn(suggestion.professionPt ? suggestion.profession : undefined)
       setDescriptionEn(suggestion.descriptionPt ? suggestion.description : undefined)
-      setCampaignRoleEn(suggestion.campaignRolePt ? suggestion.campaignRole : undefined)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao gerar personagem a partir da descrição')
     } finally {
@@ -354,7 +347,7 @@ export function CreateCharacterPage({ uid }: Props) {
     try {
       if (isEditMode && characterId) {
         await updateCharacter(characterId, {
-          name, gender, race, profession, description, campaignRole,
+          name, gender, race, profession, description,
           visibility,
           attributes: {}, skills, edges: selectedEdges, hindrances: selectedHindrances,
           hindranceAllocation: {
@@ -367,8 +360,8 @@ export function CreateCharacterPage({ uid }: Props) {
       } else {
         await createCharacter({
           worldId: selectedWorldId,
-          name, gender, race, profession, description, campaignRole,
-          genderEn, raceEn, professionEn, descriptionEn, campaignRoleEn,
+          name, gender, race, profession, description,
+          genderEn, raceEn, professionEn, descriptionEn,
           visibility,
           attributes: {}, skills, edges: selectedEdges, hindrances: selectedHindrances,
           hindranceAllocation: {
@@ -420,8 +413,8 @@ export function CreateCharacterPage({ uid }: Props) {
             <label>
               Visibilidade
               <select value={visibility} onChange={(e) => setVisibility(e.target.value as Visibility)}>
-                <option value="private">Privado</option>
                 <option value="public">Público</option>
+                <option value="private">Privado</option>
               </select>
             </label>
 
@@ -476,14 +469,14 @@ export function CreateCharacterPage({ uid }: Props) {
                 >
                   {suggestLoading ? <><span className="btn-ai-spinner" /> Gerando sugestão…</> : '✨ Sugerir pela IA'}
                 </button>
-                {(name || gender || race || profession || description || campaignRole) && (
+                {(name || gender || race || profession || description) && (
                   <button
                     className="button-danger-outline"
                     type="button"
                     onClick={() => {
                       setName(''); setGender(''); setRace('')
                       setProfession(''); setDescription('')
-                      setCampaignRole(''); setImage(undefined)
+                      setImage(undefined)
                     }}
                   >
                     🗑️ Limpar campos
@@ -524,10 +517,6 @@ export function CreateCharacterPage({ uid }: Props) {
             <label>
               Descrição
               <textarea onChange={(e) => setDescription(e.target.value)} rows={3} value={description} placeholder="Aparência, personalidade, história..." />
-            </label>
-            <label>
-              Papel na Campanha
-              <textarea onChange={(e) => setCampaignRole(e.target.value)} rows={2} value={campaignRole} placeholder="O que este personagem é neste mundo, o que está fazendo ou sua missão atual..." />
             </label>
 
             <hr className="subsection-divider" />

@@ -28,10 +28,10 @@ const actions = [
   },
   {
     icon: '🎲',
-    title: 'Jogos ativos',
-    description: 'Retome suas partidas em andamento de onde você parou.',
-    to: '/active',
-    action: 'Ver jogos ativos'
+    title: 'Jogos iniciados',
+    description: 'Acompanhe e retome suas partidas em andamento de onde você parou.',
+    to: '/games',
+    action: 'Ver jogos iniciados'
   },
   {
     icon: '📜',
@@ -52,8 +52,8 @@ const actions = [
 const flowSteps = [
   { num: '01', icon: '🌍', label: 'Universo',    text: 'Crie um universo com imagem e guia canônico para definir o cenário base.' },
   { num: '02', icon: '⚔️', label: 'Campanha',    text: 'Abra uma campanha dentro desse universo e refine a temática.' },
-  { num: '03', icon: '🧙', label: 'Personagem',  text: 'Monte a ficha vinculada à campanha e ajuste atributos e perícias.' },
-  { num: '04', icon: '🎲', label: 'Sessão',       text: 'Inicie a sessão e interaja pelo chat com o estado persistido por turno.' },
+  { num: '03', icon: '🧙', label: 'Personagem',  text: 'Monte a ficha do aventureiro com perícias, atributos e vantagens.' },
+  { num: '04', icon: '🎲', label: 'Jogos',       text: 'Inicie a partida e acompanhe suas mesas em andamento na aba Jogos.' },
 ]
 
 export function HomePage({ accountLabel }: Props) {

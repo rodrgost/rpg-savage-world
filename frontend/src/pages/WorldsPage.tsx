@@ -33,11 +33,11 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
   const [query, setQuery] = useState('')
 
   const [expandedWorldId, setExpandedWorldId] = useState<string | null>(null)
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
   const [charsByWorld, setCharsByWorld] = useState<Record<string, Character[]>>({})
   const [loadingCharsWorldId, setLoadingCharsWorldId] = useState<string | null>(null)
   const [charsError, setCharsError] = useState('')
 
-  const [playCharacter, setPlayCharacter] = useState<Character | null>(null)
   const [startingId, setStartingId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -85,10 +85,22 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
     setCharsError('')
     if (expandedWorldId === worldId) {
       setExpandedWorldId(null)
+      setSelectedCampaignId(null)
       return
     }
 
     setExpandedWorldId(worldId)
+    setSelectedCampaignId(null)
+  }
+
+  function toggleCampaign(worldId: string, campaignId: string) {
+    setCharsError('')
+    if (selectedCampaignId === campaignId) {
+      setSelectedCampaignId(null)
+      return
+    }
+
+    setSelectedCampaignId(campaignId)
 
     if (!charsByWorld[worldId]) {
       setLoadingCharsWorldId(worldId)
@@ -99,13 +111,13 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
     }
   }
 
-  async function confirmPlay(campaignId: string) {
-    if (!playCharacter || startingId) return
-    setStartingId(playCharacter.id)
+  async function handlePlay(campaignId: string, character: Character) {
+    if (startingId) return
+    setStartingId(character.id)
     setError('')
     try {
       const { sessionId } = await startSession({
-        characterId: playCharacter.id,
+        characterId: character.id,
         campaignId,
       })
       navigate(`/game/${sessionId}`)
@@ -122,7 +134,7 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
         <span className="page-list-icon">🌍</span>
         <div>
           <h2>Mesa Infinita - Seleção de Universos</h2>
-          <p className="page-list-subtitle muted">Escolha seu cenário e comece sua jornada.</p>
+          <p className="page-list-subtitle muted">Escolha seu cenário, selecione uma campanha e aventure-se com seu herói.</p>
         </div>
       </div>
 
@@ -193,8 +205,10 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
             : world.ownerProfile?.photoUrl
 
           const isExpanded = expandedWorldId === world.id
+          const worldCampaigns = campaigns.filter((c) => c.worldId === world.id)
           const worldCharacters = charsByWorld[world.id] ?? []
           const isLoadingChars = loadingCharsWorldId === world.id
+          const selectedCampaign = worldCampaigns.find((c) => c.id === selectedCampaignId)
 
           return (
             <Fragment key={world.id}>
@@ -241,96 +255,219 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
 
                   <div className="world-card-bottom">
                     <span className="world-card-expand-hint">
-                      {isExpanded ? 'Ocultar personagens ▲' : 'Ver personagens ▼'}
+                      {isExpanded ? 'Ocultar campanhas ▲' : 'Ver campanhas ▼'}
                     </span>
                   </div>
                 </div>
               </article>
 
               {isExpanded && (
-                <div className="world-characters-panel">
+                <div className="world-expanded-panel">
                   <div className="world-characters-panel-head">
-                    <h4>Personagens de {world.name || 'universo sem nome'}</h4>
+                    <h4>
+                      <span>⚔️</span>
+                      Campanhas em {world.name || 'universo sem nome'}
+                      <span className="badge badge--muted" style={{ marginLeft: 6 }}>
+                        {worldCampaigns.length}
+                      </span>
+                    </h4>
                     <button
                       type="button"
-                      className="world-card-link-action world-characters-campaigns-link"
-                      onClick={() => navigate(`/campaigns?worldId=${world.id}`)}
+                      className="page-list-cta"
+                      onClick={() => navigate(`/worlds/${world.id}/campaigns/new`)}
                     >
-                      Ver campanhas →
+                      + Criar campanha
                     </button>
                   </div>
 
-                  {isLoadingChars && (
-                    <div className="list-skeleton">
-                      {[1,2,3].map((i) => <div key={i} className="skeleton-card" />)}
-                    </div>
-                  )}
-
-                  {!isLoadingChars && charsError && expandedWorldId === world.id && (
-                    <p className="error">{charsError}</p>
-                  )}
-
-                  {!isLoadingChars && !charsError && worldCharacters.length === 0 && (
+                  {worldCampaigns.length === 0 && (
                     <div className="world-characters-empty">
-                      <p className="muted">Nenhum personagem neste universo ainda.</p>
-                      <button type="button" onClick={() => navigate('/characters/new')}>
-                        + Criar personagem
+                      <p className="muted">Nenhuma campanha criada neste universo ainda.</p>
+                      <button
+                        type="button"
+                        className="button-primary"
+                        onClick={() => navigate(`/worlds/${world.id}/campaigns/new`)}
+                      >
+                        + Criar primeira campanha
                       </button>
                     </div>
                   )}
 
-                  {!isLoadingChars && worldCharacters.length > 0 && (
-                    <div className="world-subchar-grid">
-                      {worldCharacters.map((character) => {
-                        const charIsOwner = character.ownerId === uid
-                        const charOwnerLabel = charIsOwner
+                  {worldCampaigns.length > 0 && (
+                    <div className="world-subcamp-grid">
+                      {worldCampaigns.map((camp) => {
+                        const isCampSelected = selectedCampaignId === camp.id
+                        const campIsOwner = camp.ownerId === uid
+                        const campOwnerLabel = campIsOwner
                           ? ownerLabel
-                          : character.ownerProfile?.displayName || `Jogador ${character.ownerId.slice(0, 8)}`
-                        const charOwnerPhoto = charIsOwner
-                          ? ownerPhotoUrl
-                          : character.ownerProfile?.photoUrl
+                          : camp.ownerProfile?.displayName || `Jogador ${camp.ownerId.slice(0, 8)}`
+                        const campOwnerPhoto = campIsOwner ? ownerPhotoUrl : camp.ownerProfile?.photoUrl
 
                         return (
                           <article
-                            key={character.id}
-                            className="world-subchar-card"
-                            onClick={() => {
-                              if (charIsOwner) {
-                                setError('')
-                                setPlayCharacter(character)
+                            key={camp.id}
+                            className={`world-subcamp-card ${isCampSelected ? 'is-selected-subcamp' : ''}`}
+                            onClick={() => toggleCampaign(world.id, camp.id)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                toggleCampaign(world.id, camp.id)
                               }
                             }}
-                            role={charIsOwner ? 'button' : undefined}
-                            tabIndex={charIsOwner ? 0 : undefined}
                           >
-                            <div className="world-subchar-thumb">
-                              {character.image ? (
+                            <div className="world-subcamp-banner">
+                              {camp.image ? (
                                 <img
-                                  alt={`Avatar de ${character.name}`}
-                                  src={`data:${character.image.mimeType};base64,${character.image.base64}`}
+                                  src={`data:${camp.image.mimeType};base64,${camp.image.base64}`}
+                                  alt={camp.name || 'Capa da campanha'}
                                   loading="lazy"
                                 />
                               ) : (
-                                <span aria-hidden="true">🧙</span>
+                                <div className="world-subcamp-banner-placeholder" aria-hidden="true">⚔️</div>
                               )}
                             </div>
-                            <div className="world-subchar-info">
-                              <h5>{character.name}</h5>
-                              <p className="muted">
-                                {[character.profession, character.race].filter(Boolean).join(' • ') || 'Sem profissão'}
-                              </p>
-                              <div className="world-subchar-meta">
-                                <OwnerAvatar label={charOwnerLabel} photoUrl={charOwnerPhoto} />
-                                {charIsOwner ? (
-                                  <span className="world-subchar-play">▶ Jogar</span>
-                                ) : (
-                                  <span className="badge badge--muted">Somente leitura</span>
-                                )}
+                            <div className="world-subcamp-body">
+                              <div className="world-subcamp-body-top">
+                                <h5 className="world-subcamp-title">{camp.name || 'Campanha sem nome'}</h5>
+                                <span className={`badge ${camp.visibility === 'public' ? 'badge--success' : 'badge--warn'}`}>
+                                  {camp.visibility === 'public' ? 'Pública' : 'Privada'}
+                                </span>
+                              </div>
+                              {camp.storyDescription && (
+                                <p className="world-subcamp-desc">{camp.storyDescription}</p>
+                              )}
+                              <div className="world-subcamp-footer">
+                                <OwnerAvatar label={campOwnerLabel} photoUrl={campOwnerPhoto} />
+                                <span className="world-subcamp-status-hint">
+                                  {isCampSelected ? 'Ocultar personagens ▲' : 'Ver personagens ▼'}
+                                </span>
                               </div>
                             </div>
                           </article>
                         )
                       })}
+                    </div>
+                  )}
+
+                  {/* ─── Seção de Personagens (quando uma campanha estiver selecionada) ─── */}
+                  {selectedCampaign && (
+                    <div className="world-campaign-characters-section">
+                      <div className="world-campaign-characters-head">
+                        <h4>
+                          <span>🧙</span>
+                          Personagens disponíveis para <em>"{selectedCampaign.name || 'Campanha'}"</em>
+                        </h4>
+                        <div className="world-campaign-characters-actions">
+                          <button
+                            type="button"
+                            className="button-secondary"
+                            onClick={() => navigate(`/characters/new?worldId=${world.id}&campaignId=${selectedCampaign.id}`)}
+                          >
+                            + Criar personagem
+                          </button>
+                          {selectedCampaign.ownerId === uid && (
+                            <button
+                              type="button"
+                              className="button-secondary"
+                              onClick={() => navigate(`/campaigns/${selectedCampaign.id}/edit`)}
+                              title="Editar campanha"
+                            >
+                              ✏️ Editar campanha
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {isLoadingChars && (
+                        <div className="list-skeleton">
+                          {[1, 2, 3].map((i) => <div key={i} className="skeleton-card" />)}
+                        </div>
+                      )}
+
+                      {!isLoadingChars && charsError && (
+                        <p className="error">{charsError}</p>
+                      )}
+
+                      {!isLoadingChars && !charsError && worldCharacters.length === 0 && (
+                        <div className="world-characters-empty">
+                          <p className="muted">Nenhum personagem encontrado neste universo ainda.</p>
+                          <button
+                            type="button"
+                            className="button-primary"
+                            onClick={() => navigate(`/characters/new?worldId=${world.id}&campaignId=${selectedCampaign.id}`)}
+                          >
+                            + Criar primeiro personagem
+                          </button>
+                        </div>
+                      )}
+
+                      {!isLoadingChars && worldCharacters.length > 0 && (
+                        <div className="world-subchar-grid">
+                          {worldCharacters.map((character) => {
+                            const charIsOwner = character.ownerId === uid
+                            const charOwnerLabel = charIsOwner
+                              ? ownerLabel
+                              : character.ownerProfile?.displayName || `Jogador ${character.ownerId.slice(0, 8)}`
+                            const charOwnerPhoto = charIsOwner
+                              ? ownerPhotoUrl
+                              : character.ownerProfile?.photoUrl
+
+                            const isStartingThis = startingId === character.id
+
+                            return (
+                              <article
+                                key={character.id}
+                                className="world-subchar-card"
+                                role={charIsOwner ? 'button' : undefined}
+                                tabIndex={charIsOwner ? 0 : undefined}
+                                onClick={() => {
+                                  if (charIsOwner && !startingId) {
+                                    handlePlay(selectedCampaign.id, character)
+                                  }
+                                }}
+                              >
+                                <div className="world-subchar-thumb">
+                                  {character.image ? (
+                                    <img
+                                      alt={`Avatar de ${character.name}`}
+                                      src={`data:${character.image.mimeType};base64,${character.image.base64}`}
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <span aria-hidden="true">🧙</span>
+                                  )}
+                                </div>
+                                <div className="world-subchar-info">
+                                  <h5>{character.name}</h5>
+                                  <p className="muted">
+                                    {[character.profession, character.race].filter(Boolean).join(' • ') || 'Sem profissão'}
+                                  </p>
+                                  <div className="world-subchar-meta">
+                                    <OwnerAvatar label={charOwnerLabel} photoUrl={charOwnerPhoto} />
+                                    {charIsOwner ? (
+                                      <button
+                                        type="button"
+                                        className="world-subchar-play-btn"
+                                        disabled={Boolean(startingId)}
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handlePlay(selectedCampaign.id, character)
+                                        }}
+                                      >
+                                        {isStartingThis ? 'Iniciando…' : '▶ Jogar'}
+                                      </button>
+                                    ) : (
+                                      <span className="badge badge--muted">Somente leitura</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </article>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -339,55 +476,6 @@ export function WorldsPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
           )
         })}
       </div>
-
-      {playCharacter && (() => {
-        const playWorldId = playCharacter.worldId
-        const playCampaigns = campaigns.filter((c) => !playWorldId || c.worldId === playWorldId)
-        return (
-          <div
-            onClick={() => { if (!startingId) setPlayCharacter(null) }}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
-          >
-            <div
-              className="panel"
-              onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: 440, width: '100%', display: 'flex', flexDirection: 'column', gap: 12, padding: 20 }}
-            >
-              <h3 style={{ margin: 0 }}>Escolha a campanha</h3>
-              <p className="muted" style={{ margin: 0 }}>
-                Em qual campanha jogar com <strong>{playCharacter.name}</strong>?
-              </p>
-              {playCampaigns.length === 0 ? (
-                <p className="muted" style={{ margin: 0 }}>
-                  Nenhuma campanha disponível neste universo. Crie uma campanha para jogar.
-                </p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {playCampaigns.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className="button-secondary"
-                      disabled={Boolean(startingId)}
-                      onClick={() => confirmPlay(c.id)}
-                    >
-                      {startingId === playCharacter.id ? 'Abrindo…' : (c.name || 'Campanha sem nome')}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <button
-                type="button"
-                className="button-secondary"
-                onClick={() => setPlayCharacter(null)}
-                disabled={Boolean(startingId)}
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )
-      })()}
 
       {error && <p className="error">{error}</p>}
     </section>

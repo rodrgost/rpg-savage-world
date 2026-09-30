@@ -203,7 +203,6 @@ export type Character = {
   race?: string
   profession?: string
   description?: string
-  campaignRole?: string
   attributes: Record<string, number>
   skills?: Record<string, number>
   edges?: string[]
@@ -401,6 +400,15 @@ export type ChatMessage = {
 
 export type NarrativeStyle = 'concise' | 'balanced'
 
+export type SessionObjective = {
+  id: string
+  title: string
+  description: string
+  chapter: number
+  status: 'pending' | 'active' | 'completed'
+  completedAtTurn?: number
+}
+
 export type GameState = {
   meta: {
     sessionId: string
@@ -408,6 +416,8 @@ export type GameState = {
     worldId?: string
     turn: number
     chapter: number
+    campaignStatus?: 'in_progress' | 'completed'
+    currentObjectiveTitle?: string
     narrativeStyle?: NarrativeStyle
     simpleVocabulary?: boolean
   }
@@ -438,6 +448,7 @@ export type GameState = {
     worldFlags: Record<string, boolean>
   }
   npcs?: NPCCombatant[]
+  objectives?: SessionObjective[]
 }
 
 export type NPCCombatant = {

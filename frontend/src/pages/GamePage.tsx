@@ -27,7 +27,7 @@ import {
   updateKnownNpc
 } from '../lib/api'
 import type { EnginePhaseData } from '../lib/api'
-import type { ActionOption, Campaign, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, KnownNpc, NarratorTurnResponse, NarrativeSegment, NarrativeStyle, RelationalStatus, SessionEvent, SummaryDoc, TraitTestPayload, ValidateActionResponse, World } from '../types'
+import type { ActionOption, Campaign, ChatMessage, DiceCheck, DiceRollDetail, GameState, InventoryItem, Hindrance, KnownNpc, NarratorTurnResponse, NarrativeSegment, NarrativeStyle, RelationalStatus, SessionEvent, SessionObjective, SummaryDoc, TraitTestPayload, ValidateActionResponse, World } from '../types'
 import { RELATION_LABELS, RELATION_OPTIONS, relationClass, relationFromDisposition } from '../lib/npcLabels'
 import { SKILLS, EDGES, dieLabel } from '../data/savage-worlds'
 import { YouTubeAmbient } from '../components/YouTubeAmbient'
@@ -1400,6 +1400,8 @@ function CharacterSidebar({
                   location={state?.worldState.activeLocation}
                   chapter={state?.meta.chapter}
                   turn={state?.meta.turn}
+                  objectives={state?.objectives}
+                  campaignStatus={state?.meta.campaignStatus}
                 />
               )}
               {!p && activeTab !== 'campaign' ? (
@@ -1549,6 +1551,8 @@ function SidebarCampaign({
   location,
   chapter,
   turn,
+  objectives,
+  campaignStatus,
 }: {
   campaign?: Campaign | null
   world?: World | null
@@ -1556,6 +1560,8 @@ function SidebarCampaign({
   location?: string
   chapter?: number
   turn?: number
+  objectives?: SessionObjective[]
+  campaignStatus?: 'in_progress' | 'completed'
 }) {
   const [activeSection, setActiveSection] = useState<'overview' | 'missions' | 'characters' | 'world' | 'summary'>('overview')
 
@@ -1563,7 +1569,10 @@ function SidebarCampaign({
     return <p className="muted">Informações da campanha indisponíveis.</p>
   }
 
+  const sessionObjectives = objectives ?? []
+  const hasSessionObjectives = sessionObjectives.length > 0
   const missions = campaign?.storyMissions ?? []
+  const totalObjectivesCount = hasSessionObjectives ? sessionObjectives.length : missions.length
   const storyChars = campaign?.storyCharacters ?? []
   const worldGuide = world?.worldGuide
   const knownFacts = worldGuide?.knowledgeHorizon?.knownFacts ?? []
@@ -1581,13 +1590,13 @@ function SidebarCampaign({
         >
           Visão Geral
         </button>
-        {missions.length > 0 && (
+        {totalObjectivesCount > 0 && (
           <button
             type="button"
             className={`campaign-subnav-btn${activeSection === 'missions' ? ' active' : ''}`}
             onClick={() => setActiveSection('missions')}
           >
-            Objetivos ({missions.length})
+            Objetivos ({totalObjectivesCount})
           </button>
         )}
         {storyChars.length > 0 && (
@@ -1629,6 +1638,15 @@ function SidebarCampaign({
             <div className="campaign-meta-box">
               <div><strong>Local Atual:</strong> {location ?? 'Desconhecido'}</div>
               <div><strong>Capítulo:</strong> {chapter ?? 1} &middot; <strong>Turno:</strong> {turn ?? 0}</div>
+              {campaignStatus === 'completed' ? (
+                <div className="campaign-status-completed-badge">🏆 Campanha Concluída</div>
+              ) : (
+                sessionObjectives.find((o) => o.status === 'active')?.title && (
+                  <div className="campaign-current-objective-badge">
+                    <strong>Objetivo Atual:</strong> {sessionObjectives.find((o) => o.status === 'active')?.title}
+                  </div>
+                )
+              )}
             </div>
 
             {campaign?.storyDescription && (
@@ -1650,19 +1668,52 @@ function SidebarCampaign({
         {/* Missões / Objetivos */}
         {activeSection === 'missions' && (
           <div className="campaign-section">
-            <h5 className="campaign-block-title">Missões &amp; Objetivos</h5>
-            <div className="campaign-missions-list">
-              {missions.map((m, idx) => (
-                <div key={idx} className="campaign-mission-card">
-                  <div className="mission-header">
-                    <span className={`mission-badge ${m.optional ? 'optional' : 'main'}`}>
-                      {m.optional ? 'Opcional' : 'Principal'}
-                    </span>
-                    <strong className="mission-title">{m.title}</strong>
-                  </div>
-                  {m.description && <p className="mission-desc">{m.description}</p>}
+            <h5 className="campaign-block-title">Capítulos &amp; Objetivos</h5>
+
+            {campaignStatus === 'completed' && (
+              <div className="campaign-finished-card">
+                <span className="campaign-finished-icon">🏆</span>
+                <div className="campaign-finished-text">
+                  <strong>Campanha Concluída!</strong>
+                  <p>Todos os capítulos e objetivos foram concluídos com sucesso nesta aventura.</p>
                 </div>
-              ))}
+              </div>
+            )}
+
+            <div className="campaign-missions-list">
+              {hasSessionObjectives ? (
+                sessionObjectives.map((obj) => (
+                  <div key={obj.id} className={`campaign-mission-card ${obj.status}`}>
+                    <div className="mission-header">
+                      <span className={`mission-badge ${obj.status}`}>
+                        {obj.status === 'completed' && '✅ Concluído'}
+                        {obj.status === 'active' && '🎯 Atual'}
+                        {obj.status === 'pending' && '🔒 Bloqueado'}
+                      </span>
+                      <span className="mission-chapter-tag">Capítulo {obj.chapter}</span>
+                      <strong className="mission-title">{obj.title}</strong>
+                    </div>
+                    {obj.description && <p className="mission-desc">{obj.description}</p>}
+                    {obj.status === 'completed' && obj.completedAtTurn != null && (
+                      <div className="mission-completed-info">
+                        Concluído no Turno {obj.completedAtTurn}
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                missions.map((m, idx) => (
+                  <div key={idx} className="campaign-mission-card">
+                    <div className="mission-header">
+                      <span className={`mission-badge ${m.optional ? 'optional' : 'main'}`}>
+                        {m.optional ? 'Opcional' : `Capítulo ${idx + 1}`}
+                      </span>
+                      <strong className="mission-title">{m.title}</strong>
+                    </div>
+                    {m.description && <p className="mission-desc">{m.description}</p>}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -2239,10 +2290,18 @@ export function GamePage() {
   }
 
   const sessionSummaryText = trimIncompleteSummaryText(summary?.summaryText)
+  const lastSummarizedTurn = summary?.lastTurnIncluded ?? -1
   const displayMessages = useMemo(() => {
     const hasPersistedSummaryMessage = messages.some(
       (m) => m.role === 'system' && Boolean(m.narrative?.trim()) && !(m.engineEvents?.length)
     )
+
+    // Se temos um resumo consolidado cobrindo até o turno X,
+    // as mensagens de turnos <= X já foram resumidas e são cortadas/retiradas da narração ativa.
+    const activeMessages = lastSummarizedTurn >= 0
+      ? messages.filter((m) => m.turn > lastSummarizedTurn || m.turn === -1)
+      : messages
+
     return sessionSummaryText && !hasPersistedSummaryMessage
       ? [{
           messageId: `session-summary-${sessionId || state?.meta.sessionId || 'session'}`,
@@ -2251,9 +2310,9 @@ export function GamePage() {
           seq: -1,
           role: 'system' as const,
           narrative: sessionSummaryText
-        }, ...messages]
-      : messages
-  }, [messages, sessionSummaryText, sessionId, state?.meta.sessionId])
+        }, ...activeMessages]
+      : activeMessages
+  }, [messages, sessionSummaryText, sessionId, state?.meta.sessionId, lastSummarizedTurn])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -2387,7 +2446,12 @@ export function GamePage() {
     let narratorMsg: ChatMessage | null = null
     if (result.narratorResponse?.segments?.length) {
       const nr = result.narratorResponse
-      const existingMsg = msgs.find(
+      const existingMsg = [...msgs].reverse().find(
+        (m) =>
+          m.role === 'narrator' &&
+          m.turn === result.state.meta.turn &&
+          ((m.options && m.options.length > 0) || !normalizedNarratorOptions.length)
+      ) ?? [...msgs].reverse().find(
         (m) => m.role === 'narrator' && m.turn === result.state.meta.turn
       )
       if (!existingMsg) {
@@ -2426,9 +2490,13 @@ export function GamePage() {
       pendingEngineMessages: pendingEngineMessages.length,
       hasNarratorResponse: Boolean(result.narratorResponse?.segments?.length)
     })
+    const pendingOptimisticMessages = messagesRef.current.filter((m) =>
+      m.messageId?.startsWith('optimistic-') &&
+      !msgs.some((serverMsg) => serverMsg.turn === m.turn && serverMsg.role === 'player')
+    )
     const committedMessages = options?.replaceMessages
       ? commitMessages(msgs)
-      : mergeAndCommitMessages(messagesRef.current, msgs, pendingEngineMessages)
+      : commitMessages(mergeChatMessages(msgs, pendingEngineMessages, pendingOptimisticMessages))
 
     if (result.narratorResponse) {
       setCurrentOptions(normalizedNarratorOptions)
@@ -2872,6 +2940,18 @@ export function GamePage() {
               <span title="Resistência (absorção de dano)"><span className="hud-icon">💪</span><span className="hud-label">Resist.</span> {state.player.toughness}</span>
               {state.player.isShaken && <span className="shaken-badge">ABALADO</span>}
               <span className="location-tag" title="Localização atual"><span className="hud-icon">📍</span>{state.worldState.activeLocation}</span>
+              <span
+                className={`chapter-tag${state.meta.campaignStatus === 'completed' ? ' completed' : ''}`}
+                title={state.meta.campaignStatus === 'completed' ? 'Campanha Concluída!' : state.meta.currentObjectiveTitle ? `Capítulo ${state.meta.chapter}: ${state.meta.currentObjectiveTitle}` : `Capítulo ${state.meta.chapter}`}
+              >
+                <span className="hud-icon">{state.meta.campaignStatus === 'completed' ? '🏆' : '📜'}</span>
+                <span className="hud-label">Cap. {state.meta.chapter}</span>
+                {state.meta.campaignStatus === 'completed' ? (
+                  <span className="hud-objective-title">Concluída</span>
+                ) : state.meta.currentObjectiveTitle ? (
+                  <span className="hud-objective-title">{state.meta.currentObjectiveTitle}</span>
+                ) : null}
+              </span>
             </div>
 
             <div className="subheader-actions hud-actions-row">
@@ -2966,11 +3046,42 @@ export function GamePage() {
               cumulativeTokens += Math.ceil(msgText.length / 4)
               const prev = displayMessages[i - 1]
               const showSeparator = prev && msg.turn > 0 && prev.turn > 0 && msg.turn !== prev.turn
+              const completedObjectiveOnPrevTurn = showSeparator
+                ? state?.objectives?.find((obj) => obj.status === 'completed' && obj.completedAtTurn === prev.turn)
+                : null
+              const newlyActiveObjective = completedObjectiveOnPrevTurn
+                ? state?.objectives?.find((obj) => obj.chapter === completedObjectiveOnPrevTurn.chapter + 1)
+                : null
+              const isCampaignFinaleTransition = Boolean(
+                completedObjectiveOnPrevTurn &&
+                !newlyActiveObjective &&
+                state?.meta.campaignStatus === 'completed'
+              )
               return (
                 <div key={msg.messageId ?? `msg-${i}`}>
                   {showSeparator && (
-                    <div className="turn-separator">
-                      <span className="turn-separator-label">Turno {msg.turn} · Cap. {state?.meta.chapter ?? 1}</span>
+                    <div className="turn-separator-container">
+                      {newlyActiveObjective && (
+                        <div className="chapter-advance-banner">
+                          <div className="chapter-advance-tag">Novo Capítulo</div>
+                          <h4 className="chapter-advance-title">
+                            Capítulo {newlyActiveObjective.chapter}: {newlyActiveObjective.title}
+                          </h4>
+                          {newlyActiveObjective.description && (
+                            <p className="chapter-advance-desc">{newlyActiveObjective.description}</p>
+                          )}
+                        </div>
+                      )}
+                      {isCampaignFinaleTransition && (
+                        <div className="chapter-advance-banner finale">
+                          <div className="chapter-advance-tag finale">🏆 Grande Clímax da Campanha</div>
+                          <h4 className="chapter-advance-title">Todos os Capítulos Concluídos!</h4>
+                          <p className="chapter-advance-desc">O narrador agora apresenta o grande desfecho da sua saga.</p>
+                        </div>
+                      )}
+                      <div className="turn-separator">
+                        <span className="turn-separator-label">Turno {msg.turn} · Cap. {newlyActiveObjective?.chapter ?? state?.meta.chapter ?? 1}</span>
+                      </div>
                     </div>
                   )}
                   <NarrativeBubble message={msg} isNew={msg.messageId === latestNarratorId} charsPerTick={typewriterSpeed} playerName={playerName ?? state?.player.name} playerImage={playerImage} npcs={state?.npcs ?? []} knownNpcs={knownNpcs} cumulativeTokens={msg.role === 'narrator' ? cumulativeTokens : undefined} />
@@ -2978,6 +3089,15 @@ export function GamePage() {
               )
             })
           })()}
+          {state?.meta.campaignStatus === 'completed' && !loading && (
+            <div className="campaign-finale-completion-card">
+              <div className="finale-completion-icon">🏆</div>
+              <div className="finale-completion-content">
+                <h4>Fim da Campanha Principal</h4>
+                <p>Parabéns! Todos os capítulos desta jornada foram concluídos com sucesso. Você pode continuar explorando este cenário com ações livres ou reiniciar a história a qualquer momento.</p>
+              </div>
+            </div>
+          )}
           {loading && (
             <div className="msg narrator loading">
               <strong>📖 Narrador</strong>

@@ -31,7 +31,7 @@ export function CreateCampaignPage({ uid }: Props) {
   const [resolvedWorldId, setResolvedWorldId] = useState(worldId ?? '')
   const [worldName, setWorldName] = useState('')
   const [ownerId, setOwnerId] = useState('')
-  const [visibility, setVisibility] = useState<Visibility>('private')
+  const [visibility, setVisibility] = useState<Visibility>('public')
   const [name, setName] = useState('')
   const [storyDescription, setStoryDescription] = useState('')
   const [storyDescriptionEn, setStoryDescriptionEn] = useState('')
@@ -327,14 +327,16 @@ export function CreateCampaignPage({ uid }: Props) {
         {storyMissions.length > 0 && (
           <div className="lore-section">
             <div className="lore-section-header">
-              <span className="lore-section-title">Missões da campanha</span>
+              <span className="lore-section-title">Capítulos e Objetivos da Campanha</span>
             </div>
             <div className="story-characters-grid">
               {storyMissions.map((mission, index) => (
                 <div key={index} className="story-character-card">
                   <div className="story-character-header">
                     <strong className="story-character-name">{mission.title}</strong>
-                    <span className="story-character-role">{mission.optional ? 'Opcional' : 'Principal'}</span>
+                    <span className="story-character-role">
+                      {mission.optional ? 'Opcional' : `Capítulo ${index + 1}`}
+                    </span>
                   </div>
                   {mission.description && <p className="story-character-description">{mission.description}</p>}
                 </div>
@@ -377,8 +379,8 @@ export function CreateCampaignPage({ uid }: Props) {
         <label>
           Visibilidade
           <select value={visibility} onChange={(event) => setVisibility(event.target.value as Visibility)} disabled={!isOwner}>
-            <option value="private">Privada</option>
             <option value="public">Pública</option>
+            <option value="private">Privada</option>
           </select>
         </label>
 

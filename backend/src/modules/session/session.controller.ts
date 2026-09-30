@@ -7,7 +7,7 @@ import { error as logError } from '../../utils/file-logger.js'
 import { getNarrationLog } from '../../services/narrationLog.js'
 
 const StartSessionBody = z.object({
-  campaignId: z.string().min(1).optional(),
+  campaignId: z.string().min(1),
   characterId: z.string().min(1),
   narrativeStyle: z.enum(['concise', 'balanced']).optional(),
   simpleVocabulary: z.boolean().optional()
@@ -255,6 +255,18 @@ export class SessionController {
       simpleVocabulary: z.boolean().optional()
     }).parse(body)
     return await this.sessions.updateSessionSettings({ ownerId: userId, sessionId, ...parsed })
+  }
+
+  @Patch('/:sessionId/status')
+  async updateStatus(
+    @CurrentUser('uid') userId: string,
+    @Param('sessionId') sessionId: string,
+    @Body() body: unknown
+  ) {
+    const parsed = z.object({
+      status: z.enum(['ativo', 'pausado', 'concluido', 'arquivado'])
+    }).parse(body)
+    return await this.sessions.updateSessionStatus({ ownerId: userId, sessionId, status: parsed.status })
   }
 
   @Delete('/:sessionId/inventory/:itemId')

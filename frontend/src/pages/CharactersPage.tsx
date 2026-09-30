@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { listCharacters, listCampaigns, listWorlds, startSession } from '../lib/api'
+import { listCharacters, listCampaigns, listWorlds, listActivePlaythroughs, startSession } from '../lib/api'
+import type { ActivePlaythrough } from '../lib/api'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import type { Campaign, Character, World } from '../types'
 import { dieLabel } from '../data/savage-worlds'
@@ -21,6 +22,7 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
   const [characters, setCharacters] = useState<Character[]>([])
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [worlds, setWorlds] = useState<World[]>([])
+  const [activeGames, setActiveGames] = useState<ActivePlaythrough[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [startingId, setStartingId] = useState<string | null>(null)
@@ -29,11 +31,12 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
   useEffect(() => {
     if (!uid) return
     setLoading(true)
-    Promise.all([listCharacters(), listCampaigns(), listWorlds()])
-      .then(([charItems, campaignItems, worldItems]) => {
+    Promise.all([listCharacters(), listCampaigns(), listWorlds(), listActivePlaythroughs()])
+      .then(([charItems, campaignItems, worldItems, activeItems]) => {
         setCharacters(charItems)
         setCampaigns(campaignItems)
         setWorlds(worldItems)
+        setActiveGames(activeItems)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Falha ao carregar personagens'))
       .finally(() => setLoading(false))
@@ -44,14 +47,14 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
     setPlayCharacter(character)
   }
 
-  async function confirmPlay(campaignId?: string) {
+  async function confirmPlay(campaignId: string) {
     if (!playCharacter || startingId) return
     setStartingId(playCharacter.id)
     setError('')
     try {
       const { sessionId } = await startSession({
         characterId: playCharacter.id,
-        ...(campaignId ? { campaignId } : {})
+        campaignId
       })
       navigate(`/game/${sessionId}`)
     } catch (e) {
@@ -102,6 +105,10 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
             ? ownerPhotoUrl
             : character.ownerProfile?.photoUrl
 
+          const characterGames = activeGames.filter((g) => g.characterId === character.id)
+          const singleGame = characterGames.length === 1 ? characterGames[0] : null
+          const singleCampaign = singleGame ? campaigns.find((c) => c.id === singleGame.campaignId) : null
+
           return (
             <article
               className="character-card character-card-clickable"
@@ -134,6 +141,30 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                     {character.visibility === 'public' ? 'Público' : 'Privado'}
                   </span>
                 </div>
+
+                {characterGames.length > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '6px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(34, 197, 94, 0.12)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      color: '#4ade80',
+                      fontSize: '0.8rem',
+                      fontWeight: 600
+                    }}
+                  >
+                    <span className="pulse-dot" />
+                    <span>
+                      {characterGames.length === 1
+                        ? `Jogo iniciado: ${singleCampaign?.name || 'Campanha'}`
+                        : `${characterGames.length} jogos em andamento`}
+                    </span>
+                  </div>
+                )}
 
                 <p className="char-subtitle muted">
                   {[character.profession, character.race]
@@ -191,21 +222,51 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
 
               <footer className="character-card-actions">
                 {isOwner ? (
-                  <button
-                    className="btn-play"
-                    type="button"
-                    disabled={startingId === character.id}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      openPlay(character)
-                    }}
-                  >
-                    {startingId === character.id ? (
-                      <><span className="btn-play-spinner" />Abrindo…</>
-                    ) : (
-                      <>▶ Jogar</>
-                    )}
-                  </button>
+                  characterGames.length === 1 ? (
+                    <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                      <button
+                        className="btn-play"
+                        type="button"
+                        style={{ flex: 1 }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigate(`/game/${characterGames[0].sessionId}`)
+                        }}
+                      >
+                        ▶ Continuar Jogo
+                      </button>
+                      <button
+                        className="button-secondary"
+                        type="button"
+                        title="Jogar em outra campanha"
+                        style={{ padding: '0 10px', fontSize: '0.82rem' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openPlay(character)
+                        }}
+                      >
+                        + Nova
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn-play"
+                      type="button"
+                      disabled={startingId === character.id}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openPlay(character)
+                      }}
+                    >
+                      {startingId === character.id ? (
+                        <><span className="btn-play-spinner" />Abrindo…</>
+                      ) : characterGames.length > 1 ? (
+                        <>▶ Continuar Jogo ({characterGames.length})</>
+                      ) : (
+                        <>▶ Iniciar Jogo</>
+                      )}
+                    </button>
+                  )
                 ) : (
                   <span className="badge badge--muted">Somente leitura</span>
                 )}
@@ -233,32 +294,56 @@ export function CharactersPage({ uid, ownerLabel, ownerPhotoUrl }: Props) {
                 Em qual campanha jogar com <strong>{playCharacter.name}</strong>?
               </p>
               {playCampaigns.length === 0 ? (
-                <p className="muted" style={{ margin: 0 }}>
-                  Nenhuma campanha disponível neste universo. Você pode jogar sem campanha ou criar uma.
-                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <p className="muted" style={{ margin: 0 }}>
+                    Nenhuma campanha disponível neste universo. Crie uma campanha para jogar.
+                  </p>
+                  <button
+                    type="button"
+                    className="button-primary"
+                    onClick={() => {
+                      setPlayCharacter(null)
+                      if (playWorldId) {
+                        navigate(`/worlds/${playWorldId}/campaigns/new`)
+                      } else {
+                        navigate('/campaigns')
+                      }
+                    }}
+                  >
+                    + Criar campanha
+                  </button>
+                </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {playCampaigns.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className="button-secondary"
-                      disabled={Boolean(startingId)}
-                      onClick={() => confirmPlay(c.id)}
-                    >
-                      {startingId === playCharacter.id ? 'Abrindo…' : (c.name || 'Campanha sem nome')}
-                    </button>
-                  ))}
+                  {playCampaigns.map((c) => {
+                    const hasActiveInCamp = activeGames.some(
+                      (g) => g.characterId === playCharacter.id && g.campaignId === c.id
+                    )
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={hasActiveInCamp ? 'button-primary' : 'button-secondary'}
+                        disabled={Boolean(startingId)}
+                        onClick={() => confirmPlay(c.id)}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px 14px'
+                        }}
+                      >
+                        <span style={{ fontWeight: 600 }}>
+                          {startingId === playCharacter.id ? 'Abrindo…' : (c.name || 'Campanha sem nome')}
+                        </span>
+                        <span style={{ fontSize: '0.78rem', opacity: 0.85 }}>
+                          {hasActiveInCamp ? '▶ Retomar jogo' : '+ Iniciar nova partida'}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
-              <button
-                type="button"
-                className="button-primary"
-                disabled={Boolean(startingId)}
-                onClick={() => confirmPlay()}
-              >
-                {startingId === playCharacter.id ? 'Abrindo…' : '▶ Jogar sem campanha'}
-              </button>
               <button
                 type="button"
                 className="button-secondary"

@@ -34,8 +34,8 @@ function getErrorMessage(data: unknown): string | null {
 }
 
 // Em produção (Railway), VITE_BACKEND_URL não é definida → string vazia → URLs relativas (same-origin).
-// Em dev local, VITE_BACKEND_URL=http://localhost:3100 vem do .env da raiz.
-const backendBaseUrl = normalizeEnvValue(import.meta.env.VITE_BACKEND_URL)
+// Em dev local, VITE_BACKEND_URL=http://localhost:3100 vem do .env da raiz (com fallback seguro em DEV).
+const backendBaseUrl = normalizeEnvValue(import.meta.env.VITE_BACKEND_URL) || (import.meta.env.DEV ? 'http://localhost:3100' : '')
 
 async function buildAuthHeaders(initHeaders?: HeadersInit): Promise<Headers> {
   const idToken = await getAuthenticatedIdToken()
@@ -54,7 +54,19 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   })
 
   const raw = await response.text()
-  const data = raw ? (JSON.parse(raw) as unknown) : null
+  let data: unknown = null
+  if (raw) {
+    try {
+      data = JSON.parse(raw) as unknown
+    } catch {
+      if (raw.trim().startsWith('<')) {
+        throw new Error(
+          `O servidor retornou uma página HTML em vez de JSON. Verifique se o backend está em execução em ${backendBaseUrl || 'http://localhost:3100'}.`
+        )
+      }
+      throw new Error(`Resposta inválida da API: ${raw}`)
+    }
+  }
 
   if (!response.ok) {
     const message = getErrorMessage(data) || raw || `Erro HTTP ${response.status}`
@@ -164,7 +176,7 @@ async function apiStreamRequest<T>(
 }
 
 function normalizeVisibility(value: unknown): Visibility {
-  return value === 'public' ? 'public' : 'private'
+  return value === 'private' ? 'private' : 'public'
 }
 
 function mapStoredImage(image?: { mimeType?: string; base64?: string }) {
@@ -269,7 +281,6 @@ function mapCharacterRecord(item: {
   race?: string
   profession?: string
   description?: string
-  campaignRole?: string
   attributes: Record<string, number>
   skills?: Record<string, number>
   edges?: string[]
@@ -292,7 +303,6 @@ function mapCharacterRecord(item: {
     race: item.race,
     profession: item.profession,
     description: item.description,
-    campaignRole: item.campaignRole,
     attributes: item.attributes ?? {},
     skills: item.skills,
     edges: item.edges,
@@ -584,12 +594,10 @@ export async function createCharacter(params: {
   race?: string
   profession: string
   description?: string
-  campaignRole?: string
   genderEn?: string
   raceEn?: string
   professionEn?: string
   descriptionEn?: string
-  campaignRoleEn?: string
   visibility?: Visibility
   attributes: Record<string, number>
   skills?: Record<string, number>
@@ -614,7 +622,6 @@ export async function generateCharacterFromWorldStory(params: {
     race?: string
     profession?: string
     description?: string
-    campaignRole?: string
   }
 }): Promise<{
   name: string
@@ -622,12 +629,10 @@ export async function generateCharacterFromWorldStory(params: {
   race: string
   profession: string
   description: string
-  campaignRole: string
   genderPt?: string
   racePt?: string
   professionPt?: string
   descriptionPt?: string
-  campaignRolePt?: string
 }> {
   return await apiRequest('/characters/suggest-from-world', {
     method: 'POST',
@@ -644,12 +649,10 @@ export async function generateCharacterFromDescription(params: {
   race: string
   profession: string
   description: string
-  campaignRole: string
   genderPt?: string
   racePt?: string
   professionPt?: string
   descriptionPt?: string
-  campaignRolePt?: string
 }> {
   return await apiRequest('/characters/suggest-from-description', {
     method: 'POST',
@@ -686,7 +689,6 @@ export async function listCharacters(worldId?: string): Promise<Character[]> {
     race?: string
     profession?: string
     description?: string
-    campaignRole?: string
     attributes: Record<string, number>
     skills?: Record<string, number>
     edges?: string[]
@@ -712,7 +714,6 @@ export async function getCharacter(characterId: string): Promise<Character> {
     race?: string
     profession?: string
     description?: string
-    campaignRole?: string
     attributes: Record<string, number>
     skills?: Record<string, number>
     edges?: string[]
@@ -739,7 +740,6 @@ export async function updateCharacter(
     race?: string
     profession: string
     description?: string
-    campaignRole?: string
     visibility?: Visibility
     attributes: Record<string, number>
     skills?: Record<string, number>
@@ -758,7 +758,7 @@ export async function updateCharacter(
 
 export async function startSession(params: {
   characterId: string
-  campaignId?: string
+  campaignId: string
 }): Promise<{ sessionId: string; state: GameState; messages: ChatMessage[]; narratorResponse?: NarratorTurnResponse; knownNpcs?: KnownNpc[] }> {
   return await apiRequest<{ sessionId: string; state: GameState; messages: ChatMessage[]; narratorResponse?: NarratorTurnResponse; knownNpcs?: KnownNpc[] }>('/sessions/start', {
     method: 'POST',
@@ -796,6 +796,8 @@ export type ActivePlaythrough = {
   characterId: string
   worldId?: string
   status: string
+  turn?: number
+  createdAtMillis?: number
   updatedAtMillis: number
 }
 
@@ -803,6 +805,17 @@ export type ActivePlaythrough = {
 export async function listActivePlaythroughs(): Promise<ActivePlaythrough[]> {
   const response = await apiRequest<{ playthroughs: ActivePlaythrough[] }>('/sessions/active')
   return response.playthroughs
+}
+
+/** Altera o status da sessão (ex: pausar, concluir ou arquivar). */
+export async function updateSessionStatus(
+  sessionId: string,
+  status: 'ativo' | 'pausado' | 'concluido' | 'arquivado'
+): Promise<{ ok: boolean; status: string }> {
+  return await apiRequest(`/sessions/${encodeURIComponent(sessionId)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status })
+  })
 }
 
 export type EnginePhaseData = {

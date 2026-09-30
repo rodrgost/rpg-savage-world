@@ -52,7 +52,8 @@ Você DEVE retornar APENAS um JSON válido (sem markdown, sem comentários) com 
   "npcAttacks": [
     { "npcId": "<id ou displayName do NPC que ataca>", "skillDie": 6, "damageFormula": "str+d6", "ap": 0, "isRanged": false }
   ],
-  "outcomeOverride": { "mechanicalResult": "success|failure", "narratedOutcome": "success|failure", "justification": "<causa narrativa da inversão>" } | null
+  "outcomeOverride": { "mechanicalResult": "success|failure", "narratedOutcome": "success|failure", "justification": "<causa narrativa da inversão>" } | null,
+  "objectiveCompleted": true|false
 }
 \`\`\`
 
@@ -67,6 +68,9 @@ Você DEVE retornar APENAS um JSON válido (sem markdown, sem comentários) com 
 
 ## Regras do Campo chanceCheck
 **Obrigatório em toda option.** Preencha apenas "reason" (1 frase justificando por que a ação é resolvida de forma puramente narrativa). Os campos "required" e "successChance" estão desativados — ignore-os.
+
+## Regras do Campo objectiveCompleted
+- Defina "objectiveCompleted": true SOMENTE quando as ações e acontecimentos deste turno completarem com sucesso o objetivo do capítulo atual informado no contexto. Caso contrário, omita o campo ou defina false.
 
 ## Regras Gerais
 

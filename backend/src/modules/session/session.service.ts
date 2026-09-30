@@ -1047,6 +1047,8 @@ export class SessionService {
     characterId: string
     worldId?: string
     status: string
+    turn?: number
+    createdAtMillis: number
     updatedAtMillis: number
   }>> {
     const qs = await firestore
@@ -1069,20 +1071,34 @@ export class SessionService {
           characterId: String(data.characterId ?? ''),
           worldId: typeof data.worldId === 'string' ? data.worldId : undefined,
           status: String(data.status ?? 'ativo'),
+          turn: typeof data.turn === 'number' ? data.turn : undefined,
+          createdAtMillis: toMillis(data.createdAt),
           updatedAtMillis: toMillis(data.updatedAt ?? data.createdAt)
         }
       })
       .sort((a, b) => b.updatedAtMillis - a.updatedAtMillis)
   }
 
-  async createSession(params: { ownerId: string; campaignId?: string; characterId: string; narrativeStyle?: NarrativeStyle; simpleVocabulary?: boolean }) {
+  async updateSessionStatus(params: {
+    ownerId: string
+    sessionId: string
+    status: 'ativo' | 'pausado' | 'concluido' | 'arquivado'
+  }) {
+    await this.requireOwnedSession(params.sessionId, params.ownerId)
+    await firestore.collection('sessions').doc(params.sessionId).set({
+      status: params.status,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true })
+    return { ok: true, status: params.status }
+  }
+
+  async createSession(params: { ownerId: string; campaignId: string; characterId: string; narrativeStyle?: NarrativeStyle; simpleVocabulary?: boolean }) {
     const [campaign, character] = await Promise.all([
-      params.campaignId ? this.campaigns.get(params.campaignId) : Promise.resolve(null),
+      this.campaigns.get(params.campaignId),
       this.characters.get(params.characterId)
     ])
-    // Campanha é opcional: é possível iniciar um jogo sem selecionar uma campanha.
-    if (params.campaignId && !campaign) throw new NotFoundException('Campanha não encontrada')
-    if (campaign && campaign.ownerId !== params.ownerId && campaign.visibility !== 'public') {
+    if (!campaign) throw new NotFoundException('Campanha não encontrada')
+    if (campaign.ownerId !== params.ownerId && campaign.visibility !== 'public') {
       throw new NotFoundException('Sem permissão para esta campanha')
     }
     if (!character) throw new NotFoundException('Character não encontrado')
@@ -1092,13 +1108,12 @@ export class SessionService {
     if (characterOwnerId !== params.ownerId) throw new NotFoundException('Sem permissão para este character')
     // Personagem agora pertence ao Mundo (não à Campanha). Invariante: mesmo mundo.
     // Personagens legados sem worldId são tolerados (serão backfillados).
-    if (campaign && character.worldId && character.worldId !== campaign.worldId) {
+    if (character.worldId && character.worldId !== campaign.worldId) {
       throw new NotFoundException('Personagem pertence a outro mundo')
     }
 
-    // Sem campanha, o mundo vem do próprio personagem (pode ser inexistente em fichas legadas).
-    const campaignId = params.campaignId ?? ''
-    const worldId = campaign?.worldId ?? character.worldId
+    const campaignId = params.campaignId
+    const worldId = campaign.worldId ?? character.worldId
     const resumeParams = { ownerId: params.ownerId, campaignId, characterId: params.characterId }
 
     const resumeKey = this.buildResumeKey(resumeParams)
@@ -1162,12 +1177,22 @@ export class SessionService {
 
     const armor = typeof character.armor === 'number' ? character.armor : 0
 
+    const rawMissions = campaign.storyMissions ?? []
+    const sessionObjectives: import('../../domain/types/gameState.js').SessionObjective[] = rawMissions.map((m, index) => ({
+      id: `obj-${index + 1}`,
+      title: m.title,
+      description: m.description,
+      chapter: index + 1,
+      status: index === 0 ? 'active' : 'pending'
+    }))
+
     let state = createInitialState({
       sessionId,
       campaignId,
       worldId,
       narrativeStyle: params.narrativeStyle,
       simpleVocabulary: params.simpleVocabulary,
+      objectives: sessionObjectives,
       character: {
         characterId: params.characterId,
         name: character.name ?? '',
@@ -1196,6 +1221,13 @@ export class SessionService {
               name: campaign.name,
               storyDetails: campaign.storyDetails ?? campaign.storyDetailsEn ?? '',
               storyMissions: campaign.storyMissions ?? []
+            }
+          : undefined,
+        initialObjective: sessionObjectives[0]
+          ? {
+              title: sessionObjectives[0].title,
+              description: sessionObjectives[0].description,
+              chapter: sessionObjectives[0].chapter
             }
           : undefined,
         character: {
@@ -1230,6 +1262,19 @@ export class SessionService {
 
     await this.snapshots.saveTurnState(state)
 
+    if (sessionObjectives[0]) {
+      await this.events.append({
+        sessionId,
+        turn: 0,
+        type: 'chapter_started',
+        payload: {
+          chapter: sessionObjectives[0].chapter,
+          title: sessionObjectives[0].title,
+          description: sessionObjectives[0].description
+        }
+      })
+    }
+
     await this.npcRelations.syncFromTurn({
       characterId: params.characterId,
       sessionId,
@@ -1243,6 +1288,18 @@ export class SessionService {
       summaryText: '',
       keyEvents: []
     })
+
+    // Salvar trecho inicial de narração com o descritivo da campanha (apenas a parte pública que o jogador pode saber)
+    const campaignDescription = (campaign.storyDescription ?? campaign.storyDescriptionEn ?? '').trim()
+    if (campaignDescription) {
+      await this.chatMessages.append({
+        sessionId,
+        turn: 0,
+        role: 'narrator',
+        segments: [{ type: 'narrator', text: campaignDescription }],
+        location: state.worldState.activeLocation
+      })
+    }
 
     // Salvar mensagem do narrador no chat
     await this.chatMessages.append({
@@ -1349,12 +1406,22 @@ export class SessionService {
 
     const armor = typeof character.armor === 'number' ? character.armor : 0
 
+    const rawMissions = campaign?.storyMissions ?? []
+    const sessionObjectives: import('../../domain/types/gameState.js').SessionObjective[] = rawMissions.map((m, index) => ({
+      id: `obj-${index + 1}`,
+      title: m.title,
+      description: m.description,
+      chapter: index + 1,
+      status: index === 0 ? 'active' : 'pending'
+    }))
+
     let state = createInitialState({
       sessionId: params.sessionId,
       campaignId: campaignId ?? '',
       worldId: worldId,
       narrativeStyle,
       simpleVocabulary,
+      objectives: sessionObjectives,
       character: {
         characterId,
         name: character.name ?? '',
@@ -1383,6 +1450,13 @@ export class SessionService {
               name: campaign.name,
               storyDetails: campaign.storyDetails ?? campaign.storyDetailsEn ?? '',
               storyMissions: campaign.storyMissions ?? []
+            }
+          : undefined,
+        initialObjective: sessionObjectives[0]
+          ? {
+              title: sessionObjectives[0].title,
+              description: sessionObjectives[0].description,
+              chapter: sessionObjectives[0].chapter
             }
           : undefined,
         character: {
@@ -1416,6 +1490,19 @@ export class SessionService {
 
     await this.snapshots.saveTurnState(state)
 
+    if (sessionObjectives[0]) {
+      await this.events.append({
+        sessionId: params.sessionId,
+        turn: 0,
+        type: 'chapter_started',
+        payload: {
+          chapter: sessionObjectives[0].chapter,
+          title: sessionObjectives[0].title,
+          description: sessionObjectives[0].description
+        }
+      })
+    }
+
     await this.npcRelations.syncFromTurn({
       characterId,
       sessionId: params.sessionId,
@@ -1429,6 +1516,18 @@ export class SessionService {
       summaryText: '',
       keyEvents: []
     })
+
+    // Salvar trecho inicial de narração com o descritivo da campanha (apenas a parte pública que o jogador pode saber)
+    const campaignDescription = (campaign?.storyDescription ?? campaign?.storyDescriptionEn ?? '').trim()
+    if (campaignDescription) {
+      await this.chatMessages.append({
+        sessionId: params.sessionId,
+        turn: 0,
+        role: 'narrator',
+        segments: [{ type: 'narrator', text: campaignDescription }],
+        location: state.worldState.activeLocation
+      })
+    }
 
     await this.chatMessages.append({
       sessionId: params.sessionId,
@@ -1591,7 +1690,7 @@ export class SessionService {
 
     // 3. Buscar contexto, campanha e mundo para a LLM (em paralelo para reduzir latência)
     const worldIdDirect = result.nextState.meta.worldId || null
-    const [summary, recentMessages, campaignDoc, worldDocDirect, canonicalFacts, customNarratorPrompt] = await Promise.all([
+    const [summary, recentMessages, campaignDoc, worldDocDirect, canonicalFacts, customNarratorPrompt, customFinalePrompt] = await Promise.all([
       this.summaryRepo.getSummary(params.sessionId),
       this.summaries.getRecentWindow(params.sessionId),
       result.nextState.meta.campaignId
@@ -1599,7 +1698,8 @@ export class SessionService {
         : Promise.resolve(null),
       worldIdDirect ? this.worlds.get(worldIdDirect) : Promise.resolve(null),
       this.facts.listBySession(params.sessionId),
-      this.systemPrompts.get(params.ownerId, 'narrator')
+      this.systemPrompts.get(params.ownerId, 'narrator'),
+      this.systemPrompts.get(params.ownerId, 'campaign_finale')
     ])
     const worldDoc = worldDocDirect ?? (campaignDoc?.worldId ? await this.worlds.get(campaignDoc.worldId) : null)
     const context = buildLlmContext({ state: result.nextState, summary, recentMessages, npcCatalog: worldDoc?.npcCatalog })
@@ -1608,6 +1708,14 @@ export class SessionService {
       recentMessages,
       summaryText: context.summaryText
     })
+
+    const currentObjectives = result.nextState.objectives ?? []
+    const activeObjective = currentObjectives.find((o) => o.status === 'active')
+    const pendingObjectives = currentObjectives.filter((o) => o.status === 'pending')
+    const isLastObjective = Boolean(activeObjective && pendingObjectives.length === 0)
+    const isCampaignCompleted = result.nextState.meta.campaignStatus === 'completed'
+    const isFinale = isCampaignCompleted
+    const effectiveSystemPrompt = isFinale ? (customFinalePrompt ?? undefined) : (customNarratorPrompt ?? undefined)
 
     // 4. Chamar LLM para narrativa do turno
     const llmStart = Date.now()
@@ -1650,12 +1758,21 @@ export class SessionService {
           playerSkills: context.stateBrief.playerSkills,
           rulesDigest: this.buildStrictRulesDigest(context.rulesDigest, canonicalAnchors, buildCanonicalFactsPromptSection(canonicalFacts)),
           situation: context.stateBrief.situation,
-          npcCatalog: context.stateBrief.npcCatalog
+          npcCatalog: context.stateBrief.npcCatalog,
+          currentObjective: activeObjective
+            ? {
+                title: activeObjective.title,
+                description: activeObjective.description,
+                chapter: activeObjective.chapter,
+                isLast: isLastObjective
+              }
+            : undefined
         },
         recentMessages: context.recentMessages,
         narrativeStyle: sessionNarrativeStyle ?? result.nextState.meta.narrativeStyle ?? 'concise',
         simpleVocabulary: sessionSimpleVocabulary ?? result.nextState.meta.simpleVocabulary ?? true,
-        customSystemPrompt: customNarratorPrompt ?? undefined
+        isFinale,
+        customSystemPrompt: effectiveSystemPrompt
       }),
       state: result.nextState,
       mode: 'turn',
@@ -1826,6 +1943,76 @@ export class SessionService {
       npcAttackEvents: npcAttackEvents.map((e) => ({ type: e.type, payload: e.payload as Record<string, unknown> })),
       isFallback: narratorResponse.isFallback ?? false
     }).catch(() => { /* log falhou silenciosamente — não afeta o turno */ })
+
+    // 5.95. Processar conclusão do objetivo do capítulo (quando sinalizado pelo narrador)
+    if (narratorResponse.objectiveCompleted && activeObjective) {
+      log('applyTurn', `Objetivo concluído pelo narrador no turno ${finalState.meta.turn}: Capítulo ${activeObjective.chapter} - "${activeObjective.title}"`)
+
+      const updatedObjectives = (finalState.objectives ?? []).map((obj) => {
+        if (obj.id === activeObjective.id) {
+          return {
+            ...obj,
+            status: 'completed' as const,
+            completedAtTurn: finalState.meta.turn
+          }
+        }
+        return obj
+      })
+
+      await this.events.append({
+        sessionId: params.sessionId,
+        turn: finalState.meta.turn,
+        type: 'objective_completed',
+        payload: {
+          chapter: activeObjective.chapter,
+          title: activeObjective.title
+        }
+      })
+
+      const nextPending = updatedObjectives.find((obj) => obj.status === 'pending')
+      if (nextPending) {
+        nextPending.status = 'active'
+        finalState = {
+          ...finalState,
+          objectives: updatedObjectives,
+          meta: {
+            ...finalState.meta,
+            chapter: nextPending.chapter,
+            currentObjectiveTitle: nextPending.title
+          }
+        }
+        await this.events.append({
+          sessionId: params.sessionId,
+          turn: finalState.meta.turn,
+          type: 'chapter_advanced',
+          payload: {
+            newChapter: nextPending.chapter,
+            objectiveTitle: nextPending.title,
+            objectiveDescription: nextPending.description
+          }
+        })
+        log('applyTurn', `Avançando para Capítulo ${nextPending.chapter}: "${nextPending.title}"`)
+      } else {
+        finalState = {
+          ...finalState,
+          objectives: updatedObjectives,
+          meta: {
+            ...finalState.meta,
+            campaignStatus: 'completed'
+          }
+        }
+        await this.events.append({
+          sessionId: params.sessionId,
+          turn: finalState.meta.turn,
+          type: 'campaign_completed',
+          payload: {
+            finalChapter: activeObjective.chapter,
+            totalTurns: finalState.meta.turn
+          }
+        })
+        log('applyTurn', `Campanha concluída no turno ${finalState.meta.turn}!`)
+      }
+    }
 
     // 6. Salvar estado final e mensagem do narrador
     await this.snapshots.saveTurnState(finalState)

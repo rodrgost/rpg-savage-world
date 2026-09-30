@@ -33,7 +33,7 @@ export function CreateWorldPage({ uid }: Props) {
   const [worldGuide, setWorldGuide] = useState<WorldGuide | undefined>()
   const [loreUserInstruction, setLoreUserInstruction] = useState('')
   const [ownerId, setOwnerId] = useState('')
-  const [visibility, setVisibility] = useState<Visibility>('private')
+  const [visibility, setVisibility] = useState<Visibility>('public')
   const [imagePreview, setImagePreview] = useState<StoredImage | null>(null)
   const [loading, setLoading] = useState(false)
   const [loreLoading, setLoreLoading] = useState(false)
@@ -258,8 +258,8 @@ export function CreateWorldPage({ uid }: Props) {
         <label>
           Visibilidade
           <select value={visibility} onChange={(event) => setVisibility(event.target.value as Visibility)} disabled={isEditMode && !isOwner}>
-            <option value="private">Privado</option>
             <option value="public">Público</option>
+            <option value="private">Privado</option>
           </select>
         </label>
 

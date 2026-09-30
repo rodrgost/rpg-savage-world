@@ -41,6 +41,7 @@ import { renderWorldGuideMarkdown } from '../domain/types/world-guide.js'
 import { logLlmRequest, logLlmResponse, logLlmError, log, warn, error as logErr } from '../utils/file-logger.js'
 import { buildOpenAiJsonSchemaResponseFormat } from './schemas/openai-strict-schema.js'
 import { DEFAULT_NARRATOR_SYSTEM_PROMPT } from './prompts/narrator.prompt.js'
+import { DEFAULT_CAMPAIGN_FINALE_SYSTEM_PROMPT } from './prompts/campaign-finale.prompt.js'
 // recordSkillInferenceOutcome — não mais utilizado após migração chanceCheck
 import { classifyTrivialAction } from '../core/trivial-action.js'
 
@@ -103,7 +104,7 @@ type GenerateTextResult = {
   durationMs: number
 }
 
-type NarratorPromptMode = 'start' | 'turn'
+type NarratorPromptMode = 'start' | 'turn' | 'finale'
 
 type SanitizedNarratorResponseOptions = {
   allowNarrativeFallback?: boolean
@@ -869,7 +870,7 @@ function buildUniverseStyleInferenceLines(opts: {
           ]
         : []),
       'Antes de escolher os detalhes do personagem, infira a partir do nome do mundo, lore e história da aventura uma diretriz breve de tom para este universo: clima, humor, temperatura emocional, textura social, vocabulário e os tipos de profissões e conflitos concretos que pertencem a ele.',
-      'Não exiba essa diretriz explicitamente. Aplique-a internamente para que profissão, descrição e papel na campanha soem nativos deste universo, e não como preenchimento genérico de fantasia/ficção científica.',
+      'Não exiba essa diretriz explicitamente. Aplique-a internamente para que profissão e descrição soem nativas deste universo, e não como preenchimento genérico de fantasia/ficção científica.',
       'Se o universo sugerir melancolia, humor seco, pulpa aventureira, horror cósmico, ironia trágica, paranoia, ternura, brutalidade ou assombro, deixe isso moldar concretamente as escolhas do personagem.'
     ]
   }
@@ -908,13 +909,11 @@ function buildUniverseStyleInferenceLines(opts: {
 function getSuggestedCharacterIssues(character: SuggestedCharacter): string[] {
   const issues: string[] = []
   const description = character.description.trim()
-  const campaignRole = character.campaignRole?.trim() ?? ''
 
   if (!character.name.trim()) issues.push('name vazio')
   if (!character.profession.trim()) issues.push('profissao vazia')
   if (description.length < 80) issues.push(`description curta (${description.length})`)
   if (description && !endsWithSentenceBoundary(description)) issues.push('description sem fim de frase')
-  if (campaignRole.length < 30) issues.push(`campaignRole curto (${campaignRole.length})`)
 
   return issues
 }
@@ -1081,24 +1080,10 @@ function buildSuggestedCharacterFromRecord(source: Record<string, unknown>): Sug
     'bio',
     'background'
   ])
-  const campaignRoleValue = extractFieldFromRecord(source, [
-    'campaignRole',
-    'papel',
-    'PAPEL',
-    'papelNaCampanha',
-    'role',
-    'missao',
-    'missão',
-    'objetivo',
-    'funcao',
-    'função'
-  ])
-
   const genderPtValue = extractFieldFromRecord(source, ['genderPt', 'generoPt', 'gêneroPt'])
   const racePtValue = extractFieldFromRecord(source, ['racePt', 'racaPt', 'raçaPt'])
   const professionPtValue = extractFieldFromRecord(source, ['professionPt', 'profissaoPt', 'profissãoPt'])
   const descriptionPtValue = extractFieldFromRecord(source, ['descriptionPt', 'descricaoPt', 'descriçãoPt'])
-  const campaignRolePtValue = extractFieldFromRecord(source, ['campaignRolePt', 'papelPt', 'papelNaCampanhaPt'])
 
   return {
     name: sanitizeCharacterField(nameValue, ''),
@@ -1106,12 +1091,10 @@ function buildSuggestedCharacterFromRecord(source: Record<string, unknown>): Sug
     race: sanitizeCharacterField(raceValue, ''),
     profession: sanitizeCharacterField(professionValue, ''),
     description: sanitizeCharacterField(descriptionValue, ''),
-    campaignRole: sanitizeCharacterField(campaignRoleValue, ''),
     genderPt: sanitizeCharacterField(genderPtValue, '') || undefined,
     racePt: sanitizeCharacterField(racePtValue, '') || undefined,
     professionPt: sanitizeCharacterField(professionPtValue, '') || undefined,
     descriptionPt: sanitizeCharacterField(descriptionPtValue, '') || undefined,
-    campaignRolePt: sanitizeCharacterField(campaignRolePtValue, '') || undefined,
   }
 }
 
@@ -1711,12 +1694,11 @@ export class GeminiAdapter implements Narrator {
       '- "storyDescriptionEn": mesmo conteúdo de "storyDescription" traduzido para inglês.',
       '- "storyDetails": 3-6 parágrafos com o conteúdo completo da trama — contexto, conflitos, facções, locais e segredos/reviravoltas planejadas. Uso exclusivo do Mestre/narrador, o jogador nunca lê isto — em português do Brasil.',
       '- "storyDetailsEn": mesmo conteúdo de "storyDetails" traduzido para inglês.',
-      '- "storyMissions": array com 2 a 5 missões/ganchos de aventura, cada uma com:',
-      '  - "title": título curto da missão — em português do Brasil',
+      '- "storyMissions": array com 3 a 5 objetivos sequenciais principais da campanha que formarão os capítulos da história (do início ao clímax), cada um com:',
+      '  - "title": título curto do objetivo/capítulo — em português do Brasil',
       '  - "titleEn": mesmo título em inglês',
-      '  - "description": descrição breve do objetivo (1-2 frases) — em português do Brasil',
+      '  - "description": descrição breve do que precisa ser alcançado neste capítulo (1-2 frases) — em português do Brasil',
       '  - "descriptionEn": mesma descrição em inglês',
-      '  - "optional": booleano — true para gancho secundário/opcional, false para missão principal',
       '- "storyCharacters": array com 3 a 7 NPCs relevantes para a narrativa, cada um com:',
       '  - "name": nome do personagem',
       '  - "role": papel na história (ex.: antagonista, mentor, aliado, líder de facção, neutro) — em português do Brasil',
@@ -1791,7 +1773,7 @@ export class GeminiAdapter implements Narrator {
           titleEn: typeof m.titleEn === 'string' && m.titleEn.trim() ? m.titleEn.trim() : undefined,
           description: typeof m.description === 'string' ? m.description.trim() : '',
           descriptionEn: typeof m.descriptionEn === 'string' && m.descriptionEn.trim() ? m.descriptionEn.trim() : undefined,
-          optional: m.optional === true
+          optional: false
         }))
         .filter((m) => m.title.length > 0)
 
@@ -1963,16 +1945,15 @@ export class GeminiAdapter implements Narrator {
       if (existing.race) existingLines.push(`  race: "${existing.race}"`)
       if (existing.profession) existingLines.push(`  profession: "${existing.profession}"`)
       if (existing.description) existingLines.push(`  description: "${existing.description}"`)
-      if (existing.campaignRole) existingLines.push(`  campaignRole: "${existing.campaignRole}"`)
     }
 
     const sysPrompt = [
       'Você é um designer de personagens.',
-      'Leia o nome do mundo, o lore do universo e a história da aventura. Crie um personagem cujo papel e profissão surjam NATURALMENTE desses dados, sem usar arquétipos pré-definidos do sistema.',
+      'Leia o nome do mundo, o lore do universo e a história da aventura. Crie um personagem cuja profissão e descrição surjam NATURALMENTE desses dados, sem usar arquétipos pré-definidos do sistema.',
       ...buildUniverseStyleInferenceLines({ forCharacterSuggestion: true, explicitGuide: worldStyleGuide }),
       'Responda APENAS em JSON válido, sem markdown ou comentários.',
-      'Sempre retorne as 11 chaves; gender, race, genderPt e racePt podem ser string vazia quando o contexto não permitir inferência.',
-      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
+      'Sempre retorne as 9 chaves; gender, race, genderPt e racePt podem ser string vazia quando o contexto não permitir inferência.',
+      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"..."}',
       '',
       'Instruções de campo:',
       '  name: nome coerente com o contexto; se o jogador forneceu um nome, preserve exatamente esse valor e trate-o apenas como âncora de identidade',
@@ -1980,12 +1961,10 @@ export class GeminiAdapter implements Narrator {
       '  race: raça/espécie apenas quando houver pista contextual; caso contrário, string vazia',
       '  profession: ofício ou papel social derivado exclusivamente do nome do mundo, lore e história; máximo 60 caracteres',
       '  description: 2-3 frases derivadas principalmente da história e do lore, descrevendo aparência física (cabelo, olhos, porte ou cicatriz marcante), roupa ou equipamento coerente com a profissão e traço de personalidade com motivação. Mínimo 80, máximo 280 caracteres.',
-      '  campaignRole: o que este personagem faz nesta aventura específica, sua missão, ou como se conecta à trama. Derive de história/lore, seja concreto e não genérico. Máximo 600 caracteres.',
       '  genderPt: tradução para português do Brasil de gender (Masculino, Feminino ou Outro); string vazia se gender estiver vazio',
       '  racePt: tradução para português do Brasil de race/espécie; string vazia se race estiver vazio',
       '  professionPt: tradução para português do Brasil de profession; máximo 60 caracteres',
       '  descriptionPt: tradução para português do Brasil de description; mesmos limites de tamanho (mínimo 80, máximo 280 caracteres)',
-      '  campaignRolePt: tradução para português do Brasil de campaignRole; máximo 600 caracteres',
       'Se um nome for fornecido, não invente a descrição pelo som do nome; use o nome apenas para preservar identidade e derive todo o restante da história da aventura e do lore.',
       'Em chamadas repetidas para a mesma trama, varie nome, profissão, função narrativa, motivação, aparência e ponto de entrada na aventura.',
     ].join('\n')
@@ -1999,7 +1978,7 @@ export class GeminiAdapter implements Narrator {
         ...(worldName ? [`Nome do mundo/universo: ${worldName}.`] : []),
         ...(promptWorldGuide ? [`Guia canônico do universo:\n${promptWorldGuide}`, ''] : []),
         ...(promptStoryDescription ? [`História da aventura: ${promptStoryDescription}.`, ''] : []),
-        'Derive profissão e papel apenas do guia canônico do universo.'
+        'Derive profissão e descrição apenas do guia canônico do universo.'
       ].join('\n')
     }
 
@@ -2029,8 +2008,7 @@ export class GeminiAdapter implements Narrator {
           log('suggestCharacterFromWorld', `Built character (attempt=${attempt}):`, JSON.stringify({
             name: firstTry.name,
             profession: firstTry.profession,
-            descriptionLength: firstTry.description.length,
-            campaignRoleLength: firstTry.campaignRole.length
+            descriptionLength: firstTry.description.length
           }))
 
           const truncatedJson = firstResult.finishReason === 'MAX_TOKENS' && parsedJson?.source !== 'direct'
@@ -2077,8 +2055,8 @@ export class GeminiAdapter implements Narrator {
       'Sua tarefa é expandir esse conceito em um perfil completo de personagem que se encaixe no contexto de mundo e campanha.',
       ...buildUniverseStyleInferenceLines({ forCharacterSuggestion: true, explicitGuide: worldStyleGuide }),
       'Responda APENAS em JSON válido, sem markdown ou comentários.',
-      'Sempre retorne as 11 chaves; gender, race, genderPt e racePt podem ser string vazia quando não forem mencionados nem inferíveis.',
-      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","campaignRole":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"...","campaignRolePt":"..."}',
+      'Sempre retorne as 9 chaves; gender, race, genderPt e racePt podem ser string vazia quando não forem mencionados nem inferíveis.',
+      '{"name":"...","gender":"...","race":"...","profession":"...","description":"...","genderPt":"...","racePt":"...","professionPt":"...","descriptionPt":"..."}',
       '',
       'Instruções de campo:',
       '  name: nome apropriado e coerente com o conceito e o mundo; se o jogador mencionou um nome, use-o',
@@ -2086,12 +2064,10 @@ export class GeminiAdapter implements Narrator {
       '  race: raça/espécie apenas quando mencionada ou inferível do conceito; caso contrário, string vazia',
       '  profession: ofício ou papel social derivado do conceito do jogador; máximo 60 caracteres',
       '  description: 2-3 frases expandindo o conceito com aparência física (cabelo, olhos, porte ou cicatriz marcante), roupa ou equipamento coerente com a profissão e traço de personalidade com motivação. Mínimo 80, máximo 280 caracteres.',
-      '  campaignRole: o que este personagem faz no mundo, sua missão, ou como se conecta ao cenário. Concreto e específico, não genérico. Máximo 600 caracteres.',
       '  genderPt: tradução para português do Brasil de gender (Masculino, Feminino ou Outro); string vazia se gender estiver vazio',
       '  racePt: tradução para português do Brasil de race/espécie; string vazia se race estiver vazio',
       '  professionPt: tradução para português do Brasil de profession; máximo 60 caracteres',
       '  descriptionPt: tradução para português do Brasil de description; mesmos limites de tamanho (mínimo 80, máximo 280 caracteres)',
-      '  campaignRolePt: tradução para português do Brasil de campaignRole; máximo 600 caracteres',
     ].join('\n')
 
     const userPrompt = [
@@ -2210,7 +2186,10 @@ export class GeminiAdapter implements Narrator {
     customPrompt?: string
   } = {}): string {
     const { world, campaign, rulesDigest, summaryText, playerSkills, mode = 'turn', narrativeStyle, simpleVocabulary, customPrompt } = opts
-    const baseDirectives = (customPrompt && customPrompt.trim()) ? customPrompt.trim() : DEFAULT_NARRATOR_SYSTEM_PROMPT
+    const defaultDirective = mode === 'finale'
+      ? DEFAULT_CAMPAIGN_FINALE_SYSTEM_PROMPT
+      : DEFAULT_NARRATOR_SYSTEM_PROMPT
+    const baseDirectives = (customPrompt && customPrompt.trim()) ? customPrompt.trim() : defaultDirective
     const lines = [baseDirectives]
 
     // ─── NARRATIVE STYLE (defined here, before the context, for maximum weight) ───
@@ -2307,8 +2286,8 @@ export class GeminiAdapter implements Narrator {
       if (campaign.storyMissions && campaign.storyMissions.length > 0) {
         lines.push(
           '',
-          '### Missões/Ganchos Disponíveis',
-          ...campaign.storyMissions.map((m) => `- [${m.optional ? 'Opcional' : 'Principal'}] ${m.title}: ${m.description}`)
+          '### Objetivos/Capítulos da Campanha',
+          ...campaign.storyMissions.map((m, idx) => `- Capítulo ${idx + 1}: ${m.title} — ${m.description}`)
         )
       }
     }
@@ -2889,6 +2868,9 @@ export class GeminiAdapter implements Narrator {
       }
     }
 
+    // Parse objectiveCompleted
+    const objectiveCompleted = raw.objectiveCompleted === true
+
     return {
       segments,
       options,
@@ -2896,7 +2878,8 @@ export class GeminiAdapter implements Narrator {
       itemChanges,
       statusChanges,
       npcAttacks,
-      ...(outcomeOverride ? { outcomeOverride } : {})
+      ...(outcomeOverride ? { outcomeOverride } : {}),
+      ...(objectiveCompleted ? { objectiveCompleted: true } : {})
     }
   }
 
@@ -3237,7 +3220,7 @@ export class GeminiAdapter implements Narrator {
       ? [
           campaign.name ? `- Nome: ${campaign.name}` : null,
           campaign.storyDescription ? `- Introdução: ${campaign.storyDescription}` : null,
-          ...(campaign.storyMissions ?? []).map((m) => `- [${m.optional ? 'Opcional' : 'Principal'}] ${m.title}: ${m.description}`)
+          ...(campaign.storyMissions ?? []).map((m, idx) => `- Capítulo ${idx + 1}: ${m.title} — ${m.description}`)
         ].filter((line): line is string => Boolean(line))
       : []
 
@@ -3260,8 +3243,9 @@ export class GeminiAdapter implements Narrator {
     const openingPremiseLines = campaign
       ? [
           'PREMISSA DE ABERTURA (OBRIGATÓRIA): O personagem JÁ CONHECE quem é — mantém memória e identidade completas (nome, profissão, raça, passado). NÃO aplique amnésia.',
-          'Abra a cena já em movimento, ancorada no gancho da Campanha acima: o personagem está vivendo o início do enredo (um evento, um encontro, uma chegada, uma missão começando), não acordando em local desconhecido.',
-          'Use a Introdução da campanha e, se houver, uma das missões listadas como motivo concreto e imediato para a cena começar.',
+          req.initialObjective
+            ? `CAPÍTULO 1 (OBJETIVO INICIAL): A história começa OBRIGATORIAMENTE pelo Capítulo 1: "${req.initialObjective.title}" — ${req.initialObjective.description}. Abra a cena colocando o personagem já diante deste primeiro desafio ou a caminho dele.`
+            : 'Abra a cena já em movimento, ancorada no gancho da Campanha acima: o personagem está vivendo o início do enredo (um evento, um encontro, uma chegada, uma missão começando), não acordando em local desconhecido.',
           'Apresente um gancho narrativo claro que force o personagem a agir: uma tensão palpável, uma ameaça imediata, ou uma decisão urgente ligada ao enredo da campanha.',
           'Trate profissão, raça, vantagens e itens como conhecimento consciente e já dominado pelo personagem — não como algo a ser descoberto.',
           'Ofereça 4 opções de ação que façam mais sentido para esta cena de abertura — deixe a situação decidir quais ações se encaixam; cada opção deve parecer uma escolha de história, não um botão de menu.',
@@ -3432,6 +3416,16 @@ export class GeminiAdapter implements Narrator {
       ? 'LEMBRETE DE COERÊNCIA ESPACIAL: como este turno foi de deslocamento (travel), NÃO ofereça interação com objetos fixos da sala anterior (terminal, painel, porta, mobiliário). Use apenas elementos do local atual e inventário.'
       : null
 
+    const objectiveSection = req.context.currentObjective
+      ? [
+          `## Objetivo do Capítulo Atual (Capítulo ${req.context.currentObjective.chapter})`,
+          `- Missão: ${req.context.currentObjective.title}`,
+          `- Descrição: ${req.context.currentObjective.description}`,
+          req.context.currentObjective.isLast ? '- ATENÇÃO: Este é o OBJETIVO FINAL da campanha!' : null,
+          '- REGRA DE CONCLUSÃO: Se os acontecimentos e consequências deste turno completarem este objetivo com sucesso, defina "objectiveCompleted": true no JSON. Caso contrário, omita ou defina false.',
+        ].filter(Boolean).join('\n')
+      : null
+
     const currentTurnPrompt = [
       'TURNO DE JOGO — Narre a consequência da ação do jogador.',
       '',
@@ -3442,6 +3436,8 @@ export class GeminiAdapter implements Narrator {
       optionsAnchoringReminder,
       optionsSpatialReminder,
       '',
+      objectiveSection,
+      '',
       sceneStateMarkdown,
       '',
       '## Ação do Jogador',
@@ -3449,7 +3445,7 @@ export class GeminiAdapter implements Narrator {
       '',
       '## Resultado Mecânico',
       mechanicalResultText
-    ].join('\n')
+    ].filter((line): line is string => line !== null).join('\n')
 
     // Adicionar último user turn com contexto dinâmico
     sanitizedContents.push({ role: 'user', text: currentTurnPrompt })
@@ -3458,11 +3454,12 @@ export class GeminiAdapter implements Narrator {
     // Isso acontece no primeiro turno ou quando não há mensagens recentes
 
     try {
+      const mode: NarratorPromptMode = req.isFinale ? 'finale' : 'turn'
       return await this.generateNarratorResponse(
         sanitizedContents,
         this.narrateTurnMaxTokens,
         {
-          mode: 'turn',
+          mode,
           narrativeStyle: req.narrativeStyle,
           simpleVocabulary: req.simpleVocabulary,
           customPrompt: req.customSystemPrompt

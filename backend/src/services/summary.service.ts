@@ -51,8 +51,15 @@ export class SummaryService {
    * cada turno, eliminando o risco de as duas janelas divergirem.
    */
   async getRecentWindow(sessionId: string): Promise<ChatMessageRow[]> {
-    const candidates = await this.chatMessages.getRecent(sessionId, SummaryService.RECENT_FETCH_CEILING)
-    return selectRecentWindowByTokenBudget(candidates, SummaryService.RECENT_TOKEN_BUDGET)
+    const [existing, candidates] = await Promise.all([
+      this.summaries.getSummary(sessionId),
+      this.chatMessages.getRecent(sessionId, SummaryService.RECENT_FETCH_CEILING)
+    ])
+    const lastTurnIncluded = existing?.lastTurnIncluded ?? -1
+    const unsummarized = lastTurnIncluded >= 0
+      ? candidates.filter((m) => m.turn > lastTurnIncluded)
+      : candidates
+    return selectRecentWindowByTokenBudget(unsummarized, SummaryService.RECENT_TOKEN_BUDGET)
   }
 
   private isPersistedLegacySummary(message: {
@@ -84,9 +91,9 @@ export class SummaryService {
     return legacyText ? wrapLegacyTextAsStructuredSummary(legacyText, existing?.lastTurnIncluded ?? 0) : null
   }
 
-  private buildMessagesForSummary(messages: ChatMessageRow[]) {
+  private buildMessagesForSummary(messages: ChatMessageRow[], lastTurnIncluded = -1) {
     const sorted = [...messages]
-      .filter((m) => m.role === 'narrator' || m.role === 'player')
+      .filter((m) => (m.role === 'narrator' || m.role === 'player') && (lastTurnIncluded < 0 || m.turn > lastTurnIncluded))
       .sort((a, b) => a.seq - b.seq || a.turn - b.turn)
 
     return sorted.map((m) => {
@@ -129,7 +136,7 @@ export class SummaryService {
 
     const existing = await this.summaries.getSummary(sessionId)
     const summarySeed = this.buildSummarySeed(existing, oldestMessages)
-    const messagesForLlm = this.buildMessagesForSummary(oldestMessages)
+    const messagesForLlm = this.buildMessagesForSummary(oldestMessages, existing?.lastTurnIncluded ?? -1)
     const coveredTurn = Math.max(
       existing?.lastTurnIncluded ?? 0,
       ...oldestMessages.map((message) => message.turn)

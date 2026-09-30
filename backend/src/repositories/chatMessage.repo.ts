@@ -120,7 +120,14 @@ export class ChatMessageRepo {
       qs = await fallback.get()
     }
 
-    return qs.docs.map((d, i) => ({ seq: i + 1, ...d.data() }) as ChatMessageRow)
+    return qs.docs.map((d, i) => {
+      const data = d.data()
+      return {
+        ...data,
+        messageId: (data.messageId as string | undefined) || d.id,
+        seq: (data.seq as number | undefined) ?? (i + 1)
+      } as ChatMessageRow
+    })
   }
 
   async getRecent(sessionId: string, count = 10): Promise<ChatMessageRow[]> {
@@ -139,7 +146,14 @@ export class ChatMessageRepo {
 
     // Inverte para ordem cronológica ascendente antes de mapear, para que o índice
     // posicional reflita a ordem real (i=0 → mensagem mais antiga da janela).
-    return [...qs.docs].reverse().map((d, i) => ({ seq: i + 1, ...d.data() }) as ChatMessageRow)
+    return [...qs.docs].reverse().map((d, i) => {
+      const data = d.data()
+      return {
+        ...data,
+        messageId: (data.messageId as string | undefined) || d.id,
+        seq: (data.seq as number | undefined) ?? (i + 1)
+      } as ChatMessageRow
+    })
   }
 
   async countBySession(sessionId: string): Promise<number> {
@@ -160,7 +174,14 @@ export class ChatMessageRepo {
         .get()
     }
 
-    return qs.docs.map((d, i) => ({ seq: i + 1, ...d.data() }) as ChatMessageRow)
+    return qs.docs.map((d, i) => {
+      const data = d.data()
+      return {
+        ...data,
+        messageId: (data.messageId as string | undefined) || d.id,
+        seq: (data.seq as number | undefined) ?? (i + 1)
+      } as ChatMessageRow
+    })
   }
 
   async deleteBatch(sessionId: string, messageIds: string[]): Promise<void> {
@@ -206,6 +227,12 @@ export class ChatMessageRepo {
     if (qs.empty) {
       qs = await this.archivedMessagesCollection(sessionId).orderBy('createdAt', 'asc').get()
     }
-    return qs.docs.map((d) => d.data() as ChatMessageRow)
+    return qs.docs.map((d) => {
+      const data = d.data()
+      return {
+        ...data,
+        messageId: (data.messageId as string | undefined) || d.id
+      } as ChatMessageRow
+    })
   }
 }

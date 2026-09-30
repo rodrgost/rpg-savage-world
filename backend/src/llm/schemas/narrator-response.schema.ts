@@ -161,10 +161,15 @@ export const NARRATOR_RESPONSE_SCHEMA: Record<string, unknown> = {
       },
       required: ['mechanicalResult', 'narratedOutcome', 'justification'],
       propertyOrdering: ['mechanicalResult', 'narratedOutcome', 'justification']
+    },
+    objectiveCompleted: {
+      type: 'BOOLEAN',
+      nullable: true,
+      description: 'true se a consequência narrada neste turno completou o objetivo do capítulo atual com sucesso. Caso contrário, false ou omitir.'
     }
   },
   required: ['segments', 'options'],
-  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride']
+  propertyOrdering: ['segments', 'options', 'npcs', 'itemChanges', 'statusChanges', 'npcAttacks', 'outcomeOverride', 'objectiveCompleted']
 }
 
 /**

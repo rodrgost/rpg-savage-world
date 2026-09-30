@@ -13,7 +13,8 @@ const StoredImageBody = z
   })
   .strict()
 
-const VisibilityBody = z.enum(['private', 'public']).default('private')
+const VisibilityEnum = z.enum(['private', 'public'])
+const VisibilityBody = VisibilityEnum.default('public')
 
 const WorldGuideBody = z.object({
   llmPersona: z.object({
@@ -102,7 +103,7 @@ const CreateCampaignBody = z.object({
   storyDetailsEn: z.string().optional(),
   storyMissions: z.array(MissionBody).min(0).max(7).optional(),
   storyCharacters: z.array(StoryCharacterBody).min(0).max(7).optional(),
-  visibility: VisibilityBody.optional(),
+  visibility: VisibilityBody,
   image: StoredImageBody.optional(),
   youtubeUrl: z.string().url().optional().or(z.literal(''))
 })
@@ -115,7 +116,7 @@ const UpdateCampaignBody = z.object({
   storyDetailsEn: z.string().optional(),
   storyMissions: z.array(MissionBody).min(0).max(7).optional(),
   storyCharacters: z.array(StoryCharacterBody).min(0).max(7).optional(),
-  visibility: VisibilityBody.optional(),
+  visibility: VisibilityEnum.optional(),
   image: StoredImageBody.optional(),
   youtubeUrl: z.string().url().optional().or(z.literal(''))
 })
@@ -140,7 +141,7 @@ const CreateWorldBody = z.object({
   description: z.string().optional().default(''),
   worldGuide: WorldGuideBody.optional(),
   ruleSetId: z.string().optional(),
-  visibility: VisibilityBody.optional(),
+  visibility: VisibilityBody,
   image: StoredImageBody.optional()
 })
 
@@ -149,7 +150,7 @@ const UpdateWorldBody = z.object({
   description: z.string().optional(),
   worldGuide: WorldGuideBody.optional(),
   ruleSetId: z.string().optional(),
-  visibility: VisibilityBody.optional(),
+  visibility: VisibilityEnum.optional(),
   image: StoredImageBody.optional()
 })
 
@@ -176,13 +177,11 @@ const CreateCharacterBody = z.object({
   race: z.string().optional().default(''),
   profession: z.string().min(1),
   description: z.string().optional(),
-  campaignRole: z.string().optional(),
   genderEn: z.string().optional(),
   raceEn: z.string().optional(),
   professionEn: z.string().optional(),
   descriptionEn: z.string().optional(),
-  campaignRoleEn: z.string().optional(),
-  visibility: VisibilityBody.optional(),
+  visibility: VisibilityBody,
   attributes: z.record(z.string(), z.number()).optional().default({}),
   skills: z.record(z.string(), z.number()).default({}),
   edges: z.array(z.string()).default([]),
@@ -198,8 +197,7 @@ const UpdateCharacterBody = z.object({
   race: z.string().optional().default(''),
   profession: z.string().min(1),
   description: z.string().optional(),
-  campaignRole: z.string().optional(),
-  visibility: VisibilityBody.optional(),
+  visibility: VisibilityEnum.optional(),
   attributes: z.record(z.string(), z.number()).optional().default({}),
   skills: z.record(z.string(), z.number()).default({}),
   edges: z.array(z.string()).default([]),
@@ -228,7 +226,6 @@ const CharacterSuggestionBody = z
       race: z.string().optional(),
       profession: z.string().optional(),
       description: z.string().optional(),
-      campaignRole: z.string().optional(),
     }).optional()
   })
   .strict()

@@ -237,19 +237,21 @@ export type NarratorTurnResponse = {
   npcAttacks?: NpcAttackEntry[]
   /** Preenchido apenas quando o desfecho narrado diverge do resultado mecânico, com a justificativa na ficção */
   outcomeOverride?: OutcomeOverride | null
+  /** Sinaliza se o objetivo do capítulo atual foi completado com sucesso pela narrativa deste turno */
+  objectiveCompleted?: boolean
   /** true quando o conteúdo é um fallback estático por falha do LLM */
   isFallback?: boolean
 }
 
 // ─── Requests para o Narrator ───
 
-/** Gancho de missão da campanha — texto simples, sem tracking de progresso. */
+/** Gancho de missão/objetivo da campanha. */
 export type CampaignMission = {
   title: string
   titleEn?: string
   description: string
   descriptionEn?: string
-  optional: boolean
+  optional?: boolean
 }
 
 export type NarrateStartRequest = {
@@ -273,6 +275,12 @@ export type NarrateStartRequest = {
     description?: string
     edges: string[]
     hindrances: Array<{ name: string; severity: string }>
+  }
+  /** Objetivo inicial do Capítulo 1 */
+  initialObjective?: {
+    title: string
+    description: string
+    chapter: number
   }
   simpleVocabulary?: boolean
   /** Prompt de sistema customizado do narrador configurado pelo usuário */
@@ -340,10 +348,19 @@ export type NarrateTurnRequest = {
     situation?: 'exploracao' | 'combat' | 'dialogo'
     /** Catálogo de NPCs nomeados do mundo — permite referenciar NPCs canônicos por ID */
     npcCatalog?: Array<{ id: string; name: string; description?: string; dispositionDefault: string }>
+    /** Objetivo ativo do capítulo atual */
+    currentObjective?: {
+      title: string
+      description: string
+      chapter: number
+      isLast: boolean
+    }
   }
   recentMessages: Array<{ role: string; segments?: NarrativeSegment[]; playerInput?: string; engineEvents?: Array<{ type: string; payload: Record<string, unknown> }> }>
   narrativeStyle?: NarrativeStyle
   simpleVocabulary?: boolean
+  /** Se o turno atual é o epílogo / encerramento da campanha */
+  isFinale?: boolean
   /** Prompt de sistema customizado do narrador configurado pelo usuário */
   customSystemPrompt?: string
 }

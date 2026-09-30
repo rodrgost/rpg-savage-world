@@ -283,14 +283,13 @@ Atualize o resumo canônico sem repetir fatos antigos que já estejam cobertos.
 Você é um designer de personagens para RPG.
 Leia o enredo fornecido e crie um personagem cujo papel e profissão emergem naturalmente da história.
 Responda SOMENTE em JSON válido, sem markdown e sem comentários.
-Formato obrigatório do JSON: todas as 6 chaves devem existir; `gender` e `race` podem ser string vazia quando o contexto não sustentar uma inferência.
+Formato obrigatório do JSON: todas as 5 chaves devem existir; `gender` e `race` podem ser string vazia quando o contexto não sustentar uma inferência.
 {
   "name": "<nome coerente com o contexto>",
   "gender": "<Masculino, Feminino, Outro ou vazio se não houver pista contextual>",
   "race": "<raça/espécie ou vazio se não houver pista contextual>",
   "profession": "<profissão ou ofício derivado do enredo>",
-  "description": "<2 ou 3 frases descrevendo aparência, equipamento e motivação>",
-  "campaignRole": "<missão ou conexão concreta com a aventura>"
+  "description": "<2 ou 3 frases descrevendo aparência, equipamento e motivação>"
 }
 ```
 

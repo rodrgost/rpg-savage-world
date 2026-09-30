@@ -1,4 +1,4 @@
-import type { DieType, GameState, Hindrance, SWAttributes } from '../types/gameState.js'
+import type { DieType, GameState, Hindrance, SessionObjective, SWAttributes } from '../types/gameState.js'
 import { DIE_STEPS } from '../types/gameState.js'
 import {
   calcPace,
@@ -19,7 +19,15 @@ export type CharacterInput = {
   armor?: number
 }
 
-export function createInitialState(params: { sessionId: string; campaignId: string; worldId?: string; narrativeStyle?: GameState['meta']['narrativeStyle']; simpleVocabulary?: boolean; character?: CharacterInput }): GameState {
+export function createInitialState(params: {
+  sessionId: string
+  campaignId: string
+  worldId?: string
+  narrativeStyle?: GameState['meta']['narrativeStyle']
+  simpleVocabulary?: boolean
+  character?: CharacterInput
+  objectives?: SessionObjective[]
+}): GameState {
   const char = params.character
   const attributes: SWAttributes = { ...defaultAttributes(), ...(char?.attributes ?? {}) }
   const skills: Record<string, DieType> = { ...(char?.skills ?? {}) }
@@ -52,6 +60,8 @@ export function createInitialState(params: { sessionId: string; campaignId: stri
       + (hindrances.some((h) => h.name === 'badLuck' || h.name === 'Azarado') ? -1 : 0)
   )
 
+  const activeObjective = params.objectives?.find((o) => o.status === 'active')
+
   return {
     meta: {
       sessionId: params.sessionId,
@@ -60,7 +70,9 @@ export function createInitialState(params: { sessionId: string; campaignId: stri
       narrativeStyle: params.narrativeStyle ?? 'concise',
       simpleVocabulary: params.simpleVocabulary ?? true,
       turn: 0,
-      chapter: 1
+      chapter: activeObjective?.chapter ?? 1,
+      campaignStatus: 'in_progress',
+      ...(activeObjective ? { currentObjectiveTitle: activeObjective.title } : {})
     },
     player: {
       characterId: char?.characterId ?? '',
@@ -87,6 +99,7 @@ export function createInitialState(params: { sessionId: string; campaignId: stri
       worldFlags: {}
     },
     npcs: [],
-    defeatedNpcIds: []
+    defeatedNpcIds: [],
+    ...(params.objectives ? { objectives: params.objectives } : {})
   }
 }

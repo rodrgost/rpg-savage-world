@@ -52,6 +52,9 @@ function AuthenticatedLayout({
             <NavLink className={({ isActive }) => (isActive ? 'active' : '')} end to="/">
               Home
             </NavLink>
+            <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/games">
+              Jogos
+            </NavLink>
             <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/worlds">
               Universos
             </NavLink>
@@ -151,7 +154,9 @@ export function App() {
             <Route path="/campaigns" element={<CampaignsPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
             <Route path="/campaigns/:campaignId/edit" element={<CreateCampaignPage uid={uid} />} />
             <Route path="/worlds" element={<WorldsPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
-            <Route path="/active" element={<PlaythroughsPage uid={uid} />} />
+            <Route path="/games" element={<PlaythroughsPage uid={uid} />} />
+            <Route path="/active" element={<Navigate to="/games" replace />} />
+            <Route path="/jogos" element={<Navigate to="/games" replace />} />
             <Route path="/characters" element={<CharactersPage uid={uid} ownerLabel={accountLabel} ownerPhotoUrl={userPhotoUrl} />} />
             <Route path="/characters/new" element={<CreateCharacterPage uid={uid} />} />
             <Route path="/characters/:characterId/edit" element={<CreateCharacterPage uid={uid} />} />

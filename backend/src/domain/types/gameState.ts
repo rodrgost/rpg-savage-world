@@ -128,6 +128,15 @@ export type CombatState = {
 
 export type NarrativeStyle = 'concise' | 'balanced'
 
+export type SessionObjective = {
+  id: string
+  title: string
+  description: string
+  chapter: number
+  status: 'pending' | 'active' | 'completed'
+  completedAtTurn?: number
+}
+
 export interface GameState {
   meta: {
     sessionId: string
@@ -135,6 +144,8 @@ export interface GameState {
     worldId?: string
     turn: number
     chapter: number
+    campaignStatus?: 'in_progress' | 'completed'
+    currentObjectiveTitle?: string
     narrativeStyle?: NarrativeStyle
     simpleVocabulary?: boolean
   }
@@ -181,6 +192,9 @@ export interface GameState {
 
   /** IDs de NPCs já incapacitados/derrotados nesta sessão — impede reintrodução pelo narrador */
   defeatedNpcIds: string[]
+
+  /** Objetivos da campanha mapeados para capítulos nesta sessão */
+  objectives?: SessionObjective[]
 
   combat?: CombatState
 }

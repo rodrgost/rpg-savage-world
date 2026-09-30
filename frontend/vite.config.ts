@@ -4,6 +4,17 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   envDir: '..',
+  server: {
+    proxy: {
+      '/campaigns': 'http://localhost:3100',
+      '/worlds': 'http://localhost:3100',
+      '/characters': 'http://localhost:3100',
+      '/sessions': 'http://localhost:3100',
+      '/system-prompts': 'http://localhost:3100',
+      '/health': 'http://localhost:3100',
+      '/auth': 'http://localhost:3100'
+    }
+  },
   plugins: [
     react(),
     VitePWA({

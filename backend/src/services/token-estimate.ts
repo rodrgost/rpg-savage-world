@@ -39,6 +39,16 @@ export function selectRecentWindowByTokenBudget<T extends ChatMessageRow>(
     total += tokens
     cutoff = i
   }
+
+  // Alinha cutoff para o início do turno: se uma mensagem de um turno foi incluída na janela recente,
+  // todas as mensagens daquele mesmo turno devem permanecer juntas na janela recente.
+  if (cutoff > 0 && cutoff < messagesAsc.length) {
+    const cutoffTurn = messagesAsc[cutoff].turn
+    while (cutoff > 0 && messagesAsc[cutoff - 1].turn === cutoffTurn) {
+      cutoff -= 1
+    }
+  }
+
   return messagesAsc.slice(cutoff)
 }
 
