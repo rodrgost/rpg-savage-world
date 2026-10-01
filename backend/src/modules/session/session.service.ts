@@ -1284,7 +1284,7 @@ export class SessionService {
 
     await this.summaryRepo.upsertSummary({
       sessionId,
-      lastTurnIncluded: 0,
+      lastTurnIncluded: -1,
       summaryText: '',
       keyEvents: []
     })
@@ -1512,7 +1512,7 @@ export class SessionService {
 
     await this.summaryRepo.upsertSummary({
       sessionId: params.sessionId,
-      lastTurnIncluded: 0,
+      lastTurnIncluded: -1,
       summaryText: '',
       keyEvents: []
     })

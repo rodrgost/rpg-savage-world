@@ -209,8 +209,9 @@ function sortMessages(msgs: ChatMessage[]): ChatMessage[] {
   return [...msgs].sort((a, b) => {
     // Se ambas têm seq, usa seq (ordem dada pelo backend)
     if (a.seq != null && b.seq != null) return a.seq - b.seq
-    // Fallback: ordena por turn, desempata player antes de narrator
     if (a.turn !== b.turn) return a.turn - b.turn
+    if (a.seq != null && b.seq == null) return -1
+    if (a.seq == null && b.seq != null) return 1
     const roleOrder = { player: 0, system: 1, narrator: 2 } as const
     return (roleOrder[a.role] ?? 1) - (roleOrder[b.role] ?? 1)
   })
@@ -238,6 +239,14 @@ function stableStringify(value: unknown): string {
   return `{${entries.join(',')}}`
 }
 
+function getNarratorMessageText(message: ChatMessage): string {
+  if (message.narrative?.trim()) return message.narrative
+  if (message.segments?.length) {
+    return message.segments.map((s) => s.text ?? '').join(' ')
+  }
+  return ''
+}
+
 function buildMessageSignature(message: ChatMessage): string {
   if (message.engineEvents?.length) {
     const eventsKey = message.engineEvents
@@ -251,7 +260,9 @@ function buildMessageSignature(message: ChatMessage): string {
   }
 
   if (message.role === 'narrator') {
-    return `narrator:${message.turn}:${normalizeEscapedText(message.narrative ?? '')}`
+    const text = getNarratorMessageText(message)
+    const normalized = normalizeEscapedText(text).slice(0, 120)
+    return `narrator:${message.turn}:${normalized}`
   }
 
   return `system-summary:${message.turn}:${normalizeEscapedText(message.narrative ?? '')}`
@@ -2296,13 +2307,15 @@ export function GamePage() {
       (m) => m.role === 'system' && Boolean(m.narrative?.trim()) && !(m.engineEvents?.length)
     )
 
-    // Se temos um resumo consolidado cobrindo até o turno X,
-    // as mensagens de turnos <= X já foram resumidas e são cortadas/retiradas da narração ativa.
-    const activeMessages = lastSummarizedTurn >= 0
+    // Se temos um resumo consolidado cobrindo até o turno X (com texto real),
+    // as mensagens de turnos <= X já foram resumidas e são cortadas da narração ativa.
+    // Sem texto de resumo ativo, nenhuma mensagem é cortada.
+    const hasActiveSummary = Boolean(sessionSummaryText)
+    const activeMessages = hasActiveSummary && lastSummarizedTurn >= 0
       ? messages.filter((m) => m.turn > lastSummarizedTurn || m.turn === -1)
       : messages
 
-    return sessionSummaryText && !hasPersistedSummaryMessage
+    return hasActiveSummary && !hasPersistedSummaryMessage
       ? [{
           messageId: `session-summary-${sessionId || state?.meta.sessionId || 'session'}`,
           sessionId: sessionId || state?.meta.sessionId || '',
